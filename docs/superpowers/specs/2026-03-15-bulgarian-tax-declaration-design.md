@@ -226,7 +226,10 @@ Drag-and-drop area for file uploads:
   - Gap-fills weekends/holidays by carrying forward previous business day rate
   - Currencies auto-detected from imported data (USD, GBP, HKD, etc.)
   - **Caching**: fetched rates cached locally (in app data directory) so subsequent sessions don't re-fetch. Cache keyed by currency+year, invalidated on manual request.
-  - **Fallback**: if ECB API is unreachable, use cached rates if available. If no cache, show warning and allow manual rate entry in the FX Rates tab. The app never blocks on missing rates — it marks affected calculations as "FX rate missing" and lets the user resolve.
+  - **Fallback**: if ECB API is unreachable, use cached rates if available. If no cache, show a toast notification and allow manual rate entry in the FX Rates tab.
+  - The app never blocks on missing rates — affected cells show "—" with a tooltip "FX rate missing"
+  - Export with missing rates: Excel formulas reference the FX sheet as normal; if the rate row is missing, VLOOKUP returns #N/A in Excel (user can fill in the FX sheet manually in Excel)
+  - The validation layer counts missing rates and shows a warning before export: "3 transactions have missing FX rates — export anyway?"
 
 ### 3. Main Workspace
 
@@ -323,7 +326,8 @@ The IB CSV is section-based. Key sections and their parsing:
 - First section may have only EUR WHT + prior year adjustments
 - Main USD WHT in second section
 - Match each WHT to its dividend by symbol + date + currency
-- Combine same-date dividend entries before WHT matching (e.g., BABA ordinary + bonus → single entry)
+- Combine same-date dividend entries before WHT matching (e.g., BABA ordinary + bonus → single entry, summing amounts)
+- **Unmatched WHT**: if a WHT entry has no matching dividend (e.g., prior-year adjustment), it appears in the Dividends table as a standalone row with gross=0 and the WHT amount. The validation layer flags it as a warning. User can manually assign it or leave it — it still counts toward WHT credits.
 
 **Stock Yield Enhancement**: `Stock Yield Enhancement Program Securities Lent Interest Details,Data,...`
 - Daily interest entries per symbol
@@ -368,6 +372,14 @@ Implementation:
 - FX rates from ECB are EUR-native; for BGN multiply by 1.95583, for EUR use directly
 - Excel export column headers change: "Общо BGN" → "Общо EUR"
 - Declaration form field mapping changes per year (via JSON config)
+
+### Importing Holdings Across Currency Transitions
+
+When importing 2025 holdings (BGN-based) into a 2026 session (EUR-based):
+- Holdings store `unitPrice` and `currency` in the **original trade currency** (USD, EUR, HKD, etc.) — these never change
+- The base currency only affects **display columns** (Total BGN → Total EUR) and **FX rate lookups**
+- No re-denomination needed: a holding bought for $100 at FX 1.82 BGN/USD in 2025 is still a holding bought for $100 — only the "Total in base currency" column recalculates using the EUR-based rate
+- The JSON export stores raw values (original currency amounts); the base currency setting determines how derived columns are computed
 
 ## Localization
 
