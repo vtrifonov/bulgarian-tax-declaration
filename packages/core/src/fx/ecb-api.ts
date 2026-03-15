@@ -17,35 +17,33 @@ export async function fetchEcbRates(
     startDate: string,
     endDate: string,
 ): Promise<Record<string, number>> {
-    const url = new URL('https://data-api.ecb.europa.eu/service/data/EXR/');
-    url.searchParams.set('detail', 'dataonly');
-    url.searchParams.set('startPeriod', startDate);
-    url.searchParams.set('endPeriod', endDate);
-    url.searchParams.set('dimensions', `FREQ=D,CURRENCY=${currency}`);
-    url.searchParams.set('format', 'sdmx-xml');
+    const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}`;
 
-    const resp = await fetch(url.toString());
+    const resp = await fetch(url);
     if (!resp.ok) {
         throw new Error(`ECB API error ${resp.status}`);
     }
 
     const xml = await resp.text();
+    return parseEcbXml(xml);
+}
+
+/** Parse ECB XML response — handles multi-line Obs elements */
+export function parseEcbXml(xml: string): Record<string, number> {
     const rates: Record<string, number> = {};
 
-    // Parse XML: look for <generic:Obs> elements
-    // ECB XML has ObsDimension value="YYYY-MM-DD" and ObsValue value="X.XXXX"
-    const obsRegex = /<generic:Obs><generic:ObsDimension value="([^"]+)"[^>]*><generic:ObsValue value="([^"]+)"/g;
-    let match;
-    while ((match = obsRegex.exec(xml)) !== null) {
-        const date = match[1];
-        const rate = parseFloat(match[2]);
-        if (!isNaN(rate)) {
-            rates[date] = rate;
+    // Match ObsDimension and ObsValue which may be on separate lines
+    // Pattern: <generic:ObsDimension value="DATE"/>  ...  <generic:ObsValue value="RATE"/>
+    const obsBlocks = xml.split('<generic:Obs>');
+    for (const block of obsBlocks) {
+        const dateMatch = block.match(/<generic:ObsDimension\s+value="([^"]+)"/);
+        const rateMatch = block.match(/<generic:ObsValue\s+value="([^"]+)"/);
+        if (dateMatch && rateMatch) {
+            const rate = parseFloat(rateMatch[1]);
+            if (!isNaN(rate)) {
+                rates[dateMatch[1]] = rate;
+            }
         }
-    }
-
-    if (Object.keys(rates).length === 0) {
-        throw new Error('No rates found in ECB response');
     }
 
     return rates;
@@ -67,8 +65,12 @@ export async function fetchYearRates(
     ];
     const all: Record<string, number> = {};
     for (const [start, end] of quarters) {
-        const rates = await fetchEcbRates(currency, start, end);
-        Object.assign(all, rates);
+        try {
+            const rates = await fetchEcbRates(currency, start, end);
+            Object.assign(all, rates);
+        } catch {
+            // Continue with other quarters if one fails
+        }
     }
     return all;
 }

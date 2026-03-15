@@ -10,12 +10,19 @@ import {
     fetchYearRates,
 } from '../../src/fx/ecb-api.js';
 
+// Multi-line format matching real ECB API response
 const mockXml = `<?xml version="1.0" encoding="UTF-8"?>
 <message:GenericData xmlns:message="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message" xmlns:generic="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/data/generic">
 <message:DataSet>
 <generic:Series>
-<generic:Obs><generic:ObsDimension value="2025-01-02"/><generic:ObsValue value="1.0353"/></generic:Obs>
-<generic:Obs><generic:ObsDimension value="2025-01-03"/><generic:ObsValue value="1.0345"/></generic:Obs>
+<generic:Obs>
+<generic:ObsDimension value="2025-01-02"/>
+<generic:ObsValue value="1.0353"/>
+</generic:Obs>
+<generic:Obs>
+<generic:ObsDimension value="2025-01-03"/>
+<generic:ObsValue value="1.0345"/>
+</generic:Obs>
 </generic:Series>
 </message:DataSet>
 </message:GenericData>`;
@@ -48,7 +55,7 @@ describe('fetchEcbRates', () => {
         await expect(fetchEcbRates('USD', '2025-01-02', '2025-01-03')).rejects.toThrow('404');
     });
 
-    it('throws on missing data', async () => {
+    it('returns empty rates for empty response', async () => {
         vi.stubGlobal(
             'fetch',
             vi.fn().mockResolvedValue({
@@ -56,7 +63,8 @@ describe('fetchEcbRates', () => {
                 text: () => Promise.resolve('<message:GenericData></message:GenericData>'),
             }),
         );
-        await expect(fetchEcbRates('USD', '2025-01-02', '2025-01-03')).rejects.toThrow('No');
+        const rates = await fetchEcbRates('USD', '2025-01-02', '2025-01-03');
+        expect(Object.keys(rates)).toHaveLength(0);
     });
 });
 
