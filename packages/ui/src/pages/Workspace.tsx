@@ -509,7 +509,7 @@ export function Workspace() {
     ];
 
     // Revolut Interest Entry columns
-    const revolutEntryColumns: ColumnDef<RevolutInterestEntry>[] = [
+    const getRevolutEntryColumns = (currency: string): ColumnDef<RevolutInterestEntry>[] => [
         {
             accessorKey: 'date',
             header: 'Date',
@@ -522,9 +522,26 @@ export function Workspace() {
         },
         {
             accessorKey: 'amount',
-            header: 'Amount',
-            meta: { align: 'right', editable: true },
-            cell: (info) => (info.getValue() as number).toFixed(2),
+            header: `Amount (${currency})`,
+            meta: { align: 'right' as const, editable: true },
+            cell: (info) => (info.getValue() as number).toFixed(4),
+        },
+        {
+            id: 'fxRate',
+            header: 'FX Rate',
+            accessorFn: (row: RevolutInterestEntry) => getFxRateDisplay(fxRates, baseCurrency, currency, row.date),
+            cell: (info) => info.getValue(),
+            meta: { align: 'right' as const, editable: false },
+        },
+        {
+            id: 'amountBase',
+            header: `Amount (${baseCurrency})`,
+            accessorFn: (row: RevolutInterestEntry) => {
+                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+                return toBaseCcy(row.amount, currency, row.date);
+            },
+            cell: (info) => info.getValue(),
+            meta: { align: 'right' as const, editable: false },
         },
     ];
 
@@ -701,7 +718,7 @@ export function Workspace() {
                     </div>
                 </div>
 
-                <DataTable columns={revolutEntryColumns} data={currentData.entries} />
+                <DataTable columns={getRevolutEntryColumns(currentCurrency)} data={currentData.entries} />
             </div>
         );
     };
