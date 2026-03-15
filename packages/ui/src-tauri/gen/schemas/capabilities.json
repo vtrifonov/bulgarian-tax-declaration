@@ -1,9 +1,1 @@
-{
-  "main-capability": {
-    "identifier": "main-capability",
-    "description": "Capability for main window",
-    "local": true,
-    "windows": ["main"],
-    "permissions": ["core:default", "dialog:default", "fs:default"]
-  }
-}
+{"main-capability":{"identifier":"main-capability","description":"Capability for main window","local":true,"windows":["main"],"permissions":["core:default","dialog:default","fs:default"]}}

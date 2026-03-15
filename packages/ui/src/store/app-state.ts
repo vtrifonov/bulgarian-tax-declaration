@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
     Dividend,
     Holding,
+    IBInterestEntry,
     RevolutInterest,
     Sale,
     StockYieldEntry,
@@ -18,6 +19,7 @@ export interface AppState {
     sales: Sale[];
     dividends: Dividend[];
     stockYield: StockYieldEntry[];
+    ibInterest: IBInterestEntry[];
     revolutInterest: RevolutInterest[];
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
 
@@ -50,6 +52,12 @@ export interface AppState {
     deleteStockYield: (index: number) => void;
     importStockYield: (items: StockYieldEntry[]) => void;
 
+    // IB Interest
+    addIbInterest: (interest: IBInterestEntry) => void;
+    updateIbInterest: (index: number, interest: IBInterestEntry) => void;
+    deleteIbInterest: (index: number) => void;
+    importIbInterest: (interests: IBInterestEntry[]) => void;
+
     // Revolut Interest
     addRevolutInterest: (interest: RevolutInterest) => void;
     updateRevolutInterest: (index: number, interest: RevolutInterest) => void;
@@ -71,6 +79,7 @@ const initialState = {
     sales: [],
     dividends: [],
     stockYield: [],
+    ibInterest: [],
     revolutInterest: [],
     fxRates: {} as Record<string, Record<string, number>>,
 };
@@ -133,6 +142,22 @@ export const useAppStore = create<AppState>((set) => ({
             stockYield: state.stockYield.filter((_, i) => i !== index),
         })),
     importStockYield: (items: StockYieldEntry[]) => set({ stockYield: items }),
+
+    addIbInterest: (interest: IBInterestEntry) =>
+        set((state) => ({
+            ibInterest: [...state.ibInterest, interest],
+        })),
+    updateIbInterest: (index: number, interest: IBInterestEntry) =>
+        set((state) => {
+            const ibInterest = [...state.ibInterest];
+            ibInterest[index] = interest;
+            return { ibInterest };
+        }),
+    deleteIbInterest: (index: number) =>
+        set((state) => ({
+            ibInterest: state.ibInterest.filter((_, i) => i !== index),
+        })),
+    importIbInterest: (interests: IBInterestEntry[]) => set({ ibInterest: interests }),
 
     addRevolutInterest: (interest: RevolutInterest) =>
         set((state) => ({

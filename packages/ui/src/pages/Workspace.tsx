@@ -5,13 +5,14 @@ import { DataTable } from '../components/DataTable';
 import type {
     Dividend,
     Holding,
+    IBInterestEntry,
     RevolutInterest,
     RevolutInterestEntry,
     Sale,
     StockYieldEntry,
 } from '@bg-tax/core';
 
-type TabType = 'holdings' | 'sales' | 'dividends' | 'stockYield' | 'revolutInterest' | 'fxRates';
+type TabType = 'holdings' | 'sales' | 'dividends' | 'stockYield' | 'ibInterest' | 'revolutInterest' | 'fxRates';
 
 // Helper to create an editable column definition
 function createEditableColumn<T extends Record<string, any>>(
@@ -73,6 +74,7 @@ export function Workspace() {
         sales,
         dividends,
         stockYield,
+        ibInterest,
         revolutInterest,
         fxRates,
         baseCurrency,
@@ -88,6 +90,9 @@ export function Workspace() {
         updateStockYield,
         deleteStockYield,
         addStockYield,
+        updateIbInterest,
+        deleteIbInterest,
+        addIbInterest,
         updateRevolutInterest,
         deleteRevolutInterest,
         addRevolutInterest,
@@ -103,6 +108,9 @@ export function Workspace() {
         // Show only if data exists (populated from IB/Revolut import)
         if (stockYield.length > 0) {
             tabs.push({ id: 'stockYield', label: 'Stock Yield', count: stockYield.length });
+        }
+        if (ibInterest.length > 0) {
+            tabs.push({ id: 'ibInterest', label: 'IB Interest', count: ibInterest.length });
         }
         if (revolutInterest.length > 0) {
             tabs.push({ id: 'revolutInterest', label: 'Revolut Interest', count: revolutInterest.length });
@@ -454,6 +462,71 @@ export function Workspace() {
         },
     ];
 
+    // IB Interest columns
+    const ibInterestColumns: ColumnDef<IBInterestEntry>[] = [
+        createEditableColumn<IBInterestEntry>('date', 'Date', {
+            onSave: (rowIndex, value) => {
+                const updated = { ...ibInterest[rowIndex], date: value };
+                updateIbInterest(rowIndex, updated);
+            },
+        }),
+        createEditableColumn<IBInterestEntry>('currency', 'Currency', {
+            onSave: (rowIndex, value) => {
+                const updated = { ...ibInterest[rowIndex], currency: value };
+                updateIbInterest(rowIndex, updated);
+            },
+        }),
+        createEditableColumn<IBInterestEntry>('description', 'Description', {
+            onSave: (rowIndex, value) => {
+                const updated = { ...ibInterest[rowIndex], description: value };
+                updateIbInterest(rowIndex, updated);
+            },
+        }),
+        createEditableColumn<IBInterestEntry>('amount', 'Amount', {
+            align: 'right',
+            format: (v) => (v as number).toFixed(2),
+            onSave: (rowIndex, value) => {
+                const updated = { ...ibInterest[rowIndex], amount: parseFloat(value) || 0 };
+                updateIbInterest(rowIndex, updated);
+            },
+        }),
+        {
+            id: 'fxRate',
+            header: 'FX Rate',
+            accessorFn: (row: IBInterestEntry) => {
+                return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
+            },
+            cell: (info) => info.getValue(),
+            meta: { align: 'right' as const, editable: false },
+        },
+        {
+            id: 'amountBase',
+            header: `Amount (${baseCurrency})`,
+            accessorFn: (row: IBInterestEntry) => {
+                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+                return toBaseCcy(row.amount, row.currency, row.date);
+            },
+            cell: (info) => info.getValue(),
+            meta: { align: 'right' as const, editable: false },
+        },
+        {
+            id: 'delete',
+            header: '',
+            cell: ({ row }) => (
+                <button
+                    className='delete-button'
+                    onClick={() => {
+                        const index = ibInterest.indexOf(row.original);
+                        if (index >= 0) deleteIbInterest(index);
+                    }}
+                >
+                    Delete
+                </button>
+            ),
+            meta: { editable: false },
+        },
+    ];
+
     // Stock Yield columns
     const stockYieldColumns: ColumnDef<StockYieldEntry>[] = [
         createEditableColumn<StockYieldEntry>('date', 'Date', {
@@ -644,6 +717,23 @@ export function Workspace() {
         />
     );
 
+    const renderIbInterestContent = () => (
+        <DataTable
+            columns={ibInterestColumns}
+            data={ibInterest}
+            onAddRow={() => {
+                const newEntry: IBInterestEntry = {
+                    date: new Date().toISOString().split('T')[0],
+                    currency: 'USD',
+                    description: '',
+                    amount: 0,
+                };
+                addIbInterest(newEntry);
+            }}
+            addRowLabel='Add IB Interest Entry'
+        />
+    );
+
     const renderRevolutInterestContent = () => {
         const currencies = revolutInterest.map((r) => r.currency).sort();
 
@@ -800,6 +890,8 @@ export function Workspace() {
                 return renderDividendsContent();
             case 'stockYield':
                 return renderStockYieldContent();
+            case 'ibInterest':
+                return renderIbInterestContent();
             case 'revolutInterest':
                 return renderRevolutInterestContent();
             case 'fxRates':

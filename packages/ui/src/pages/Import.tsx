@@ -48,6 +48,7 @@ export function Import() {
         importSales,
         importDividends,
         importStockYield,
+        importIbInterest,
         importRevolutInterest,
         setFxRates,
         taxYear,
@@ -62,6 +63,7 @@ export function Import() {
         for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
         for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
         for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
+        for (const i of state.ibInterest) if (i.currency) currencies.add(i.currency);
         for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
 
         const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
@@ -115,6 +117,7 @@ export function Import() {
                 }
                 importDividends(allDividends);
                 importStockYield(parsed.stockYield);
+                importIbInterest(parsed.interest);
 
                 // Build country map for FIFO engine
                 const countryMap: Record<string, string> = {};
@@ -138,7 +141,7 @@ export function Import() {
                     type: 'ib',
                     status: 'success',
                     message:
-                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield${warnMsg}`,
+                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}`,
                 }]);
             } else {
                 const revolut: RevolutInterest = parseRevolutCsv(content);
@@ -162,7 +165,7 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             }]);
         }
-    }, [holdings, importHoldings, importDividends, importStockYield, importRevolutInterest]);
+    }, [holdings, importHoldings, importDividends, importStockYield, importIbInterest, importRevolutInterest]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
@@ -358,6 +361,7 @@ export function Import() {
                             for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
                             for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
                             for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
+                            for (const i of state.ibInterest) if (i.currency) currencies.add(i.currency);
                             for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
 
                             // Fetch FX rates from ECB

@@ -11,7 +11,7 @@ type ImportOption = 'none' | 'json' | 'excel' | 'fresh';
 
 export function YearSetup() {
     const navigate = useNavigate();
-    const { taxYear, baseCurrency, setTaxYear, setBaseCurrency, importHoldings } = useAppStore();
+    const { taxYear, baseCurrency, setTaxYear, setBaseCurrency, importHoldings, reset } = useAppStore();
     const [importOption, setImportOption] = useState<ImportOption>('fresh');
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
@@ -204,6 +204,30 @@ export function YearSetup() {
                 }}
             >
                 Continue to Import
+            </button>
+
+            <button
+                onClick={() => {
+                    if (confirm('This will clear all imported data. Are you sure?')) {
+                        reset();
+                        localStorage.removeItem('bg-tax-autosave');
+                        setImportStatus(null);
+                        setImportError(null);
+                        setImportOption('fresh');
+                    }
+                }}
+                style={{
+                    padding: '0.75rem 2rem',
+                    fontSize: '1rem',
+                    backgroundColor: 'transparent',
+                    color: '#dc3545',
+                    border: '1px solid #dc3545',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    marginLeft: '1rem',
+                }}
+            >
+                Reset All Data
             </button>
         </div>
     );

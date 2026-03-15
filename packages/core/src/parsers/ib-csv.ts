@@ -1,5 +1,6 @@
 import type {
     IBDividend,
+    IBInterestEntry,
     IBParsedData,
     IBTrade,
     IBWithholdingTax,
@@ -12,6 +13,7 @@ export function parseIBCsv(csv: string): IBParsedData {
     const rawDividends: IBDividend[] = [];
     const withholdingTax: IBWithholdingTax[] = [];
     const stockYield: StockYieldEntry[] = [];
+    const interest: IBInterestEntry[] = [];
 
     for (const fields of lines) {
         const section = fields[0];
@@ -22,9 +24,7 @@ export function parseIBCsv(csv: string): IBParsedData {
         if (section === 'Trades' && fields[2] === 'Order' && fields[3] === 'Stocks') {
             trades.push(parseTrade(fields));
         } else if (section === 'Dividends' && isDataRow(fields[2])) {
-            // This also captures "Payment in Lieu of Dividend" entries — they appear
-            // in the Dividends section with description like "VCLT(...) Payment in Lieu of Dividend"
-            // and are treated identically to regular dividends for tax purposes (5% rate + WHT credit)
+            // This also captures "Payment in Lieu of Dividend" entries
             const div = parseDividendLine(fields);
             if (div) rawDividends.push(div);
         } else if (section === 'Withholding Tax' && isDataRow(fields[2])) {
@@ -33,11 +33,15 @@ export function parseIBCsv(csv: string): IBParsedData {
         } else if (section.startsWith('Stock Yield Enhancement Program Securities Lent Interest Details') && isDataRow(fields[2])) {
             const sy = parseStockYieldLine(fields);
             if (sy) stockYield.push(sy);
+        } else if (section === 'Interest' && isDataRow(fields[2])) {
+            // Cash interest: SYEP interest, debit interest, etc.
+            const entry = parseInterestLine(fields);
+            if (entry) interest.push(entry);
         }
     }
 
     const dividends = combineDividends(rawDividends);
-    return { trades, dividends, withholdingTax, stockYield };
+    return { trades, dividends, withholdingTax, stockYield, interest };
 }
 
 /** Check if field[2] is a currency code (data row), not a Total/SubTotal line */
@@ -119,6 +123,16 @@ function parseStockYieldLine(fields: string[]): StockYieldEntry | null {
     const amount = parseFloat(fields[10]);
     if (isNaN(amount)) return null;
     return { date, symbol, currency, amount };
+}
+
+function parseInterestLine(fields: string[]): IBInterestEntry | null {
+    // Interest,Data,{currency},{date},{description},{amount}
+    const currency = fields[2];
+    const date = fields[3];
+    const description = fields[4];
+    const amount = parseFloat(fields[5]);
+    if (isNaN(amount)) return null;
+    return { currency, date, description, amount };
 }
 
 /** Combine dividends by symbol+date+currency (sum amounts) */

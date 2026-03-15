@@ -41,6 +41,7 @@ function Layout() {
             if (saved.sales) store.importSales(saved.sales as any);
             if (saved.dividends) store.importDividends(saved.dividends as any);
             if (saved.stockYield) store.importStockYield(saved.stockYield as any);
+            if (saved.ibInterest) store.importIbInterest(saved.ibInterest as any);
             if (saved.revolutInterest) store.importRevolutInterest(saved.revolutInterest as any);
             if (saved.fxRates) store.setFxRates(saved.fxRates as any);
             if (saved.taxYear) store.setTaxYear(saved.taxYear as number);
@@ -59,6 +60,7 @@ function Layout() {
                 generateExcel({
                     ...state,
                     language: 'en',
+                    ibInterest: state.ibInterest || [],
                     manualEntries: [],
                 }).then(buffer => {
                     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

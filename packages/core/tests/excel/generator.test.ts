@@ -86,6 +86,7 @@ describe('Excel Generator', () => {
                     amount: 10.5,
                 },
             ],
+            ibInterest: [],
             revolutInterest: [
                 {
                     currency: 'EUR',
@@ -123,6 +124,7 @@ describe('Excel Generator', () => {
                     '2024-06-10': 1.95583,
                 },
             },
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -234,12 +236,14 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: {
                 USD: {
                     '2024-01-15': 0.92,
                 },
             },
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -271,8 +275,10 @@ describe('Excel Generator', () => {
                 { symbol: 'AAPL', country: 'САЩ', date: '2025-01-10', currency: 'USD', grossAmount: 25, withholdingTax: 2, bgTaxDue: 1.5, whtCredit: 2, notes: '' },
             ],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: { USD: { '2025-01-10': 1.9, '2025-02-10': 1.95 } },
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -324,8 +330,10 @@ describe('Excel Generator', () => {
             ],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: {},
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -379,6 +387,7 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: {
                 USD: {
@@ -387,6 +396,7 @@ describe('Excel Generator', () => {
                     '2025-03-10': 1.95,
                 },
             },
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -428,6 +438,7 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [
                 {
                     currency: 'EUR',
@@ -443,6 +454,7 @@ describe('Excel Generator', () => {
                 },
             ],
             fxRates: {},
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -488,8 +500,10 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: { USD: { '2024-01-15': 1.82 } },
+            ibInterest: [],
             manualEntries: [],
         };
 
@@ -522,8 +536,10 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
+            ibInterest: [],
             revolutInterest: [],
             fxRates: {},
+            ibInterest: [],
             manualEntries: [],
         };
 

@@ -72,6 +72,7 @@ export interface AppState {
     sales: Sale[];
     dividends: Dividend[];
     stockYield: StockYieldEntry[];
+    ibInterest: IBInterestEntry[];
     revolutInterest: RevolutInterest[];
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
     manualEntries: ManualEntry[];
@@ -85,12 +86,21 @@ export interface ValidationWarning {
     rowId?: string;
 }
 
+/** IB cash interest entry (SYEP interest, debit interest, etc.) */
+export interface IBInterestEntry {
+    currency: string;
+    date: string;
+    description: string;
+    amount: number;
+}
+
 /** IB CSV raw parsed data before FIFO processing */
 export interface IBParsedData {
     trades: IBTrade[];
     dividends: IBDividend[];
     withholdingTax: IBWithholdingTax[];
     stockYield: StockYieldEntry[];
+    interest: IBInterestEntry[];
 }
 
 export interface IBTrade {

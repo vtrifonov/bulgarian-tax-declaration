@@ -18,6 +18,7 @@ export function useAutoSave() {
         sales,
         dividends,
         stockYield,
+        ibInterest,
         revolutInterest,
         fxRates,
     } = useAppStore();
@@ -26,14 +27,14 @@ export function useAutoSave() {
         clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
             try {
-                const data = { taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, revolutInterest, fxRates };
+                const data = { taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, ibInterest, revolutInterest, fxRates };
                 localStorage.setItem(SAVE_KEY, JSON.stringify(data));
             } catch (err) {
                 console.error('Auto-save failed:', err);
             }
         }, DEBOUNCE_MS);
         return () => clearTimeout(timerRef.current);
-    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, revolutInterest, fxRates]);
+    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, ibInterest, revolutInterest, fxRates]);
 }
 
 /** Load auto-saved state on app startup. Returns null if nothing saved. */
