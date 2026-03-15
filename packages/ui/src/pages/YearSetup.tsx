@@ -23,8 +23,8 @@ export function YearSetup() {
           type="number"
           value={taxYear}
           onChange={(e) => handleYearChange(parseInt(e.target.value))}
-          min={2020}
-          max={2030}
+          min={2025}
+          max={2035}
           style={{ padding: '0.5rem', fontSize: '1rem', width: '120px' }}
         />
       </div>
