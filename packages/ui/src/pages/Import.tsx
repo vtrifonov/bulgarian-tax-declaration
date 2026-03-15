@@ -219,7 +219,7 @@ export function Import() {
                         style={{
                             border: `3px dashed ${isDragOver ? 'var(--accent)' : 'var(--border)'}`,
                             borderRadius: '12px',
-                            padding: '3rem 2rem',
+                            padding: '1.5rem 2rem',
                             textAlign: 'center',
                             backgroundColor: isDragOver ? 'var(--drop-bg)' : 'var(--card-bg)',
                             cursor: 'pointer',
