@@ -38,6 +38,19 @@ function createEditableColumn<T extends Record<string, any>>(
   };
 }
 
+// Helper to convert amounts to base currency
+function createToBaseCcy(fxRates: Record<string, Record<string, number>>, baseCurrency: 'BGN' | 'EUR') {
+  return (amount: number, currency: string, date: string): string => {
+    if (currency === baseCurrency) return amount.toFixed(2);
+    if (currency === 'EUR' && baseCurrency === 'BGN') return (amount * 1.95583).toFixed(2);
+    if (currency === 'BGN' && baseCurrency === 'EUR') return (amount / 1.95583).toFixed(2);
+    const ecbRate = fxRates[currency]?.[date];
+    if (!ecbRate) return '—';
+    if (baseCurrency === 'EUR') return (amount / ecbRate).toFixed(2);
+    return (amount * 1.95583 / ecbRate).toFixed(2);
+  };
+}
+
 export function Workspace() {
   const [activeTab, setActiveTab] = useState<TabType>('holdings');
   const [fxTab, setFxTab] = useState<string | null>(null);
@@ -50,6 +63,7 @@ export function Workspace() {
     stockYield,
     revolutInterest,
     fxRates,
+    baseCurrency,
     updateHolding,
     deleteHolding,
     addHolding,
@@ -124,6 +138,33 @@ export function Workspace() {
         updateHolding(rowIndex, updated);
       },
     }),
+    {
+      id: 'totalCcy',
+      header: 'Total (ccy)',
+      accessorFn: (row: Holding) => (row.quantity * row.unitPrice).toFixed(2),
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'fxRate',
+      header: 'FX Rate',
+      accessorFn: (row: Holding) => {
+        const rate = fxRates[row.currency]?.[row.dateAcquired];
+        return rate ? rate.toFixed(6) : '—';
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'totalBase',
+      header: `Total (${baseCurrency})`,
+      accessorFn: (row: Holding) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.quantity * row.unitPrice, row.currency, row.dateAcquired);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
     createEditableColumn<Holding>('notes', 'Notes', {
       onSave: (rowIndex, value) => {
         const updated = { ...holdings[rowIndex], notes: value };
@@ -227,6 +268,39 @@ export function Workspace() {
       },
     }),
     {
+      id: 'proceedsBase',
+      header: `Proceeds (${baseCurrency})`,
+      accessorFn: (row: Sale) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'costBase',
+      header: `Cost (${baseCurrency})`,
+      accessorFn: (row: Sale) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'plBase',
+      header: `P/L (${baseCurrency})`,
+      accessorFn: (row: Sale) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
+        const cost = parseFloat(toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired));
+        if (proceeds === NaN || cost === NaN) return '—';
+        return (proceeds - cost).toFixed(2);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
       id: 'delete',
       header: '',
       cell: ({ row }) => (
@@ -286,6 +360,36 @@ export function Workspace() {
         updateDividend(rowIndex, updated);
       },
     }),
+    {
+      id: 'fxRate',
+      header: 'FX Rate',
+      accessorFn: (row: Dividend) => {
+        const rate = fxRates[row.currency]?.[row.date];
+        return rate ? rate.toFixed(6) : '—';
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'grossBase',
+      header: `Gross (${baseCurrency})`,
+      accessorFn: (row: Dividend) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.grossAmount, row.currency, row.date);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'whtBase',
+      header: `WHT (${baseCurrency})`,
+      accessorFn: (row: Dividend) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.withholdingTax, row.currency, row.date);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
     {
       id: 'tax5pct',
       header: 'Tax (5%)',
@@ -361,6 +465,26 @@ export function Workspace() {
         updateStockYield(rowIndex, updated);
       },
     }),
+    {
+      id: 'fxRate',
+      header: 'FX Rate',
+      accessorFn: (row: StockYieldEntry) => {
+        const rate = fxRates[row.currency]?.[row.date];
+        return rate ? rate.toFixed(6) : '—';
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
+    {
+      id: 'amountBase',
+      header: `Amount (${baseCurrency})`,
+      accessorFn: (row: StockYieldEntry) => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        return toBaseCcy(row.amount, row.currency, row.date);
+      },
+      cell: (info) => info.getValue(),
+      meta: { align: 'right' as const, editable: false },
+    },
     {
       id: 'delete',
       header: '',
