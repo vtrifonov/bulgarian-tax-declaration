@@ -23,36 +23,33 @@ function Layout() {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <nav
         style={{
-          backgroundColor: '#f0f0f0',
+          backgroundColor: 'var(--nav-bg)',
           padding: '1rem',
-          borderBottom: '1px solid #ccc',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}
       >
-        <div>
-          <h2 style={{ margin: 0 }}>Bulgarian Tax Declaration</h2>
-        </div>
+        <h2 style={{ margin: 0 }}>Bulgarian Tax Declaration</h2>
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {steps.map((step, idx) => (
-              <div key={step.name}>
-                <Link
-                  to={step.path}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: idx <= currentStepIndex ? '#007bff' : '#e0e0e0',
-                    color: idx <= currentStepIndex ? 'white' : '#666',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                  }}
-                >
-                  {step.label}
-                </Link>
-              </div>
+              <Link
+                key={step.name}
+                to={step.path}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: idx <= currentStepIndex ? 'var(--accent)' : 'var(--bg-secondary)',
+                  color: idx <= currentStepIndex ? 'white' : 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                }}
+              >
+                {step.label}
+              </Link>
             ))}
           </div>
 
@@ -60,21 +57,21 @@ function Layout() {
             onClick={() => setLanguage(language === 'en' ? 'bg' : 'en')}
             style={{
               padding: '0.5rem 1rem',
-              backgroundColor: language === 'bg' ? '#28a745' : '#fff',
-              color: language === 'bg' ? '#fff' : '#333',
-              border: '1px solid #ccc',
+              backgroundColor: language === 'bg' ? '#28a745' : 'var(--bg)',
+              color: language === 'bg' ? '#fff' : 'var(--text)',
+              border: '1px solid var(--border)',
               cursor: 'pointer',
               borderRadius: '4px',
               fontWeight: 'bold',
               minWidth: '80px',
             }}
           >
-            {language === 'en' ? '🇧🇬 BG' : '🇬🇧 EN'}
+            {language === 'en' ? 'BG' : 'EN'}
           </button>
         </div>
       </nav>
 
-      <main style={{ flex: 1, padding: '0' }}>
+      <main style={{ flex: 1 }}>
         <Routes>
           <Route path="/" element={<YearSetup />} />
           <Route path="/import" element={<Import />} />

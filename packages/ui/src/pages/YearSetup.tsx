@@ -35,7 +35,7 @@ export function YearSetup() {
         </label>
         <div style={{
           padding: '0.5rem 1rem',
-          backgroundColor: '#f0f0f0',
+          backgroundColor: 'var(--bg-secondary)',
           borderRadius: '4px',
           display: 'inline-block',
           fontSize: '1rem',
@@ -52,7 +52,7 @@ export function YearSetup() {
         style={{
           padding: '0.75rem 2rem',
           fontSize: '1rem',
-          backgroundColor: '#007bff',
+          backgroundColor: 'var(--accent)',
           color: 'white',
           border: 'none',
           borderRadius: '4px',

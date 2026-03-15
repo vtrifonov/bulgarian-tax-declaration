@@ -38,7 +38,7 @@ export function Workspace() {
   return (
     <div style={{ padding: '2rem' }}>
       <h1>Workspace</h1>
-      <div style={{ borderBottom: '1px solid #ccc', marginBottom: '1rem' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
         {getTabs().map((tab) => (
           <button
             key={tab.id}
@@ -46,8 +46,8 @@ export function Workspace() {
             style={{
               marginRight: '1rem',
               padding: '0.5rem 1rem',
-              backgroundColor: activeTab === tab.id ? '#007bff' : '#f0f0f0',
-              color: activeTab === tab.id ? 'white' : 'black',
+              backgroundColor: activeTab === tab.id ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: activeTab === tab.id ? 'white' : 'var(--text)',
               border: 'none',
               cursor: 'pointer',
             }}

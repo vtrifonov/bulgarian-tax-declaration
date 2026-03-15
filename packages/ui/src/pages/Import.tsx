@@ -157,11 +157,11 @@ export function Import() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
-          border: `3px dashed ${isDragOver ? '#007bff' : '#ccc'}`,
+          border: `3px dashed ${isDragOver ? 'var(--accent)' : 'var(--border)'}`,
           borderRadius: '12px',
           padding: '3rem 2rem',
           textAlign: 'center',
-          backgroundColor: isDragOver ? '#e8f0fe' : '#fafafa',
+          backgroundColor: isDragOver ? 'var(--drop-bg)' : 'var(--card-bg)',
           cursor: 'pointer',
           transition: 'all 0.2s',
           marginBottom: '1.5rem',
@@ -174,7 +174,7 @@ export function Import() {
         <p style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0', fontWeight: 'bold' }}>
           {isDragOver ? 'Drop files here' : 'Drag & drop CSV files here'}
         </p>
-        <p style={{ color: '#666', margin: '0 0 1rem 0' }}>or</p>
+        <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>or</p>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -183,7 +183,7 @@ export function Import() {
           style={{
             padding: '0.6rem 1.5rem',
             fontSize: '1rem',
-            backgroundColor: '#007bff',
+            backgroundColor: 'var(--accent)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -200,7 +200,7 @@ export function Import() {
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />
-        <p style={{ color: '#999', fontSize: '0.85rem', marginTop: '1rem', marginBottom: 0 }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '1rem', marginBottom: 0 }}>
           Supported: Interactive Brokers CSV, Revolut Savings CSV
         </p>
       </div>
@@ -216,8 +216,8 @@ export function Import() {
                 padding: '0.75rem 1rem',
                 marginBottom: '0.5rem',
                 borderRadius: '6px',
-                backgroundColor: f.status === 'success' ? '#d4edda' : '#f8d7da',
-                border: `1px solid ${f.status === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+                backgroundColor: f.status === 'success' ? 'var(--success-bg)' : 'var(--error-bg)',
+                border: `1px solid ${f.status === 'success' ? 'var(--success-border)' : 'var(--error-border)'}`,
               }}
             >
               <div style={{ fontWeight: 'bold' }}>
@@ -225,7 +225,7 @@ export function Import() {
                 <span style={{
                   marginLeft: '0.5rem',
                   fontSize: '0.8rem',
-                  backgroundColor: f.type === 'ib' ? '#007bff' : '#28a745',
+                  backgroundColor: f.type === 'ib' ? 'var(--accent)' : '#28a745',
                   color: 'white',
                   padding: '0.1rem 0.4rem',
                   borderRadius: '3px',
@@ -233,7 +233,7 @@ export function Import() {
                   {f.type === 'ib' ? 'IB' : 'Revolut'}
                 </span>
               </div>
-              <div style={{ fontSize: '0.9rem', color: '#555', marginTop: '0.25rem' }}>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                 {f.message}
               </div>
             </div>
@@ -246,7 +246,7 @@ export function Import() {
         style={{
           padding: '0.75rem 2rem',
           fontSize: '1rem',
-          backgroundColor: importedFiles.some(f => f.status === 'success') ? '#007bff' : '#ccc',
+          backgroundColor: importedFiles.some(f => f.status === 'success') ? 'var(--accent)' : 'var(--border)',
           color: 'white',
           border: 'none',
           borderRadius: '4px',
