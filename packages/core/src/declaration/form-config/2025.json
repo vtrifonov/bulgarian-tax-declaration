@@ -1,0 +1,29 @@
+{
+  "year": 2025,
+  "baseCurrency": "BGN",
+  "appendix5": {
+    "title": "Приложение 5 — Доходи от прехвърляне на права или имущество",
+    "fields": [
+      { "ref": "Ред 1, Кол. 3", "label": "Приходи от продажба на ценни книжа", "source": "capitalGains.totalProceeds" },
+      { "ref": "Ред 1, Кол. 4", "label": "Цена на придобиване", "source": "capitalGains.totalCost" },
+      { "ref": "Ред 1, Кол. 5", "label": "Печалба", "source": "capitalGains.profit" },
+      { "ref": "Ред 1, Кол. 7", "label": "Данък (10%)", "source": "capitalGains.taxDue" }
+    ]
+  },
+  "appendix8table1": {
+    "title": "Приложение 8, Таблица 1 — Дивиденти от чужбина",
+    "fields": [
+      { "ref": "Кол. 4", "label": "Брутен размер на дивидента", "source": "dividends.totalGross" },
+      { "ref": "Кол. 6", "label": "Удържан данък в чужбина", "source": "dividends.totalWht" },
+      { "ref": "Кол. 7", "label": "Дължим данък (5%)", "source": "dividends.totalBgTax" },
+      { "ref": "Кол. 8", "label": "Данъчен кредит", "source": "dividends.totalWhtCredit" }
+    ]
+  },
+  "appendix8table6": {
+    "title": "Приложение 8, Таблица 6 — Лихви от чужбина",
+    "fields": [
+      { "ref": "Кол. 4", "label": "Брутен размер на лихвата", "source": "interest.totalGross" },
+      { "ref": "Кол. 7", "label": "Дължим данък (10%)", "source": "interest.totalTax" }
+    ]
+  }
+}

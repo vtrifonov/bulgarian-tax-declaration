@@ -1,0 +1,33 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Statement,Data,Title,Activity Statement
+Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,EUR,CSPX,"2025-01-21, 10:26:07",1,614.28,614.38,-614.28,-1.25,615.53,0,0.1,O
+Trades,Data,Order,Stocks,USD,AAPL,"2025-03-10, 14:30:00",10,170.50,171.00,-1705.00,-1.00,1706.00,0,5.00,O
+Trades,Data,Order,Stocks,USD,AAPL,"2025-09-15, 10:00:00",-5,250.00,250.00,1250.00,-1.00,-852.50,396.50,0,O
+Trades,SubTotal,,Stocks,EUR,CSPX,,1,,,-614.28,-1.25,615.53,0,0.1,
+Trades,Total,,Stocks,EUR,,,,,,-614.28,-1.25,615.53,0,0.1,
+Trades,Total,,Stocks,USD,,,,,,-455.00,-2.00,853.50,396.50,5.00,
+Dividends,Header,Currency,Date,Description,Amount
+Dividends,Data,EUR,2025-02-19,ASML(NL0010273215) Cash Dividend EUR 1.52 per Share (Ordinary Dividend),10.64
+Dividends,Data,EUR,2025-02-19,ASML(NL0010273215) Cash Dividend EUR 1.52 per Share - Reversal (Ordinary Dividend),-10.64
+Dividends,Data,EUR,2025-02-19,ASML(NL0010273215) Cash Dividend EUR 1.52 per Share (Ordinary Dividend),10.64
+Dividends,Data,Total,,,10.64
+Dividends,Data,USD,2025-02-13,AAPL(US0378331005) Cash Dividend USD 0.25 per Share (Ordinary Dividend),12.50
+Dividends,Data,USD,2025-07-10,BABA(US01609W1027) Cash Dividend USD 1.05 per Share (Ordinary Dividend),10.50
+Dividends,Data,USD,2025-07-10,BABA(US01609W1027) Cash Dividend USD 0.95 per Share (Bonus Dividend),9.50
+Dividends,Data,USD,2025-03-13,MSFT(US5949181045) Cash Dividend USD 0.83 per Share (Ordinary Dividend),166.00
+Dividends,Data,Total,,,198.50
+Withholding Tax,Header,Currency,Date,Description,Amount,Code
+Withholding Tax,Data,EUR,2025-02-19,ASML(NL0010273215) Cash Dividend EUR 1.52 per Share - NL Tax,-1.60,
+Withholding Tax,Data,Total,,,-1.60,
+Withholding Tax,Data,USD,2024-12-04,VCLT(US92206C8139) Cash Dividend USD 0.3267 per Share - US Tax,1.05,
+Withholding Tax,Data,USD,2024-12-04,VCLT(US92206C8139) Cash Dividend USD 0.3267 per Share - US Tax,-0.10,
+Withholding Tax,Data,USD,2025-02-13,AAPL(US0378331005) Cash Dividend USD 0.25 per Share - US Tax,-1.25,
+Withholding Tax,Data,USD,2025-03-13,MSFT(US5949181045) Cash Dividend USD 0.83 per Share - US Tax,-16.60,
+Withholding Tax,Data,Total,,,-16.90,
+Stock Yield Enhancement Program Securities Lent Interest Details,Header,Currency,Value Date,Symbol,Start Date,Quantity,Collateral Amount,Market-based Rate (%),Interest Rate on Customer Collateral (%),Interest Paid to Customer,Code
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-01-02,ISPAd,2025-01-02,-42,1300.95,1.62,0.81,0.03,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-01-03,ISPAd,2025-01-03,-42,1300.95,1.62,0.81,0.03,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,Total,,,,,,,,0.06,
