@@ -208,7 +208,7 @@ export function Import() {
         <div style={{ padding: '2rem' }}>
             <h1>Data Import</h1>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'stretch' }}>
                 {/* Left column: drop zone + files + continue */}
                 <div>
                     {/* Drop zone */}
