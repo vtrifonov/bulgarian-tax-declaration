@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
 import {
     calcDividendTax,
+    FifoEngine,
     FxService,
     InMemoryFxCache,
     matchWhtToDividends,
@@ -44,6 +45,7 @@ export function Import() {
 
     const {
         importHoldings,
+        importSales,
         importDividends,
         importStockYield,
         importRevolutInterest,
@@ -114,28 +116,29 @@ export function Import() {
                 importDividends(allDividends);
                 importStockYield(parsed.stockYield);
 
-                // For trades, we need FIFO processing — store buys as holdings for now
-                // Sells will be processed when user has all data loaded
-                const buys = parsed.trades.filter(t => t.quantity > 0);
-                const newHoldings = buys.map(t => ({
-                    id: crypto.randomUUID(),
-                    broker: 'IB',
-                    country: resolveCountry(t.symbol),
-                    symbol: t.symbol,
-                    dateAcquired: t.dateTime.split(',')[0].trim(),
-                    quantity: t.quantity,
-                    currency: t.currency,
-                    unitPrice: t.price,
-                }));
-                importHoldings([...holdings, ...newHoldings]);
+                // Build country map for FIFO engine
+                const countryMap: Record<string, string> = {};
+                for (const t of parsed.trades) {
+                    countryMap[t.symbol] = resolveCountry(t.symbol);
+                }
 
+                // FIFO: process all trades (buys + sells) against existing holdings
+                const fifo = new FifoEngine([...holdings]);
+                const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
+
+                importHoldings(newHoldings);
+                importSales(newSales);
+
+                const buys = parsed.trades.filter(t => t.quantity > 0).length;
                 const sells = parsed.trades.filter(t => t.quantity < 0).length;
+                const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
 
                 setImportedFiles(prev => [...prev, {
                     name: file.name,
                     type: 'ib',
                     status: 'success',
-                    message: `${buys.length} buys, ${sells} sells, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield entries`,
+                    message:
+                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield${warnMsg}`,
                 }]);
             } else {
                 const revolut: RevolutInterest = parseRevolutCsv(content);
