@@ -15,16 +15,16 @@ export function parseIBCsv(csv: string): IBParsedData {
 
     if (section === 'Trades' && fields[2] === 'Order' && fields[3] === 'Stocks') {
       trades.push(parseTrade(fields));
-    } else if (section === 'Dividends' && fields[2] !== 'Total' && !fields[2].startsWith('Total')) {
+    } else if (section === 'Dividends' && isDataRow(fields[2])) {
       // This also captures "Payment in Lieu of Dividend" entries — they appear
       // in the Dividends section with description like "VCLT(...) Payment in Lieu of Dividend"
       // and are treated identically to regular dividends for tax purposes (5% rate + WHT credit)
       const div = parseDividendLine(fields);
       if (div) rawDividends.push(div);
-    } else if (section === 'Withholding Tax' && fields[2] !== 'Total' && !fields[2].startsWith('Total')) {
+    } else if (section === 'Withholding Tax' && isDataRow(fields[2])) {
       const wht = parseWhtLine(fields);
       if (wht) withholdingTax.push(wht);
-    } else if (section.startsWith('Stock Yield Enhancement Program Securities Lent Interest Details') && fields[2] !== 'Total') {
+    } else if (section.startsWith('Stock Yield Enhancement Program Securities Lent Interest Details') && isDataRow(fields[2])) {
       const sy = parseStockYieldLine(fields);
       if (sy) stockYield.push(sy);
     }
@@ -32,6 +32,16 @@ export function parseIBCsv(csv: string): IBParsedData {
 
   const dividends = combineDividends(rawDividends);
   return { trades, dividends, withholdingTax, stockYield };
+}
+
+/** Check if field[2] is a currency code (data row), not a Total/SubTotal line */
+function isDataRow(field2: string): boolean {
+  if (!field2) return false;
+  const lower = field2.toLowerCase();
+  // Skip Total, SubTotal, and "Total in XXX" lines
+  if (lower === 'total' || lower.startsWith('total')) return false;
+  // Valid currency codes are 3 uppercase letters
+  return /^[A-Z]{3}$/.test(field2);
 }
 
 function parseCsvLines(csv: string): string[][] {
