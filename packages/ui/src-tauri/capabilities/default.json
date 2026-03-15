@@ -1,18 +1,10 @@
 {
-  "version": 2,
   "identifier": "main-capability",
   "description": "Capability for main window",
   "windows": ["main"],
-  "webApi": {
-    "all": false,
-    "core": ["path", "event"]
-  },
   "permissions": [
-    "core:app:default",
-    "core:window:allow-*",
-    "dialog:open",
-    "dialog:save",
-    "fs:scope-app-data",
-    "fs:scope-download"
+    "core:default",
+    "dialog:default",
+    "fs:default"
   ]
 }
