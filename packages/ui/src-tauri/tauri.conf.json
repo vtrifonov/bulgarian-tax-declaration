@@ -4,7 +4,7 @@
   "identifier": "com.bgtax.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev:vite",
     "beforeBuildCommand": "pnpm build:vite"
   },
