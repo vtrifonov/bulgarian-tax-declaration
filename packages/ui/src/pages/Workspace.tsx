@@ -93,14 +93,25 @@ export function Workspace() {
         addRevolutInterest,
     } = useAppStore();
 
-    const getTabs = () => [
-        { id: 'holdings', label: 'Holdings', count: holdings.length },
-        { id: 'sales', label: 'Sales', count: sales.length },
-        { id: 'dividends', label: 'Dividends', count: dividends.length },
-        { id: 'stockYield', label: 'Stock Yield', count: stockYield.length },
-        { id: 'revolutInterest', label: 'Revolut Interest', count: revolutInterest.length },
-        { id: 'fxRates', label: 'FX Rates', count: Object.keys(fxRates).length },
-    ];
+    const getTabs = () => {
+        // Always show: Holdings, Sales, Dividends (user can fill manually)
+        const tabs = [
+            { id: 'holdings', label: 'Holdings', count: holdings.length },
+            { id: 'sales', label: 'Sales', count: sales.length },
+            { id: 'dividends', label: 'Dividends', count: dividends.length },
+        ];
+        // Show only if data exists (populated from IB/Revolut import)
+        if (stockYield.length > 0) {
+            tabs.push({ id: 'stockYield', label: 'Stock Yield', count: stockYield.length });
+        }
+        if (revolutInterest.length > 0) {
+            tabs.push({ id: 'revolutInterest', label: 'Revolut Interest', count: revolutInterest.length });
+        }
+        if (Object.keys(fxRates).length > 0) {
+            tabs.push({ id: 'fxRates', label: 'FX Rates', count: Object.keys(fxRates).length });
+        }
+        return tabs;
+    };
 
     // Holdings columns
     const holdingsColumns: ColumnDef<Holding>[] = [
@@ -303,7 +314,7 @@ export function Workspace() {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
                 const cost = parseFloat(toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired));
-                if (proceeds === NaN || cost === NaN) return '—';
+                if (isNaN(proceeds) || isNaN(cost)) return '—';
                 return (proceeds - cost).toFixed(2);
             },
             cell: (info) => info.getValue(),

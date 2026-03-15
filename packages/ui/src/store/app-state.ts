@@ -150,7 +150,7 @@ export const useAppStore = create<AppState>((set) => ({
         })),
     importRevolutInterest: (interests: RevolutInterest[]) => set({ revolutInterest: interests }),
 
-    setFxRates: (rates: Record<string, Record<string, number>>) => set({ fxRates: rates }),
+    setFxRates: (rates: Record<string, Record<string, number>>) => set((state) => ({ fxRates: { ...state.fxRates, ...rates } })),
 
     reset: () => set(initialState),
 }));
