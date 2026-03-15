@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
-import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry } from '@bg-tax/core';
+import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry, FxService, InMemoryFxCache } from '@bg-tax/core';
 import type { IBParsedData, RevolutInterest } from '@bg-tax/core';
 
 interface ImportedFile {
@@ -24,10 +24,12 @@ export function Import() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importedFiles, setImportedFiles] = useState<ImportedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [fetchingFx, setFetchingFx] = useState(false);
 
   const {
     importHoldings, importDividends,
     importStockYield, importRevolutInterest,
+    setFxRates, taxYear, baseCurrency,
     holdings,
   } = useAppStore();
 
@@ -245,7 +247,33 @@ export function Import() {
       )}
 
       <button
-        onClick={() => navigate('/workspace')}
+        disabled={fetchingFx}
+        onClick={async () => {
+          // Collect all currencies from imported data
+          const state = useAppStore.getState();
+          const currencies = new Set<string>();
+          for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
+          for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
+          for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
+          for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
+
+          // Fetch FX rates from ECB
+          const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
+          if (needed.length > 0) {
+            setFetchingFx(true);
+            try {
+              const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+              const rates = await fxService.fetchRates(needed, taxYear);
+              setFxRates(rates);
+            } catch (err) {
+              console.error('Failed to fetch FX rates:', err);
+            } finally {
+              setFetchingFx(false);
+            }
+          }
+
+          navigate('/workspace');
+        }}
         style={{
           padding: '0.75rem 2rem',
           fontSize: '1rem',
@@ -254,9 +282,10 @@ export function Import() {
           border: 'none',
           borderRadius: '4px',
           cursor: 'pointer',
+          opacity: fetchingFx ? 0.7 : 1,
         }}
       >
-        Continue to Workspace
+        {fetchingFx ? 'Fetching FX rates...' : 'Continue to Workspace'}
       </button>
     </div>
   );
