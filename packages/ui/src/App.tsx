@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
     HashRouter,
     Link,
@@ -6,10 +7,15 @@ import {
     useLocation,
 } from 'react-router-dom';
 import { useAppStore } from './store/app-state';
+import {
+    loadAutoSave,
+    useAutoSave,
+} from './hooks/useAutoSave';
 import { YearSetup } from './pages/YearSetup';
 import { Import } from './pages/Import';
 import { Workspace } from './pages/Workspace';
 import { Declaration } from './pages/Declaration';
+import { generateExcel } from '@bg-tax/core';
 import './App.css';
 
 const steps = [
@@ -22,6 +28,52 @@ const steps = [
 function Layout() {
     const location = useLocation();
     const { language, setLanguage } = useAppStore();
+
+    // Auto-save state to localStorage
+    useAutoSave();
+
+    // Load saved state on startup
+    useEffect(() => {
+        const saved = loadAutoSave();
+        if (saved) {
+            const store = useAppStore.getState();
+            if (saved.holdings) store.importHoldings(saved.holdings as any);
+            if (saved.sales) store.importSales(saved.sales as any);
+            if (saved.dividends) store.importDividends(saved.dividends as any);
+            if (saved.stockYield) store.importStockYield(saved.stockYield as any);
+            if (saved.revolutInterest) store.importRevolutInterest(saved.revolutInterest as any);
+            if (saved.fxRates) store.setFxRates(saved.fxRates as any);
+            if (saved.taxYear) store.setTaxYear(saved.taxYear as number);
+            if (saved.language) store.setLanguage(saved.language as 'en' | 'bg');
+        }
+    }, []);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            const mod = e.metaKey || e.ctrlKey;
+            if (mod && e.key === 'e') {
+                e.preventDefault();
+                // Export Excel
+                const state = useAppStore.getState();
+                generateExcel({
+                    ...state,
+                    language: 'en',
+                    manualEntries: [],
+                }).then(buffer => {
+                    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Данъчна ${state.taxYear}.xlsx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
 
     const currentStepIndex = steps.findIndex((step) => step.path === location.pathname);
 

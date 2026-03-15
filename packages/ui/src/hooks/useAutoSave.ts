@@ -4,42 +4,50 @@ import {
 } from 'react';
 import { useAppStore } from '../store/app-state';
 
-const SAVE_FILENAME = 'bg-tax-autosave.json';
+const SAVE_KEY = 'bg-tax-autosave';
 const DEBOUNCE_MS = 2000;
 
-/**
- * Auto-save hook that debounces state changes and saves to localStorage
- * In a real Tauri app, this would use the fs plugin to save to disk.
- */
+/** Auto-save data (not actions) to localStorage, debounced */
 export function useAutoSave() {
-    const state = useAppStore();
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const {
+        taxYear,
+        baseCurrency,
+        language,
+        holdings,
+        sales,
+        dividends,
+        stockYield,
+        revolutInterest,
+        fxRates,
+    } = useAppStore();
 
     useEffect(() => {
         clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
             try {
-                const json = JSON.stringify(state, null, 2);
-                localStorage.setItem(SAVE_FILENAME, json);
+                const data = { taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, revolutInterest, fxRates };
+                localStorage.setItem(SAVE_KEY, JSON.stringify(data));
             } catch (err) {
                 console.error('Auto-save failed:', err);
             }
         }, DEBOUNCE_MS);
-
         return () => clearTimeout(timerRef.current);
-    }, [state]);
+    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, revolutInterest, fxRates]);
 }
 
-/**
- * Load auto-saved state on app startup
- * In a real Tauri app, this would use the fs plugin to read from disk.
- */
-export async function loadAutoSave(): Promise<Record<string, unknown> | null> {
+/** Load auto-saved state on app startup. Returns null if nothing saved. */
+export function loadAutoSave(): Record<string, unknown> | null {
     try {
-        const json = localStorage.getItem(SAVE_FILENAME);
+        const json = localStorage.getItem(SAVE_KEY);
         if (!json) return null;
         return JSON.parse(json);
     } catch {
-        return null; // No auto-save file or parse error — start fresh
+        return null;
     }
+}
+
+/** Clear auto-saved state */
+export function clearAutoSave(): void {
+    localStorage.removeItem(SAVE_KEY);
 }
