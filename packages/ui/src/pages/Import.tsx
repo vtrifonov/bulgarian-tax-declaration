@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
 import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry, calcDividendTax, FxService, InMemoryFxCache } from '@bg-tax/core';
@@ -32,6 +32,33 @@ export function Import() {
     setFxRates, taxYear, baseCurrency,
     holdings,
   } = useAppStore();
+
+  // Auto-fetch FX rates when new currencies are detected
+  useEffect(() => {
+    const state = useAppStore.getState();
+    const currencies = new Set<string>();
+    for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
+    for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
+    for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
+    for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
+
+    const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
+    if (needed.length === 0) return;
+
+    // Check if we already have rates for all needed currencies
+    const existing = Object.keys(state.fxRates);
+    const missing = needed.filter(c => !existing.includes(c));
+    if (missing.length === 0) return;
+
+    setFetchingFx(true);
+    const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+    fxService.fetchRates(needed, taxYear).then(rates => {
+      setFxRates(rates);
+      setFetchingFx(false);
+    }).catch(() => {
+      setFetchingFx(false);
+    });
+  }, [importedFiles.length]); // Re-run after each file import
 
   const processFile = useCallback(async (file: File) => {
     const content = await file.text();
@@ -244,6 +271,23 @@ export function Import() {
           </ol>
         </div>
       </div>
+
+      {/* FX Rate loading indicator */}
+      {fetchingFx && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+          borderRadius: '6px',
+          backgroundColor: 'var(--drop-bg)',
+          border: '1px solid var(--accent)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}>
+          <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+          Fetching FX rates from ECB for detected currencies...
+        </div>
+      )}
 
       {/* Imported files list */}
       {importedFiles.length > 0 && (
