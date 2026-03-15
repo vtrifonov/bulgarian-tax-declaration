@@ -1,9 +1,12 @@
-import type { Sale, Dividend } from '../types/index.js';
+import type {
+    Dividend,
+    Sale,
+} from '../types/index.js';
 
 // ECB cross-rate conversion factors
 const BGN_TO_EUR = 1.95583; // 1 BGN = 1.95583 EUR (inverse)
 const ECB_CONVERSION: Record<string, number> = {
-  USD: 1.0,  // baseline
+    USD: 1.0, // baseline
 };
 
 /**
@@ -12,32 +15,32 @@ const ECB_CONVERSION: Record<string, number> = {
  * For EUR base: rate = 1 / ecbRate
  */
 export function populateSaleFxRates(
-  sales: Sale[],
-  getRate: (currency: string, date: string) => number | undefined,
-  baseCurrency: 'BGN' | 'EUR' = 'BGN',
+    sales: Sale[],
+    getRate: (currency: string, date: string) => number | undefined,
+    baseCurrency: 'BGN' | 'EUR' = 'BGN',
 ): Sale[] {
-  return sales.map(s => {
-    const buyEcbRate = getRate(s.currency, s.dateAcquired);
-    const sellEcbRate = getRate(s.currency, s.dateSold);
+    return sales.map(s => {
+        const buyEcbRate = getRate(s.currency, s.dateAcquired);
+        const sellEcbRate = getRate(s.currency, s.dateSold);
 
-    const fxRateBuy = buyEcbRate !== undefined
-      ? baseCurrency === 'BGN'
-        ? BGN_TO_EUR / buyEcbRate
-        : 1 / buyEcbRate
-      : 0;
+        const fxRateBuy = buyEcbRate !== undefined
+            ? baseCurrency === 'BGN'
+                ? BGN_TO_EUR / buyEcbRate
+                : 1 / buyEcbRate
+            : 0;
 
-    const fxRateSell = sellEcbRate !== undefined
-      ? baseCurrency === 'BGN'
-        ? BGN_TO_EUR / sellEcbRate
-        : 1 / sellEcbRate
-      : 0;
+        const fxRateSell = sellEcbRate !== undefined
+            ? baseCurrency === 'BGN'
+                ? BGN_TO_EUR / sellEcbRate
+                : 1 / sellEcbRate
+            : 0;
 
-    return {
-      ...s,
-      fxRateBuy,
-      fxRateSell,
-    };
-  });
+        return {
+            ...s,
+            fxRateBuy,
+            fxRateSell,
+        };
+    });
 }
 
 /**
@@ -45,8 +48,8 @@ export function populateSaleFxRates(
  * so this function just returns dividends as-is.
  */
 export function populateDividendFxRates(
-  dividends: Dividend[],
-  getRate: (currency: string, date: string) => number | undefined,
+    dividends: Dividend[],
+    getRate: (currency: string, date: string) => number | undefined,
 ): Dividend[] {
-  return dividends.map(d => ({ ...d })); // FX conversion happens in tax calculator
+    return dividends.map(d => ({ ...d })); // FX conversion happens in tax calculator
 }

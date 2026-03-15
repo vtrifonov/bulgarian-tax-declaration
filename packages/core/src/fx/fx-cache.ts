@@ -3,8 +3,8 @@
  * This allows flexible caching backends (file system, localStorage, etc.).
  */
 export interface FxCache {
-  get(currency: string, year: number): Promise<Record<string, number> | null>;
-  set(currency: string, year: number, rates: Record<string, number>): Promise<void>;
+    get(currency: string, year: number): Promise<Record<string, number> | null>;
+    set(currency: string, year: number, rates: Record<string, number>): Promise<void>;
 }
 
 /**
@@ -12,13 +12,13 @@ export interface FxCache {
  * Stores rates in a simple Map with no persistence.
  */
 export class InMemoryFxCache implements FxCache {
-  private store = new Map<string, Record<string, number>>();
+    private store = new Map<string, Record<string, number>>();
 
-  async get(currency: string, year: number): Promise<Record<string, number> | null> {
-    return this.store.get(`${currency}-${year}`) ?? null;
-  }
+    async get(currency: string, year: number): Promise<Record<string, number> | null> {
+        return this.store.get(`${currency}-${year}`) ?? null;
+    }
 
-  async set(currency: string, year: number, rates: Record<string, number>): Promise<void> {
-    this.store.set(`${currency}-${year}`, rates);
-  }
+    async set(currency: string, year: number, rates: Record<string, number>): Promise<void> {
+        this.store.set(`${currency}-${year}`, rates);
+    }
 }

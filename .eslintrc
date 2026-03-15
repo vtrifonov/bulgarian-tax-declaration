@@ -1,0 +1,156 @@
+{
+    "extends": [
+        ".base.eslintrc"
+    ],
+    "plugins": [
+        "import-newlines",
+        "@stylistic"
+    ],
+    "rules": {
+        "@stylistic/semi": "error",
+        "@stylistic/indent": [
+            "warn",
+            4,
+            {
+                "SwitchCase": 1
+            }
+        ],
+        "@stylistic/member-delimiter-style": "error",
+        "@stylistic/array-bracket-spacing": [
+            "error",
+            "never"
+        ],
+        "@stylistic/space-infix-ops": "error",
+        "arrow-spacing": "error",
+        "@stylistic/brace-style": [
+            "error",
+            "1tbs",
+            {
+                "allowSingleLine": false
+            }
+        ],
+        "@stylistic/comma-dangle": [
+            "error",
+            "always-multiline"
+        ],
+        "@stylistic/comma-spacing": "error",
+        "@stylistic/comma-style": "error",
+        "curly": [
+            "error",
+            "all"
+        ],
+        "@stylistic/dot-location": [
+            "error",
+            "property"
+        ],
+        "@stylistic/key-spacing": [
+            "error",
+            {
+                "afterColon": true,
+                "beforeColon": false,
+                "mode": "strict"
+            }
+        ],
+        "@stylistic/keyword-spacing": "error",
+        "@stylistic/lines-between-class-members": [
+            "error",
+            "always",
+            {
+                "exceptAfterSingleLine": true
+            }
+        ],
+        "@stylistic/no-multi-spaces": "error",
+        "@stylistic/no-multiple-empty-lines": [
+            "error",
+            {
+                "max": 1,
+                "maxBOF": 0,
+                "maxEOF": 1
+            }
+        ],
+        "@stylistic/no-whitespace-before-property": [
+            "error"
+        ],
+        "@stylistic/object-curly-spacing": [
+            "error",
+            "always"
+        ],
+        "@stylistic/operator-linebreak": [
+            "error",
+            "before",
+            {
+                "overrides": {
+                    "+": "ignore",
+                    "+=": "ignore",
+                    "=": "ignore"
+                }
+            }
+        ],
+        "@stylistic/padded-blocks": [
+            "error",
+            "never"
+        ],
+        "@stylistic/padding-line-between-statements": [
+            "error",
+            {
+                "blankLine": "always",
+                "next": [
+                    "return",
+                    "if",
+                    "for",
+                    "switch",
+                    "function"
+                ],
+                "prev": "*"
+            },
+            {
+                "blankLine": "always",
+                "next": "*",
+                "prev": [
+                    "const",
+                    "let",
+                    "var"
+                ]
+            },
+            {
+                "blankLine": "any",
+                "next": [
+                    "const",
+                    "let",
+                    "var"
+                ],
+                "prev": [
+                    "const",
+                    "let",
+                    "var"
+                ]
+            }
+        ],
+        "@stylistic/quotes": [
+            "error",
+            "single",
+            {
+                "allowTemplateLiterals": true
+            }
+        ],
+        "@stylistic/semi-spacing": "error",
+        "@stylistic/space-in-parens": [
+            "error",
+            "never"
+        ],
+        "sort-imports": [
+            "error",
+            {
+                "ignoreCase": true,
+                "ignoreDeclarationSort": true
+            }
+        ],
+        "import-newlines/enforce": [
+            "warn",
+            {
+                "items": 1,
+                "semi": false
+            }
+        ]
+    }
+}

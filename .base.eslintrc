@@ -1,0 +1,93 @@
+// includes all non-formatting rules
+{
+    "extends": [
+        "plugin:@typescript-eslint/eslint-recommended",
+        "plugin:import/errors",
+        "plugin:import/warnings",
+        "plugin:import/typescript"
+    ],
+    "ignorePatterns": [
+        "setupTests.ts",
+        "serviceWorker.ts",
+        "node_modules/**",
+        "coverage/**",
+        "**/*.js",
+        "**/*.json"
+    ],
+    "parser": "@typescript-eslint/parser",
+    "parserOptions": {
+        "ecmaFeatures": {
+            "modules": true
+        },
+        "project": "./tsconfig.json",
+        "sourceType": "module"
+    },
+    "env": {
+        "jest/globals": true
+    },
+    "plugins": [
+        "@typescript-eslint",
+        "import",
+        "jest"
+    ],
+    "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-wrapper-object-types": "error",
+        "@typescript-eslint/prefer-enum-initializers": "error",
+        "jest/valid-expect": "error",
+        "jest/no-focused-tests": "error",
+        "jest/prefer-expect-resolves": "error",
+        "eqeqeq": "error",
+        "no-unreachable": "error",
+        "no-cond-assign": ["error", "always"],
+        "no-unused-vars": "off",
+        "@typescript-eslint/consistent-type-exports": ["error", {
+            "fixMixedExportsWithInlineTypeSpecifier": true
+        }],
+        "@typescript-eslint/consistent-type-imports": ["error", {
+            "prefer": "type-imports",
+            "disallowTypeAnnotations": false,
+            "fixStyle": "inline-type-imports"
+        }],
+        "@typescript-eslint/no-unused-vars": [
+            "error",
+            {
+                "args": "none",
+                "argsIgnorePattern": "^_",
+                "caughtErrors": "none",
+                "caughtErrorsIgnorePattern": "^_",
+                "destructuredArrayIgnorePattern": "^_",
+                "varsIgnorePattern": "^_",
+                "ignoreRestSiblings": true
+            }
+        ],
+        "import/namespace": "off",
+        "import/order": [
+            "error",
+            {
+                "alphabetize": {
+                    "caseInsensitive": true,
+                    "order": "asc"
+                },
+                "groups": [
+                    "builtin",
+                    "external",
+                    "internal"
+                ],
+                "newlines-between": "always",
+                "pathGroupsExcludedImportTypes": [
+                    "builtin"
+                ]
+            }
+        ],
+        "no-duplicate-case": "error",
+        "no-param-reassign": "error",
+        "no-unreachable-loop": "error",
+        "object-shorthand": "error"
+    },
+    "settings": {
+        "import/resolver": {
+            "typescript": {}
+        }
+    }
+}

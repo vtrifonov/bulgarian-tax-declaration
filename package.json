@@ -5,10 +5,29 @@
     "test": "pnpm -r test",
     "test:core": "pnpm --filter @bg-tax/core test",
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @bg-tax/ui dev"
+    "dev": "pnpm --filter @bg-tax/ui dev",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "dprint fmt",
+    "format:check": "dprint check",
+    "spell": "cspell '**'"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "cspell": "^8.14.0",
+    "dprint": "^0.47.0",
+    "eslint": "^8.57.1",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-import-newlines": "^2.0.0",
+    "eslint-plugin-jest": "^29.15.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

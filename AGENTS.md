@@ -50,6 +50,18 @@
 4. Verify test passes
 5. Run full test suite
 
+## Before Push Checklist
+
+Run these before every push:
+
+```bash
+pnpm --filter @bg-tax/core test   # All tests pass
+pnpm format                        # Format code with dprint
+pnpm spell                         # Spellcheck with cspell
+```
+
+If cspell flags a legitimate word, add it to `cspell-dict.txt`.
+
 ## Commit Messages
 
 Format: `type: description`

@@ -13,42 +13,42 @@
  * @returns Record mapping date strings to rates
  */
 export async function fetchEcbRates(
-  currency: string,
-  startDate: string,
-  endDate: string,
+    currency: string,
+    startDate: string,
+    endDate: string,
 ): Promise<Record<string, number>> {
-  const url = new URL('https://data-api.ecb.europa.eu/service/data/EXR/');
-  url.searchParams.set('detail', 'dataonly');
-  url.searchParams.set('startPeriod', startDate);
-  url.searchParams.set('endPeriod', endDate);
-  url.searchParams.set('dimensions', `FREQ=D,CURRENCY=${currency}`);
-  url.searchParams.set('format', 'sdmx-xml');
+    const url = new URL('https://data-api.ecb.europa.eu/service/data/EXR/');
+    url.searchParams.set('detail', 'dataonly');
+    url.searchParams.set('startPeriod', startDate);
+    url.searchParams.set('endPeriod', endDate);
+    url.searchParams.set('dimensions', `FREQ=D,CURRENCY=${currency}`);
+    url.searchParams.set('format', 'sdmx-xml');
 
-  const resp = await fetch(url.toString());
-  if (!resp.ok) {
-    throw new Error(`ECB API error ${resp.status}`);
-  }
-
-  const xml = await resp.text();
-  const rates: Record<string, number> = {};
-
-  // Parse XML: look for <generic:Obs> elements
-  // ECB XML has ObsDimension value="YYYY-MM-DD" and ObsValue value="X.XXXX"
-  const obsRegex = /<generic:Obs><generic:ObsDimension value="([^"]+)"[^>]*><generic:ObsValue value="([^"]+)"/g;
-  let match;
-  while ((match = obsRegex.exec(xml)) !== null) {
-    const date = match[1];
-    const rate = parseFloat(match[2]);
-    if (!isNaN(rate)) {
-      rates[date] = rate;
+    const resp = await fetch(url.toString());
+    if (!resp.ok) {
+        throw new Error(`ECB API error ${resp.status}`);
     }
-  }
 
-  if (Object.keys(rates).length === 0) {
-    throw new Error('No rates found in ECB response');
-  }
+    const xml = await resp.text();
+    const rates: Record<string, number> = {};
 
-  return rates;
+    // Parse XML: look for <generic:Obs> elements
+    // ECB XML has ObsDimension value="YYYY-MM-DD" and ObsValue value="X.XXXX"
+    const obsRegex = /<generic:Obs><generic:ObsDimension value="([^"]+)"[^>]*><generic:ObsValue value="([^"]+)"/g;
+    let match;
+    while ((match = obsRegex.exec(xml)) !== null) {
+        const date = match[1];
+        const rate = parseFloat(match[2]);
+        if (!isNaN(rate)) {
+            rates[date] = rate;
+        }
+    }
+
+    if (Object.keys(rates).length === 0) {
+        throw new Error('No rates found in ECB response');
+    }
+
+    return rates;
 }
 
 /**
@@ -56,19 +56,19 @@ export async function fetchEcbRates(
  * Makes 4 requests per currency per year and combines results.
  */
 export async function fetchYearRates(
-  currency: string,
-  year: number,
+    currency: string,
+    year: number,
 ): Promise<Record<string, number>> {
-  const quarters = [
-    [`${year}-01-01`, `${year}-03-31`],
-    [`${year}-04-01`, `${year}-06-30`],
-    [`${year}-07-01`, `${year}-09-30`],
-    [`${year}-10-01`, `${year}-12-31`],
-  ];
-  const all: Record<string, number> = {};
-  for (const [start, end] of quarters) {
-    const rates = await fetchEcbRates(currency, start, end);
-    Object.assign(all, rates);
-  }
-  return all;
+    const quarters = [
+        [`${year}-01-01`, `${year}-03-31`],
+        [`${year}-04-01`, `${year}-06-30`],
+        [`${year}-07-01`, `${year}-09-30`],
+        [`${year}-10-01`, `${year}-12-31`],
+    ];
+    const all: Record<string, number> = {};
+    for (const [start, end] of quarters) {
+        const rates = await fetchEcbRates(currency, start, end);
+        Object.assign(all, rates);
+    }
+    return all;
 }

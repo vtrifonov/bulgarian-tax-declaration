@@ -4,20 +4,20 @@ import { bg } from './bg.js';
 type Language = 'en' | 'bg';
 
 const TRANSLATIONS: Record<Language, Record<string, string>> = {
-  en,
-  bg,
+    en,
+    bg,
 };
 
 let currentLanguage: Language = 'en';
 
 export function setLanguage(language: Language): void {
-  currentLanguage = language;
+    currentLanguage = language;
 }
 
 export function getLanguage(): Language {
-  return currentLanguage;
+    return currentLanguage;
 }
 
 export function t(key: string): string {
-  return TRANSLATIONS[currentLanguage][key] ?? key;
+    return TRANSLATIONS[currentLanguage][key] ?? key;
 }

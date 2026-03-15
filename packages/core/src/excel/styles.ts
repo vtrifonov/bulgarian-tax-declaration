@@ -8,9 +8,9 @@ export const EUR_FORMAT = '#,##0.00 "EUR"';
 export const CCY_FORMAT = '#,##0.00';
 
 export function baseCcyFormat(baseCurrency: string): string {
-  return baseCurrency === 'BGN' ? BGN_FORMAT : EUR_FORMAT;
+    return baseCurrency === 'BGN' ? BGN_FORMAT : EUR_FORMAT;
 }
 
 export const HEADER_STYLE: Partial<Style> = {
-  font: { ...FONT, bold: true },
+    font: { ...FONT, bold: true },
 };
