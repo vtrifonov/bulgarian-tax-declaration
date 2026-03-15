@@ -8,7 +8,21 @@ Parses Interactive Brokers and Revolut savings statements, calculates Bulgarian 
 
 - **Node.js** ≥ 20
 - **pnpm** ≥ 9 (enable via `corepack enable && corepack prepare pnpm@latest --activate`)
-- **Rust** (for Tauri desktop builds) — install via [rustup.rs](https://rustup.rs/)
+- **Rust** (for Tauri desktop builds):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+## Setup
+
+```bash
+git clone git@github.com:vtrifonov/bulgarian-tax-declaration.git
+cd bulgarian-tax-declaration
+pnpm install
+pnpm dev          # starts desktop app (first run: ~3-5 min for Rust compilation)
+```
 
 ## Project Structure
 
