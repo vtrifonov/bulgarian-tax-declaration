@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { Holding } from '../types/index.js';
-import { randomUUID } from 'crypto';
+const randomUUID = () => crypto.randomUUID();
 
 export async function importHoldingsFromExcel(buffer: Buffer): Promise<Holding[]> {
   const wb = new ExcelJS.Workbook();

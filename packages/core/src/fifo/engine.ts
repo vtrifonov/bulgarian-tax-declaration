@@ -1,5 +1,5 @@
 import type { Holding, Sale, IBTrade, ValidationWarning } from '../types/index.js';
-import { randomUUID } from 'crypto';
+const randomUUID = () => crypto.randomUUID();
 
 export interface FifoResult {
   holdings: Holding[];
