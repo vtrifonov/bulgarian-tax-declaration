@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
-import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry, FxService, InMemoryFxCache } from '@bg-tax/core';
+import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry, calcDividendTax, FxService, InMemoryFxCache } from '@bg-tax/core';
 import type { IBParsedData, RevolutInterest } from '@bg-tax/core';
 
 interface ImportedFile {
@@ -55,9 +55,14 @@ export function Import() {
         const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
         const allDividends = [...matched, ...unmatched];
 
-        // Resolve countries for dividends
+        // Resolve countries and calculate BG tax for dividends
         for (const d of allDividends) {
           d.country = resolveCountry(d.symbol);
+          // Calculate BG tax due and WHT credit (amounts are in original currency for now,
+          // final base-currency conversion happens at export/declaration time)
+          const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
+          d.bgTaxDue = bgTaxDue;
+          d.whtCredit = whtCredit;
         }
         importDividends(allDividends);
         importStockYield(parsed.stockYield);
