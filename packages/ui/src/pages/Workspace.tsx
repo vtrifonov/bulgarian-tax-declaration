@@ -286,19 +286,26 @@ export function Workspace() {
         updateDividend(rowIndex, updated);
       },
     }),
-    createEditableColumn<Dividend>('bgTaxDue', 'BG Tax Due', {
-      align: 'right',
-      format: (v) => (v as number).toFixed(2),
-      onSave: (rowIndex, value) => {
-        const updated = { ...dividends[rowIndex], bgTaxDue: parseFloat(value) || 0 };
-        updateDividend(rowIndex, updated);
-      },
-    }),
+    {
+      id: 'tax5pct',
+      header: 'Tax (5%)',
+      accessorFn: (row: Dividend) => row.grossAmount * 0.05,
+      cell: (info) => (info.getValue() as number).toFixed(2),
+      meta: { align: 'right' as const, editable: false },
+    },
     createEditableColumn<Dividend>('whtCredit', 'WHT Credit', {
       align: 'right',
       format: (v) => (v as number).toFixed(2),
       onSave: (rowIndex, value) => {
         const updated = { ...dividends[rowIndex], whtCredit: parseFloat(value) || 0 };
+        updateDividend(rowIndex, updated);
+      },
+    }),
+    createEditableColumn<Dividend>('bgTaxDue', 'BG Tax Due', {
+      align: 'right',
+      format: (v) => (v as number).toFixed(2),
+      onSave: (rowIndex, value) => {
+        const updated = { ...dividends[rowIndex], bgTaxDue: parseFloat(value) || 0 };
         updateDividend(rowIndex, updated);
       },
     }),
