@@ -446,10 +446,14 @@ export function Workspace() {
     />
   );
 
+  const sortedDividends = [...dividends].sort((a, b) =>
+    a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date)
+  );
+
   const renderDividendsContent = () => (
     <DataTable
       columns={dividendsColumns}
-      data={dividends}
+      data={sortedDividends}
       onAddRow={() => {
         const newDividend: Dividend = {
           symbol: '',

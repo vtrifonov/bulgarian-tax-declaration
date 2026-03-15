@@ -46,6 +46,8 @@ export function DataTable<TData extends Record<string, any>>({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
   });
 
   const handleCellDoubleClick = (rowIndex: number, columnId: string, currentValue: any) => {
@@ -90,10 +92,12 @@ export function DataTable<TData extends Record<string, any>>({
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
-                  onClick={header.column.getToggleSortingHandler()}
-                  className={header.column.getCanSort() ? 'sortable' : ''}
+                  style={{ width: header.getSize(), position: 'relative' }}
                 >
-                  <div className="header-content">
+                  <div
+                    className={`header-content ${header.column.getCanSort() ? 'sortable' : ''}`}
+                    onClick={header.column.getToggleSortingHandler()}
+                  >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {header.column.getCanSort() && (
                       <span className="sort-indicator">
@@ -105,6 +109,13 @@ export function DataTable<TData extends Record<string, any>>({
                       </span>
                     )}
                   </div>
+                  {header.column.getCanResize() && (
+                    <div
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      className={`resize-handle ${header.column.getIsResizing() ? 'resizing' : ''}`}
+                    />
+                  )}
                 </th>
               ))}
             </tr>

@@ -7,6 +7,7 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   border: 1px solid var(--border);
   background: var(--bg);
   font-size: 0.95rem;
@@ -33,14 +34,30 @@
   border-right: none;
 }
 
-.data-table th.sortable {
+.header-content.sortable {
   cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 
-.data-table th.sortable:hover {
-  background-color: var(--bg-secondary);
-  opacity: 0.9;
+.header-content.sortable:hover {
+  opacity: 0.8;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  background: transparent;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 .header-content {

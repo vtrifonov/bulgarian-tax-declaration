@@ -215,6 +215,36 @@ export function Import() {
         </p>
       </div>
 
+      {/* Instructions */}
+      <div style={{
+        marginBottom: '1.5rem',
+        padding: '1rem',
+        backgroundColor: 'var(--bg-secondary)',
+        borderRadius: '8px',
+        fontSize: '0.9rem',
+        lineHeight: '1.6',
+      }}>
+        <h3 style={{ marginBottom: '0.75rem' }}>How to export your statements</h3>
+        <div style={{ marginBottom: '0.75rem' }}>
+          <strong>Interactive Brokers:</strong>
+          <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+            <li>Go to <em>Performance & Reports → Statements</em></li>
+            <li>Click <em>Activity</em> statement</li>
+            <li>Period: select your tax year (Jan 1 — Dec 31)</li>
+            <li>Format: <strong>CSV</strong></li>
+            <li>Click <em>Run</em>, then download the file</li>
+          </ol>
+        </div>
+        <div>
+          <strong>Revolut Savings:</strong>
+          <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+            <li>Go to <em>Savings → your vault → Statements</em></li>
+            <li>Select the tax year period</li>
+            <li>Download one CSV per currency vault (EUR, USD, GBP)</li>
+          </ol>
+        </div>
+      </div>
+
       {/* Imported files list */}
       {importedFiles.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
