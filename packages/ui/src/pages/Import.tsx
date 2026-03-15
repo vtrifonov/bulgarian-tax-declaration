@@ -230,7 +230,7 @@ export function Import() {
           <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
             <li>Go to <em>Performance & Reports → Statements</em></li>
             <li>Click <em>Activity</em> statement</li>
-            <li>Period: select your tax year (Jan 1 — Dec 31)</li>
+            <li>Period: <strong>Annual</strong> (or custom: Jan 1 — Dec 31)</li>
             <li>Format: <strong>CSV</strong></li>
             <li>Click <em>Run</em>, then download the file</li>
           </ol>
