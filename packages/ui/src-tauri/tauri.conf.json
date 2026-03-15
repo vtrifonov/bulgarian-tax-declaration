@@ -20,9 +20,5 @@
       "csp": null
     }
   },
-  "plugins": {
-    "fs": {
-      "scope": ["$APPDATA/**", "$DOWNLOAD/**"]
-    }
-  }
+  "plugins": {}
 }
