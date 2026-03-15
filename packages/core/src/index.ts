@@ -24,3 +24,4 @@ export { populateSaleFxRates, populateDividendFxRates } from './fifo/populate-fx
 export { calcCapitalGainsTax, calcDividendTax, calcInterestTax, type DividendTaxResult } from './tax/rules.js';
 export { TaxCalculator, type CapitalGainsResult, type DividendsTaxResult, type RevolutInterestResult, type StockYieldResult } from './tax/calculator.js';
 export { validate } from './validation/validator.js';
+export { generateExcel } from './excel/generator.js';
