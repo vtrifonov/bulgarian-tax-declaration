@@ -9,7 +9,6 @@
     "beforeBuildCommand": "pnpm build:vite"
   },
   "app": {
-    "title": "Bulgarian Tax Declaration",
     "windows": [
       {
         "title": "Данъчна декларация",

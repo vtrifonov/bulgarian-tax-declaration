@@ -66,4 +66,42 @@ describe('parseIBCsv', () => {
     const totalTrades = result.trades.filter(t => t.symbol === '');
     expect(totalTrades).toHaveLength(0);
   });
+
+  it('empty CSV returns empty arrays', () => {
+    const emptyResult = parseIBCsv('');
+    expect(emptyResult.trades).toHaveLength(0);
+    expect(emptyResult.dividends).toHaveLength(0);
+    expect(emptyResult.withholdingTax).toHaveLength(0);
+    expect(emptyResult.stockYield).toHaveLength(0);
+  });
+
+  it('handles Payment in Lieu dividend descriptions', () => {
+    // Test data with Payment in Lieu entries
+    const csvWithPaymentInLieu = `Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers
+Dividends,Header,Currency,Date,Description,Amount
+Dividends,Data,USD,2025-03-15,VCLT(US92206C8139) Payment in Lieu of Dividend USD 0.50,50.00
+Dividends,Data,Total,,,50.00`;
+
+    const result = parseIBCsv(csvWithPaymentInLieu);
+    const paymentInLieu = result.dividends.find(d => d.symbol === 'VCLT');
+    expect(paymentInLieu).toBeDefined();
+    expect(paymentInLieu!.amount).toBe(50.00);
+  });
+
+  it('parses forex trades section without crashing (ignores non-Stocks trades)', () => {
+    // Test data with Forex section that should be ignored (only Stocks trades matter)
+    const csvWithForex = `Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,USD,AAPL,"2025-01-15, 10:00:00",10,150.00,150.00,-1500.00,-1.00,1501.00,0,0,O
+Trades,Data,Order,Forex,USD,EUR,"2025-01-20, 11:00:00",1000,-1.05,1.05,-1050.00,-5.00,-1050.00,0,0,O
+Trades,Total,,Stocks,USD,,,,,,-1500.00,-1.00,1501.00,0,0,
+Trades,Total,,Forex,USD,,,,,,-1050.00,-5.00,-1050.00,0,0,`;
+
+    const result = parseIBCsv(csvWithForex);
+    // Should only parse Stocks trades, not Forex
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0].symbol).toBe('AAPL');
+  });
 });
