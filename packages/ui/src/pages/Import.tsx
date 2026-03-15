@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
-import { parseIBCsv, parseRevolutCsv, matchWhtToDividends } from '@bg-tax/core';
+import { parseIBCsv, parseRevolutCsv, matchWhtToDividends, resolveCountry } from '@bg-tax/core';
 import type { IBParsedData, RevolutInterest } from '@bg-tax/core';
 
 interface ImportedFile {
@@ -53,7 +53,10 @@ export function Import() {
         const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
         const allDividends = [...matched, ...unmatched];
 
-        // Import dividends and stock yield directly
+        // Resolve countries for dividends
+        for (const d of allDividends) {
+          d.country = resolveCountry(d.symbol);
+        }
         importDividends(allDividends);
         importStockYield(parsed.stockYield);
 
@@ -63,7 +66,7 @@ export function Import() {
         const newHoldings = buys.map(t => ({
           id: crypto.randomUUID(),
           broker: 'IB',
-          country: '',
+          country: resolveCountry(t.symbol),
           symbol: t.symbol,
           dateAcquired: t.dateTime.split(',')[0].trim(),
           quantity: t.quantity,
