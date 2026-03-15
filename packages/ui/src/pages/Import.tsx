@@ -225,6 +225,10 @@ export function Import() {
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                             marginBottom: '1.5rem',
+                            minHeight: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
                         }}
                         onClick={() => fileInputRef.current?.click()}
                     >
