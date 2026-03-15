@@ -72,7 +72,7 @@ const initialState = {
 export const useAppStore = create<AppState>((set) => ({
   ...initialState,
 
-  setTaxYear: (year: number) => set({ taxYear: year }),
+  setTaxYear: (year: number) => set({ taxYear: year, baseCurrency: year <= 2025 ? 'BGN' : 'EUR' }),
   setBaseCurrency: (currency: 'BGN' | 'EUR') => set({ baseCurrency: currency }),
   setLanguage: (lang: 'en' | 'bg') => set({ language: lang }),
 

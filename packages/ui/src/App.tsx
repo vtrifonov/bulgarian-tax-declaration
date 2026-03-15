@@ -56,20 +56,21 @@ function Layout() {
             ))}
           </div>
 
-          <div>
-            <button
-              onClick={() => setLanguage(language === 'en' ? 'bg' : 'en')}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#fff',
-                border: '1px solid #ccc',
-                cursor: 'pointer',
-                borderRadius: '4px',
-              }}
-            >
-              {language === 'en' ? 'BG' : 'EN'}
-            </button>
-          </div>
+          <button
+            onClick={() => setLanguage(language === 'en' ? 'bg' : 'en')}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: language === 'bg' ? '#28a745' : '#fff',
+              color: language === 'bg' ? '#fff' : '#333',
+              border: '1px solid #ccc',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              minWidth: '80px',
+            }}
+          >
+            {language === 'en' ? '🇧🇬 BG' : '🇬🇧 EN'}
+          </button>
         </div>
       </nav>
 
