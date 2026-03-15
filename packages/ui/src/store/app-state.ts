@@ -59,7 +59,7 @@ export interface AppState {
 
 const initialState = {
   taxYear: new Date().getFullYear() - 1,
-  baseCurrency: new Date().getFullYear() <= 2025 ? ('BGN' as const) : ('EUR' as const),
+  baseCurrency: (new Date().getFullYear() - 1) <= 2025 ? ('BGN' as const) : ('EUR' as const),
   language: 'en' as const,
   holdings: [],
   sales: [],
