@@ -51,6 +51,18 @@ function createToBaseCcy(fxRates: Record<string, Record<string, number>>, baseCu
     };
 }
 
+/** Display the FX rate for a currency on a date (handles EUR/BGN fixed rate) */
+function getFxRateDisplay(fxRates: Record<string, Record<string, number>>, baseCurrency: 'BGN' | 'EUR', currency: string, date: string): string {
+    if (currency === baseCurrency) return '1';
+    if (currency === 'EUR' && baseCurrency === 'BGN') return '1.95583';
+    if (currency === 'BGN' && baseCurrency === 'EUR') return (1 / 1.95583).toFixed(6);
+    const ecbRate = fxRates[currency]?.[date];
+    if (!ecbRate) return '—';
+    // Show rate as "1 currency = X baseCurrency"
+    if (baseCurrency === 'EUR') return (1 / ecbRate).toFixed(6);
+    return (1.95583 / ecbRate).toFixed(6);
+}
+
 export function Workspace() {
     const [activeTab, setActiveTab] = useState<TabType>('holdings');
     const [fxTab, setFxTab] = useState<string | null>(null);
@@ -148,10 +160,7 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: 'FX Rate',
-            accessorFn: (row: Holding) => {
-                const rate = fxRates[row.currency]?.[row.dateAcquired];
-                return rate ? rate.toFixed(6) : '—';
-            },
+            accessorFn: (row: Holding) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.dateAcquired),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -363,10 +372,7 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: 'FX Rate',
-            accessorFn: (row: Dividend) => {
-                const rate = fxRates[row.currency]?.[row.date];
-                return rate ? rate.toFixed(6) : '—';
-            },
+            accessorFn: (row: Dividend) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -469,8 +475,7 @@ export function Workspace() {
             id: 'fxRate',
             header: 'FX Rate',
             accessorFn: (row: StockYieldEntry) => {
-                const rate = fxRates[row.currency]?.[row.date];
-                return rate ? rate.toFixed(6) : '—';
+                return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
@@ -631,6 +636,11 @@ export function Workspace() {
 
         // Summary row
         const netInterest = currentData.entries.reduce((sum, e) => sum + e.amount, 0);
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+        // Use mid-year date for approximate conversion of totals
+        const midDate = `${useAppStore.getState().taxYear}-06-30`;
+        const netBase = toBaseCcy(netInterest, currentCurrency, midDate);
+        const taxBase = netBase !== '—' ? (parseFloat(netBase) * 0.1).toFixed(2) : '—';
         const tax = netInterest * 0.1;
 
         return (
@@ -657,7 +667,7 @@ export function Workspace() {
                 <div
                     style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
                         gap: '1rem',
                         marginBottom: '2rem',
                         padding: '1rem',
@@ -674,12 +684,20 @@ export function Workspace() {
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currentData.entries.length}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Interest</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Interest ({currentCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netInterest.toFixed(2)}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>10% Tax</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Interest ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netBase}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>10% Tax ({currentCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>10% Tax ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{taxBase}</div>
                     </div>
                 </div>
 

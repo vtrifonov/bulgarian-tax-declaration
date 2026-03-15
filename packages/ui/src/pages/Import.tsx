@@ -315,13 +315,37 @@ export function Import() {
                         borderRadius: '6px',
                         backgroundColor: 'var(--drop-bg)',
                         border: '1px solid var(--accent)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
                     }}
                 >
-                    <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
-                    Fetching FX rates from ECB for detected currencies...
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div
+                            style={{
+                                width: '16px',
+                                height: '16px',
+                                border: '2px solid var(--accent)',
+                                borderTopColor: 'transparent',
+                                borderRadius: '50%',
+                                animation: 'spin 0.8s linear infinite',
+                            }}
+                        />
+                        Fetching FX rates from ECB...
+                    </div>
+                    <div style={{ height: '4px', backgroundColor: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div
+                            style={{
+                                height: '100%',
+                                backgroundColor: 'var(--accent)',
+                                borderRadius: '2px',
+                                animation: 'progress 2s ease-in-out infinite',
+                            }}
+                        />
+                    </div>
+                    <style>
+                        {`
+                        @keyframes spin { to { transform: rotate(360deg); } }
+                        @keyframes progress { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
+                    `}
+                    </style>
                 </div>
             )}
 
