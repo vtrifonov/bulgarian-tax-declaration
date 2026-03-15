@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/refs/heads/v2/crates/tauri-cli/schema.json",
+  "productName": "Bulgarian Tax Declaration",
+  "identifier": "com.bgtax.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm dev:vite",
+    "beforeBuildCommand": "pnpm build:vite"
+  },
+  "app": {
+    "title": "Bulgarian Tax Declaration",
+    "windows": [
+      {
+        "title": "Данъчна декларация",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "fs": {
+      "scope": ["$APPDATA/**", "$DOWNLOAD/**"]
+    }
+  }
+}
