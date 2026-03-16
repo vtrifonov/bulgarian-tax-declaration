@@ -9,14 +9,17 @@
     "build": "tsc -b && vite build",
     "build:vite": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@bg-tax/core": "workspace:*",
+    "@tanstack/react-table": "^8.20.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
-    "@tanstack/react-table": "^8.20.0",
+    "firebase": "^12.10.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.0.0",
@@ -35,6 +38,7 @@
     "globals": "^17.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^3.0.0"
   }
 }

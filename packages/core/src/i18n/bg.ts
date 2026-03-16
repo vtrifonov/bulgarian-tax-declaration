@@ -83,10 +83,12 @@ export const bg = {
     'button.addDividend': 'Добави дивидент',
     'button.addInterest': 'Добави лихва',
     'button.delete': 'Изтрий',
+    'confirm.deleteRow': 'Сигурни ли сте, че искате да изтриете този ред?',
     'button.addRow': 'Добави ред',
     'button.showAll': 'Покажи всички',
     'button.browseFiles': 'Избери файлове',
     'button.chooseFile': 'Избери файл',
+    'button.signOut': 'Изход',
 
     // Labels
     'label.taxYear': 'Данъчна година',
@@ -143,6 +145,7 @@ export const bg = {
     'col.whtBase': 'Удържан данък',
     'col.amountBase': 'Сума',
     'col.qty': 'Кол.',
+    'col.source': 'Източник',
 
     // Summary labels
     'summary.total': 'Общо',

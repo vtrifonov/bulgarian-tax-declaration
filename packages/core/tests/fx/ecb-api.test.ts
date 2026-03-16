@@ -55,6 +55,13 @@ describe('fetchEcbRates', () => {
         await expect(fetchEcbRates('USD', '2025-01-02', '2025-01-03')).rejects.toThrow('404');
     });
 
+    it('rejects invalid currency codes', async () => {
+        await expect(fetchEcbRates('USDA', '2025-01-01', '2025-01-31')).rejects.toThrow('Invalid currency code');
+        await expect(fetchEcbRates('U', '2025-01-01', '2025-01-31')).rejects.toThrow('Invalid currency code');
+        await expect(fetchEcbRates('usd', '2025-01-01', '2025-01-31')).rejects.toThrow('Invalid currency code');
+        await expect(fetchEcbRates('US1', '2025-01-01', '2025-01-31')).rejects.toThrow('Invalid currency code');
+    });
+
     it('returns empty rates for empty response', async () => {
         vi.stubGlobal(
             'fetch',

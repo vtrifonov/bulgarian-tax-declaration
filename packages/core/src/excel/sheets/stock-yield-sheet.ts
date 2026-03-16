@@ -7,6 +7,7 @@ import {
     CCY_FORMAT,
     DATE_FORMAT,
     FONT,
+    FX_RATE_FORMAT,
     HEADER_STYLE,
 } from '../styles.js';
 import type { AppState } from '../../types/index.js';
@@ -21,33 +22,72 @@ export function addStockYieldSheet(workbook: Workbook, state: AppState): Workshe
         cell.style = { ...HEADER_STYLE, font: FONT };
     });
 
-    // Data rows
+    // Data rows (skip incomplete rows)
+    let r = 2;
     for (let i = 0; i < state.stockYield.length; i++) {
         const sy = state.stockYield[i];
-        const r = i + 2;
+        if (!sy.symbol && !sy.currency) continue;
 
         const row = sheet.addRow([
             sy.date,
             sy.symbol,
             sy.currency,
             sy.amount,
-            1, // FX rate (simplified)
-            `=ROUND(D${r}*E${r},2)`, // Amount in base currency
+            null, // E: FX rate
+            null, // F: Amount in base
         ]);
 
-        // Set formats
+        // E: FX rate
+        setFxRateCell(row.getCell(5), sy.currency, r, state.baseCurrency);
+        // F: Amount in base currency
+        row.getCell(6).value = { formula: `ROUND(D${r}*E${r},2)` };
+
         row.getCell(1).numFmt = DATE_FORMAT;
         row.getCell(4).numFmt = CCY_FORMAT;
-        row.getCell(5).numFmt = CCY_FORMAT;
+        row.getCell(5).numFmt = FX_RATE_FORMAT;
         row.getCell(6).numFmt = baseCcyFormat(state.baseCurrency);
         row.font = FONT;
+        r++;
     }
 
     // Column widths
-    const widths = [12, 12, 10, 12, 10, 14];
+    const widths = [12, 12, 10, 12, 12, 14];
     for (let i = 0; i < headers.length; i++) {
         sheet.getColumn(i + 1).width = widths[i];
     }
 
     return sheet;
+}
+
+function setFxRateCell(
+    cell: import('exceljs').Cell,
+    currency: string,
+    rowNum: number,
+    baseCurrency: string,
+): void {
+    if (currency === baseCurrency) {
+        cell.value = 1;
+        return;
+    }
+    if (baseCurrency === 'BGN') {
+        if (currency === 'EUR') {
+            cell.value = 1.95583;
+            return;
+        }
+        if (currency === 'BGN') {
+            cell.value = 1;
+            return;
+        }
+        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT(C${rowNum}&"!A:B"),2,FALSE),"")` };
+    } else {
+        if (currency === 'EUR') {
+            cell.value = 1;
+            return;
+        }
+        if (currency === 'BGN') {
+            cell.value = { formula: '1/1.95583' };
+            return;
+        }
+        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT(C${rowNum}&"!A:B"),2,FALSE),"")` };
+    }
 }

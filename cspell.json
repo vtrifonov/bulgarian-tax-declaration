@@ -9,6 +9,7 @@
     "**/build",
     "coverage"
   ],
+  "import": ["@cspell/dict-bg-bg/cspell-ext.json"],
   "dictionaryDefinitions": [
     {
       "name": "project-words",
@@ -16,5 +17,5 @@
       "addWords": true
     }
   ],
-  "dictionaries": ["project-words"]
+  "dictionaries": ["project-words", "bg-bg"]
 }

@@ -74,7 +74,7 @@ export interface AppState {
 const initialState = {
     taxYear: new Date().getFullYear() - 1,
     baseCurrency: (new Date().getFullYear() - 1) <= 2025 ? ('BGN' as const) : ('EUR' as const),
-    language: 'en' as const,
+    language: 'bg' as const,
     holdings: [],
     sales: [],
     dividends: [],
@@ -175,7 +175,14 @@ export const useAppStore = create<AppState>((set) => ({
         })),
     importRevolutInterest: (interests: RevolutInterest[]) => set({ revolutInterest: interests }),
 
-    setFxRates: (rates: Record<string, Record<string, number>>) => set((state) => ({ fxRates: { ...state.fxRates, ...rates } })),
+    setFxRates: (rates: Record<string, Record<string, number>>) =>
+        set((state) => {
+            const merged: Record<string, Record<string, number>> = { ...state.fxRates };
+            for (const currency in rates) {
+                merged[currency] = { ...merged[currency], ...rates[currency] };
+            }
+            return { fxRates: merged };
+        }),
 
     reset: () => set(initialState),
 }));

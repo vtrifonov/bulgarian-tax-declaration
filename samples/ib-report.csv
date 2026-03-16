@@ -1,0 +1,77 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Statement,Data,Title,Activity Statement
+Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,USD,GOOG,"2025-02-05, 09:31:12",15,142.30,142.55,-2134.50,-1.50,2136.00,0,3.75,O
+Trades,Data,Order,Stocks,USD,GOOG,"2025-08-20, 11:15:33",-8,189.75,189.75,1518.00,-1.00,-1138.40,378.60,0,O
+Trades,Data,Order,Stocks,USD,AMZN,"2025-03-18, 14:22:45",20,178.90,179.10,-3578.00,-2.00,3580.00,0,4.00,O
+Trades,Data,Order,Stocks,USD,AMZN,"2025-10-08, 10:05:19",-20,205.40,205.40,4108.00,-2.00,-3580.00,526.00,0,O
+Trades,Data,Order,Stocks,EUR,ASML,"2025-01-14, 10:42:08",5,680.50,681.00,-3402.50,-2.50,3405.00,0,2.50,O
+Trades,Data,Order,Stocks,EUR,SAP,"2025-04-22, 11:30:55",12,195.20,195.60,-2342.40,-1.80,2344.20,0,4.80,O
+Trades,Data,Order,Stocks,EUR,SAP,"2025-11-12, 09:50:22",-12,228.10,228.10,2737.20,-1.80,-2344.20,391.20,0,O
+Trades,Data,Order,Stocks,GBP,RIO,"2025-05-07, 08:15:30",25,52.80,52.90,-1320.00,-1.50,1321.50,0,2.50,O
+Trades,Data,Order,Stocks,HKD,1810,"2025-06-11, 02:30:15",200,148.00,148.50,-29600.00,-50.00,29650.00,0,100.00,O
+Trades,SubTotal,,Stocks,USD,GOOG,,7,,,-616.50,-2.50,997.60,378.60,3.75,
+Trades,SubTotal,,Stocks,USD,AMZN,,0,,,530.00,-4.00,0,526.00,4.00,
+Trades,Total,,Stocks,USD,,,,,,,-86.50,-6.50,997.60,904.60,7.75,
+Trades,Total,,Stocks,EUR,,,,,,,-1007.70,-6.10,3405.00,391.20,7.30,
+Trades,Total,,Stocks,GBP,,,,,,,-1320.00,-1.50,1321.50,0,2.50,
+Trades,Total,,Stocks,HKD,,,,,,,-29600.00,-50.00,29650.00,0,100.00,
+Dividends,Header,Currency,Date,Description,Amount
+Dividends,Data,USD,2025-03-14,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share (Ordinary Dividend),3.00
+Dividends,Data,USD,2025-06-13,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share (Ordinary Dividend),3.00
+Dividends,Data,USD,2025-09-12,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share (Ordinary Dividend),1.40
+Dividends,Data,USD,2025-05-08,AMZN(US0231351067) Cash Dividend USD 0.10 per Share (Ordinary Dividend),2.00
+Dividends,Data,USD,2025-08-07,AMZN(US0231351067) Cash Dividend USD 0.10 per Share (Ordinary Dividend),2.00
+Dividends,Data,USD,2025-11-06,AMZN(US0231351067) Cash Dividend USD 0.10 per Share (Ordinary Dividend),2.00
+Dividends,Data,Total,,,13.40
+Dividends,Data,EUR,2025-04-23,ASML(NL0010273215) Cash Dividend EUR 1.72 per Share (Ordinary Dividend),8.60
+Dividends,Data,EUR,2025-10-22,ASML(NL0010273215) Cash Dividend EUR 1.72 per Share (Ordinary Dividend),8.60
+Dividends,Data,EUR,2025-07-15,SAP(DE0007164600) Cash Dividend EUR 2.35 per Share (Ordinary Dividend),28.20
+Dividends,Data,Total,,,45.40
+Dividends,Data,GBP,2025-04-17,RIO(GB0007188757) Cash Dividend GBP 1.77 per Share (Ordinary Dividend),44.25
+Dividends,Data,GBP,2025-09-11,RIO(GB0007188757) Cash Dividend GBP 1.77 per Share (Ordinary Dividend),44.25
+Dividends,Data,Total,,,88.50
+Dividends,Data,HKD,2025-06-20,1810(KYG875721634) Cash Dividend HKD 0.40 per Share (Ordinary Dividend),80.00
+Dividends,Data,Total,,,80.00
+Withholding Tax,Header,Currency,Date,Description,Amount,Code
+Withholding Tax,Data,USD,2025-03-14,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share - US Tax,-0.45,
+Withholding Tax,Data,USD,2025-06-13,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share - US Tax,-0.45,
+Withholding Tax,Data,USD,2025-09-12,GOOG(US02079K3059) Cash Dividend USD 0.20 per Share - US Tax,-0.21,
+Withholding Tax,Data,USD,2025-05-08,AMZN(US0231351067) Cash Dividend USD 0.10 per Share - US Tax,-0.30,
+Withholding Tax,Data,USD,2025-08-07,AMZN(US0231351067) Cash Dividend USD 0.10 per Share - US Tax,-0.30,
+Withholding Tax,Data,USD,2025-11-06,AMZN(US0231351067) Cash Dividend USD 0.10 per Share - US Tax,-0.30,
+Withholding Tax,Data,Total,,,-2.01,
+Withholding Tax,Data,EUR,2025-04-23,ASML(NL0010273215) Cash Dividend EUR 1.72 per Share - NL Tax,-1.29,
+Withholding Tax,Data,EUR,2025-10-22,ASML(NL0010273215) Cash Dividend EUR 1.72 per Share - NL Tax,-1.29,
+Withholding Tax,Data,EUR,2025-07-15,SAP(DE0007164600) Cash Dividend EUR 2.35 per Share - DE Tax,-7.33,
+Withholding Tax,Data,Total,,,-9.91,
+Withholding Tax,Data,GBP,2025-04-17,RIO(GB0007188757) Cash Dividend GBP 1.77 per Share - GB Tax,-0.00,
+Withholding Tax,Data,GBP,2025-09-11,RIO(GB0007188757) Cash Dividend GBP 1.77 per Share - GB Tax,-0.00,
+Withholding Tax,Data,Total,,,-0.00,
+Withholding Tax,Data,HKD,2025-06-20,1810(KYG875721634) Cash Dividend HKD 0.40 per Share - HK Tax,-0.00,
+Withholding Tax,Data,Total,,,-0.00,
+Interest,Header,Currency,Date,Description,Amount
+Interest,Data,USD,2025-01-06,USD Debit Interest for 12/2024,-3.22
+Interest,Data,USD,2025-02-05,USD Debit Interest for 01/2025,-2.87
+Interest,Data,USD,2025-03-06,USD Credit Interest for 02/2025,8.45
+Interest,Data,USD,2025-04-04,USD Credit Interest for 03/2025,9.12
+Interest,Data,USD,2025-05-06,USD Credit Interest for 04/2025,7.80
+Interest,Data,USD,2025-06-05,USD Credit Interest for 05/2025,6.55
+Interest,Data,USD,2025-07-07,USD Credit Interest for 06/2025,5.40
+Interest,Data,USD,2025-08-06,USD Credit Interest for 07/2025,4.92
+Interest,Data,USD,2025-09-05,USD Credit Interest for 08/2025,4.18
+Interest,Data,USD,2025-10-07,USD Credit Interest for 09/2025,3.65
+Interest,Data,USD,2025-11-06,USD Credit Interest for 10/2025,3.22
+Interest,Data,USD,2025-12-05,USD Credit Interest for 11/2025,2.98
+Interest,Data,Total,,,50.18
+Stock Yield Enhancement Program Securities Lent Interest Details,Header,Currency,Value Date,Symbol,Start Date,Quantity,Collateral Amount,Market-based Rate (%),Interest Rate on Customer Collateral (%),Interest Paid to Customer,Code
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-03-15,GOOG,2025-03-15,-15,2142.30,2.10,1.05,0.06,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-03-16,GOOG,2025-03-16,-15,2145.80,2.10,1.05,0.06,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-03-17,GOOG,2025-03-17,-15,2150.25,2.08,1.04,0.06,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-06-20,AMZN,2025-06-20,-20,3850.00,1.85,0.93,0.10,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-06-21,AMZN,2025-06-21,-20,3855.40,1.85,0.93,0.10,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-02-10,ASML,2025-02-10,-5,3410.00,1.50,0.75,0.07,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-02-11,ASML,2025-02-11,-5,3415.60,1.50,0.75,0.07,Po
+Stock Yield Enhancement Program Securities Lent Interest Details,Data,Total,,,,,,,,0.52,

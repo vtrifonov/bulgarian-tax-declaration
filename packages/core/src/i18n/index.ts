@@ -8,7 +8,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     bg,
 };
 
-let currentLanguage: Language = 'en';
+let currentLanguage: Language = 'bg';
 
 export function setLanguage(language: Language): void {
     currentLanguage = language;

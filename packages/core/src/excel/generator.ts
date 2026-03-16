@@ -5,26 +5,29 @@ import { addHoldingsSheet } from './sheets/holdings-sheet.js';
 import { addSalesSheet } from './sheets/sales-sheet.js';
 import { addDividendsSheet } from './sheets/dividends-sheet.js';
 import { addStockYieldSheet } from './sheets/stock-yield-sheet.js';
+import { addIbInterestSheet } from './sheets/ib-interest-sheet.js';
 import { addRevolutSheets } from './sheets/revolut-sheet.js';
 
-export async function generateExcel(state: AppState): Promise<Buffer> {
+export async function generateExcel(state: AppState): Promise<Uint8Array> {
     const workbook = new ExcelJS.Workbook();
 
-    // 1. FX rate sheets
+    // 1. Data sheets
+    addHoldingsSheet(workbook, state);
+    addSalesSheet(workbook, state);
+    addDividendsSheet(workbook, state);
+    addStockYieldSheet(workbook, state);
+    addIbInterestSheet(workbook, state);
+    addRevolutSheets(workbook, state);
+
+    // 2. FX rate sheets (last)
     const currencies = detectCurrencies(state);
     for (const ccy of currencies) {
         const rates = state.fxRates[ccy] ?? {};
         addFxSheet(workbook, ccy, rates, state.taxYear);
     }
 
-    // 2. Data sheets
-    addHoldingsSheet(workbook, state);
-    addSalesSheet(workbook, state);
-    addDividendsSheet(workbook, state);
-    addStockYieldSheet(workbook, state);
-    addRevolutSheets(workbook, state);
-
-    return Buffer.from(await workbook.xlsx.writeBuffer());
+    const buf = await workbook.xlsx.writeBuffer();
+    return new Uint8Array(buf instanceof ArrayBuffer ? buf : (buf as Uint8Array).buffer);
 }
 
 function detectCurrencies(state: AppState): string[] {
@@ -65,5 +68,9 @@ function detectCurrencies(state: AppState): string[] {
         }
     }
 
+    cccies.delete(''); // Exclude empty currencies from incomplete rows
+    // EUR/BGN is a fixed rate — no FX sheet needed
+    cccies.delete('EUR');
+    cccies.delete('BGN');
     return Array.from(cccies).sort();
 }

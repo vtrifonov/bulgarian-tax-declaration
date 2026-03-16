@@ -138,14 +138,14 @@ describe('Excel Generator', () => {
         // Verify sheet names exist
         const sheetNames = workbook.worksheets.map((ws) => ws.name);
         expect(sheetNames).toContain('USD');
-        expect(sheetNames).toContain('EUR');
+        // EUR/BGN is fixed rate — no FX sheet needed
         expect(sheetNames).toContain('Притежания');
         expect(sheetNames).toContain('Продажби');
         expect(sheetNames).toContain('Дивиденти');
         expect(sheetNames).toContain('IB Stock Yield');
         expect(sheetNames).toContain('Revolut Лихва');
-        expect(sheetNames).toContain('Revolut EUR 2025');
-        expect(sheetNames).toContain('Revolut USD 2025');
+        expect(sheetNames).toContain('Revolut EUR');
+        expect(sheetNames).toContain('Revolut USD');
 
         // Verify Holdings sheet structure
         const holdingsSheet = workbook.getWorksheet('Притежания');
@@ -154,9 +154,9 @@ describe('Excel Generator', () => {
 
         const headerRow = holdingsSheet!.getRow(1);
         expect(headerRow.getCell(1).value).toBe('Брокер');
-        expect(headerRow.getCell(2).value).toBe('Държава');
-        expect(headerRow.getCell(3).value).toBe('Символ');
-        expect(headerRow.getCell(4).value).toBe('Дата');
+        expect(headerRow.getCell(2).value).toBe('Символ');
+        expect(headerRow.getCell(3).value).toBe('Държава');
+        expect(headerRow.getCell(4).value).toBe('Дата на придобиване');
 
         // Verify at least one formula is present
         const dataRow = holdingsSheet!.getRow(2);
@@ -202,8 +202,7 @@ describe('Excel Generator', () => {
         const usdSheet = workbook.getWorksheet('USD');
         expect(usdSheet).toBeDefined();
 
-        const eurSheet = workbook.getWorksheet('EUR');
-        expect(eurSheet).toBeDefined();
+        // EUR/BGN fixed rate — no EUR FX sheet
 
         // Verify Revolut sheets
         const revolutSummary = workbook.getWorksheet('Revolut Лихва');
@@ -212,7 +211,7 @@ describe('Excel Generator', () => {
 
         const revHeader = revolutSummary!.getRow(1);
         expect(revHeader.getCell(1).value).toBe('Валута');
-        expect(revHeader.getCell(2).value).toBe('Общо приход');
+        expect(revHeader.getCell(2).value).toBe('Записи');
     });
 
     it('generates Excel with EUR base currency', async () => {
@@ -255,7 +254,7 @@ describe('Excel Generator', () => {
         const headerRow = holdingsSheet!.getRow(1);
         let foundEurColumn = false;
         headerRow.eachCell((cell) => {
-            if (cell.value === 'Общо EUR') {
+            if (cell.value === 'Общо (EUR)') {
                 foundEurColumn = true;
             }
         });
@@ -346,8 +345,8 @@ describe('Excel Generator', () => {
 
         const expectedHeaders = [
             'Брокер',
-            'Държава',
             'Символ',
+            'Държава',
             'Дата покупка',
             'Дата продажба',
             'Кол.',
@@ -356,9 +355,9 @@ describe('Excel Generator', () => {
             'Цена продажба',
             'Курс покупка',
             'Курс продажба',
-            'Приходи',
-            'Разходи',
-            'П/З',
+            'Приходи (BGN)',
+            'Разходи (BGN)',
+            'Печалба/Загуба (BGN)',
         ];
 
         expectedHeaders.forEach((header, index) => {
@@ -467,13 +466,13 @@ describe('Excel Generator', () => {
         expect(summarySheet).toBeDefined();
 
         // Check detail sheets exist
-        const eurSheet = workbook.getWorksheet('Revolut EUR 2025');
-        const gbpSheet = workbook.getWorksheet('Revolut GBP 2025');
+        const eurSheet = workbook.getWorksheet('Revolut EUR');
+        const gbpSheet = workbook.getWorksheet('Revolut GBP');
         expect(eurSheet).toBeDefined();
         expect(gbpSheet).toBeDefined();
 
         // Check detail sheet headers
-        const eurDetailHeaders = eurSheet!.getRow(3);
+        const eurDetailHeaders = eurSheet!.getRow(1);
         expect(eurDetailHeaders.getCell(1).value).toBe('Дата');
         expect(eurDetailHeaders.getCell(2).value).toBe('Описание');
         expect(eurDetailHeaders.getCell(3).value).toBe('Размер');
@@ -517,14 +516,18 @@ describe('Excel Generator', () => {
         // Check column H (Общо = Qty * Price) has formula
         const totalCell = dataRow.getCell(8);
         expect(totalCell.value).toBeDefined();
-        const totalValue = String(totalCell.value);
-        expect(totalValue).toContain('ROUND');
+        const totalFormula = typeof totalCell.value === 'object' && totalCell.value !== null && 'formula' in totalCell.value
+            ? (totalCell.value as { formula: string }).formula
+            : String(totalCell.value);
+        expect(totalFormula).toContain('ROUND');
 
         // Check column J (Total in base currency) has formula
         const totalBaseCell = dataRow.getCell(10);
         expect(totalBaseCell.value).toBeDefined();
-        const totalBaseValue = String(totalBaseCell.value);
-        expect(totalBaseValue).toContain('ROUND');
+        const totalBaseFormula = typeof totalBaseCell.value === 'object' && totalBaseCell.value !== null && 'formula' in totalBaseCell.value
+            ? (totalBaseCell.value as { formula: string }).formula
+            : String(totalBaseCell.value);
+        expect(totalBaseFormula).toContain('ROUND');
     });
 
     it('empty state generates valid Excel with headers', async () => {

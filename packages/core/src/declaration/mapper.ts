@@ -49,13 +49,13 @@ export interface DeclarationSection {
 
 function getValueBySource(source: string, taxResults: TaxResults): number {
     const parts = source.split('.');
-    let current: any = taxResults;
+    let current: unknown = taxResults;
 
     for (const part of parts) {
-        if (current === null || current === undefined) {
+        if (current === null || current === undefined || typeof current !== 'object') {
             return 0;
         }
-        current = current[part];
+        current = (current as Record<string, unknown>)[part];
     }
 
     return typeof current === 'number' ? current : 0;

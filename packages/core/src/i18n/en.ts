@@ -83,10 +83,12 @@ export const en = {
     'button.addDividend': 'Add Dividend',
     'button.addInterest': 'Add IB Interest Entry',
     'button.delete': 'Delete',
+    'confirm.deleteRow': 'Are you sure you want to delete this row?',
     'button.addRow': 'Add Row',
     'button.showAll': 'Show all',
     'button.browseFiles': 'Browse Files',
     'button.chooseFile': 'Choose file',
+    'button.signOut': 'Sign Out',
 
     // Labels
     'label.taxYear': 'Tax Year',
@@ -143,6 +145,7 @@ export const en = {
     'col.whtBase': 'WHT',
     'col.amountBase': 'Amount',
     'col.qty': 'Qty',
+    'col.source': 'Source',
 
     // Summary labels
     'summary.total': 'Total',

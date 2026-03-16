@@ -20,6 +20,11 @@ import {
     setLanguage as setCoreLanguage,
     t,
 } from '@bg-tax/core';
+import {
+    AuthProvider,
+    useAuth,
+} from './auth/AuthProvider';
+import { AuthGate } from './auth/AuthGate';
 import './App.css';
 
 const steps = [
@@ -29,9 +34,12 @@ const steps = [
     { path: '/declaration', labelKey: 'page.declaration', name: 'declaration' },
 ];
 
+const isTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TAURI_INTERNALS__' in window);
+
 function Layout() {
     const location = useLocation();
     const { language, setLanguage } = useAppStore();
+    const { user, signOut } = useAuth();
 
     // Auto-save state to localStorage
     useAutoSave();
@@ -77,7 +85,7 @@ function Layout() {
                     a.download = `Данъчна ${state.taxYear}.xlsx`;
                     a.click();
                     URL.revokeObjectURL(url);
-                });
+                }).catch(err => console.error('Export failed:', err));
             }
         };
         window.addEventListener('keydown', handler);
@@ -104,43 +112,65 @@ function Layout() {
                     alignItems: 'center',
                 }}
             >
-                <h2 style={{ margin: 0 }}>{t('app.title')}</h2>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', fontSize: '1.1rem' }}>
+                    <img src='/favicon.png' alt='' width={22} height={22} />
+                    {t('app.title')}
+                </h2>
 
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {steps.map((step, idx) => (
-                            <Link
-                                key={step.name}
-                                to={step.path}
-                                style={{
-                                    padding: '0.5rem 1rem',
-                                    backgroundColor: idx <= currentStepIndex ? 'var(--accent)' : 'var(--bg-secondary)',
-                                    color: idx <= currentStepIndex ? 'white' : 'var(--text-secondary)',
-                                    textDecoration: 'none',
-                                    cursor: 'pointer',
-                                    borderRadius: '4px',
-                                }}
-                            >
-                                {t(step.labelKey)}
-                            </Link>
-                        ))}
-                    </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                    {steps.map((step, idx) => (
+                        <Link
+                            key={step.name}
+                            to={step.path}
+                            style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: idx <= currentStepIndex ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: idx <= currentStepIndex ? 'white' : 'var(--text-secondary)',
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {t(step.labelKey)}
+                        </Link>
+                    ))}
 
                     <button
                         onClick={handleLanguageToggle}
                         style={{
-                            padding: '0.5rem 1rem',
+                            padding: '0.4rem 0.75rem',
                             backgroundColor: language === 'bg' ? '#28a745' : 'var(--bg)',
                             color: language === 'bg' ? '#fff' : 'var(--text)',
                             border: '1px solid var(--border)',
                             cursor: 'pointer',
                             borderRadius: '4px',
                             fontWeight: 'bold',
-                            minWidth: '80px',
+                            fontSize: '0.85rem',
                         }}
                     >
                         {language === 'en' ? 'BG' : 'EN'}
                     </button>
+
+                    {!isTauri && user && (
+                        <button
+                            onClick={signOut}
+                            title={user.email ?? ''}
+                            style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: 'var(--bg)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border)',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                                fontSize: '0.85rem',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {t('button.signOut')}
+                        </button>
+                    )}
                 </div>
             </nav>
 
@@ -158,9 +188,13 @@ function Layout() {
 
 function App() {
     return (
-        <HashRouter>
-            <Layout />
-        </HashRouter>
+        <AuthProvider>
+            <AuthGate>
+                <HashRouter>
+                    <Layout />
+                </HashRouter>
+            </AuthGate>
+        </AuthProvider>
     );
 }
 

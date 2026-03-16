@@ -3,11 +3,8 @@ import type {
     Sale,
 } from '../types/index.js';
 
-// ECB cross-rate conversion factors
-const BGN_TO_EUR = 1.95583; // 1 BGN = 1.95583 EUR (inverse)
-const ECB_CONVERSION: Record<string, number> = {
-    USD: 1.0, // baseline
-};
+// ECB cross-rate conversion factor
+const BGN_TO_EUR = 1.95583;
 
 /**
  * Populate FX rates for sales using a rate lookup function.

@@ -5,12 +5,13 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
 import {
+    importFullExcel,
+    importHoldingsFromCsv,
     importHoldingsFromExcel,
     t,
 } from '@bg-tax/core';
-import type { AppState } from '@bg-tax/core';
 
-type ImportOption = 'none' | 'json' | 'excel' | 'fresh';
+type ImportOption = 'none' | 'excel' | 'excel-full' | 'fresh';
 
 export function YearSetup() {
     const navigate = useNavigate();
@@ -30,20 +31,52 @@ export function YearSetup() {
         setImportStatus(null);
 
         try {
-            if (importOption === 'json') {
-                const text = await file.text();
-                const data = JSON.parse(text) as Partial<AppState>;
-                if (data.holdings && Array.isArray(data.holdings)) {
-                    importHoldings(data.holdings);
-                    setImportStatus(`Imported ${data.holdings.length} holdings from JSON`);
+            if (importOption === 'excel') {
+                let holdings;
+                if (file.name.endsWith('.csv')) {
+                    const text = await file.text();
+                    holdings = importHoldingsFromCsv(text);
                 } else {
-                    setImportError('JSON file does not contain a "holdings" array');
+                    const buffer = await file.arrayBuffer();
+                    holdings = await importHoldingsFromExcel(buffer);
                 }
-            } else if (importOption === 'excel') {
-                const buffer = await file.arrayBuffer();
-                const holdings = await importHoldingsFromExcel(buffer);
+                for (const h of holdings) h.source = { type: 'Initial import', file: file.name };
                 importHoldings(holdings);
-                setImportStatus(`Imported ${holdings.length} holdings from Excel`);
+                setImportStatus(`Imported ${holdings.length} holdings`);
+            } else if (importOption === 'excel-full') {
+                const buffer = await file.arrayBuffer();
+                const data = await importFullExcel(buffer);
+                const { importSales, importDividends, importStockYield, importIbInterest, importRevolutInterest } = useAppStore.getState();
+                const parts: string[] = [];
+                if (data.holdings.length) {
+                    for (const h of data.holdings) h.source = { type: 'Initial import', file: file.name };
+                    importHoldings(data.holdings);
+                    parts.push(`${data.holdings.length} притежания`);
+                }
+                if (data.sales.length) {
+                    for (const s of data.sales) s.source = { type: 'Initial import', file: file.name };
+                    importSales(data.sales);
+                    parts.push(`${data.sales.length} продажби`);
+                }
+                if (data.dividends.length) {
+                    for (const d of data.dividends) d.source = { type: 'Initial import', file: file.name };
+                    importDividends(data.dividends);
+                    parts.push(`${data.dividends.length} дивиденти`);
+                }
+                if (data.stockYield.length) {
+                    importStockYield(data.stockYield);
+                    parts.push(`${data.stockYield.length} stock yield`);
+                }
+                if (data.ibInterest.length) {
+                    for (const i of data.ibInterest) i.source = { type: 'Initial import', file: file.name };
+                    importIbInterest(data.ibInterest);
+                    parts.push(`${data.ibInterest.length} IB лихви`);
+                }
+                if (data.revolutInterest.length) {
+                    importRevolutInterest(data.revolutInterest);
+                    parts.push(`${data.revolutInterest.length} Revolut лихви`);
+                }
+                setImportStatus(parts.length > 0 ? `Imported: ${parts.join(', ')}` : 'No data found in file');
             }
         } catch (err) {
             setImportError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -55,8 +88,20 @@ export function YearSetup() {
 
     const options: { value: ImportOption; label: string; description: string; accept?: string }[] = [
         { value: 'fresh', label: t('import.fresh'), description: t('import.freshDesc') },
-        { value: 'json', label: t('import.json'), description: "Previous year's app export — recommended, lossless", accept: '.json' },
-        { value: 'excel', label: t('import.excel'), description: "Previous year's Данъчна {YEAR}.xlsx — reads Притежания sheet", accept: '.xlsx' },
+        {
+            value: 'excel',
+            label: `Притежания от предходна година (Excel, CSV)`,
+            description: `Зарежда само притежанията от миналогодишния файл Данъчна_${
+                taxYear - 1
+            }.xlsx (лист "Притежания") или CSV с колони: Брокер, Символ, Държава, Дата, Количество, Валута, Цена`,
+            accept: '.xlsx,.csv',
+        },
+        {
+            value: 'excel-full',
+            label: `Продължи от Данъчна_${taxYear}.xlsx`,
+            description: 'Зарежда всички данни (притежания, продажби, дивиденти, лихви, курсове) от файл на приложението',
+            accept: '.xlsx',
+        },
     ];
 
     return (
@@ -71,7 +116,7 @@ export function YearSetup() {
                     type='number'
                     value={taxYear}
                     onChange={(e) => handleYearChange(parseInt(e.target.value))}
-                    min={2025}
+                    min={2024}
                     max={2035}
                     style={{ padding: '0.5rem', fontSize: '1rem', width: '120px' }}
                 />
@@ -137,7 +182,7 @@ export function YearSetup() {
                 </div>
             </div>
 
-            {(importOption === 'json' || importOption === 'excel') && (
+            {(importOption === 'excel' || importOption === 'excel-full') && (
                 <div style={{ marginBottom: '1.5rem' }}>
                     <input
                         ref={fileInputRef}
@@ -149,20 +194,31 @@ export function YearSetup() {
                         }}
                         style={{ display: 'none' }}
                     />
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{
-                            padding: '0.6rem 1.5rem',
-                            fontSize: '1rem',
-                            backgroundColor: 'var(--bg-secondary)',
-                            color: 'var(--text)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        {t('button.chooseFile')}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                                padding: '0.6rem 1.5rem',
+                                fontSize: '1rem',
+                                backgroundColor: 'var(--bg-secondary)',
+                                color: 'var(--text)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {t('button.chooseFile')}
+                        </button>
+                        {importOption === 'excel' && (
+                            <a
+                                href='/holdings-template.csv'
+                                download='holdings-template.csv'
+                                style={{ fontSize: '0.85rem', color: 'var(--accent)' }}
+                            >
+                                Изтегли шаблон (CSV)
+                            </a>
+                        )}
+                    </div>
                 </div>
             )}
 

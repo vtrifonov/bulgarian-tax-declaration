@@ -255,3 +255,112 @@ describe('TaxCalculator', () => {
         expect(result.totalTax).toBeCloseTo(4.99, 1);
     });
 });
+
+describe('TaxCalculator (EUR base)', () => {
+    const fxRates = { USD: { '2025-06-15': 1.08 }, GBP: { '2025-06-15': 0.84 } };
+
+    it('calculates USD dividends with EUR base', () => {
+        const calc = new TaxCalculator('EUR');
+        const dividends: Dividend[] = [{
+            symbol: 'AAPL',
+            country: 'САЩ',
+            date: '2025-06-15',
+            currency: 'USD',
+            grossAmount: 100,
+            withholdingTax: -15,
+            bgTaxDue: 0,
+            whtCredit: 0,
+        }];
+        const result = calc.calcDividendsTax(dividends, fxRates);
+        // 100 USD / 1.08 = 92.59 EUR
+        expect(result.totalGross).toBeCloseTo(92.59, 1);
+        // WHT: 15 / 1.08 = 13.89 EUR
+        expect(result.totalWht).toBeCloseTo(13.89, 1);
+        // 5% tax = 4.63, WHT > tax → bgTax = 0
+        expect(result.totalBgTax).toBe(0);
+    });
+
+    it('calculates EUR dividends with EUR base (no conversion)', () => {
+        const calc = new TaxCalculator('EUR');
+        const dividends: Dividend[] = [{
+            symbol: 'ASML',
+            country: 'NL',
+            date: '2025-06-15',
+            currency: 'EUR',
+            grossAmount: 100,
+            withholdingTax: -15,
+            bgTaxDue: 0,
+            whtCredit: 0,
+        }];
+        const result = calc.calcDividendsTax(dividends, fxRates);
+        expect(result.totalGross).toBe(100);
+        expect(result.totalWht).toBe(15);
+    });
+
+    it('calculates GBP dividends with EUR base', () => {
+        const calc = new TaxCalculator('EUR');
+        const dividends: Dividend[] = [{
+            symbol: 'RIO',
+            country: 'GB',
+            date: '2025-06-15',
+            currency: 'GBP',
+            grossAmount: 84,
+            withholdingTax: 0,
+            bgTaxDue: 0,
+            whtCredit: 0,
+        }];
+        const result = calc.calcDividendsTax(dividends, fxRates);
+        // 84 GBP / 0.84 = 100 EUR
+        expect(result.totalGross).toBeCloseTo(100, 1);
+        // 0 WHT → full 5% tax
+        expect(result.totalBgTax).toBeCloseTo(5, 1);
+    });
+
+    it('calculates stock yield with EUR base', () => {
+        const calc = new TaxCalculator('EUR');
+        const entries: StockYieldEntry[] = [{
+            date: '2025-06-15',
+            symbol: 'AAPL',
+            currency: 'USD',
+            amount: 10.80,
+        }];
+        const result = calc.calcStockYieldTax(entries, fxRates);
+        // 10.80 / 1.08 = 10 EUR, tax 10% = 1.00
+        expect(result.totalGross).toBeCloseTo(10, 1);
+        expect(result.totalTax).toBeCloseTo(1, 1);
+    });
+
+    it('calculates Revolut interest with EUR base', () => {
+        const calc = new TaxCalculator('EUR');
+        const revolut: RevolutInterest[] = [{
+            currency: 'EUR',
+            entries: [
+                { date: '2025-06-15', description: 'Interest PAID', amount: 5.00 },
+                { date: '2025-06-16', description: 'Service Fee', amount: -0.50 },
+            ],
+        }];
+        const results = calc.calcRevolutInterest(revolut);
+        expect(results).toHaveLength(1);
+        // Net = 4.50 EUR, already in EUR base
+        expect(results[0].netInterestInCurrency).toBeCloseTo(4.50, 2);
+        expect(results[0].netInterestBaseCcy).toBeCloseTo(4.50, 2);
+        expect(results[0].taxDue).toBeCloseTo(0.45, 2);
+    });
+
+    it('handles missing FX rate gracefully', () => {
+        const calc = new TaxCalculator('EUR');
+        const dividends: Dividend[] = [{
+            symbol: 'TEST',
+            country: 'JP',
+            date: '2025-06-15',
+            currency: 'JPY',
+            grossAmount: 1000,
+            withholdingTax: -100,
+            bgTaxDue: 0,
+            whtCredit: 0,
+        }];
+        // No JPY rate → amounts stay unconverted
+        const result = calc.calcDividendsTax(dividends, fxRates);
+        expect(result.totalGross).toBe(1000); // Unconverted
+    });
+});

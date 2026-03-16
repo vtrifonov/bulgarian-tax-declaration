@@ -114,9 +114,24 @@ export class FifoEngine {
         }
 
         if (remaining > 0) {
+            // Create sale with empty buy data — user can fill in manually
+            sales.push({
+                id: randomUUID(),
+                broker,
+                country: countryMap[trade.symbol] ?? '',
+                symbol: trade.symbol,
+                dateAcquired: '',
+                dateSold,
+                quantity: remaining,
+                currency: trade.currency,
+                buyPrice: 0,
+                sellPrice: trade.price,
+                fxRateBuy: 0,
+                fxRateSell: 0,
+            });
             warnings.push({
                 type: 'negative-holdings',
-                message: `Sell of ${Math.abs(trade.quantity)} ${trade.symbol} exceeds available holdings by ${remaining}`,
+                message: `Sell of ${Math.abs(trade.quantity)} ${trade.symbol}: ${remaining} shares have no matching buy — fill in acquisition date and price manually`,
                 tab: 'Sales',
             });
         }

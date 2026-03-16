@@ -93,6 +93,41 @@ Dividends,Data,Total,,,50.00`;
         expect(paymentInLieu!.amount).toBe(50.00);
     });
 
+    it('parses Inter-Company transfer In as synthetic buy trade', () => {
+        const csvWithTransfer = `Statement,Header,Field Name,Field Value
+Transfers,Header,Asset Category,Currency,Symbol,Date,Type,Direction,Xfer Company,Xfer Account,Qty,Xfer Price,Market Value,Realized P/L,Cash Amount,Code
+Transfers,Data,Stocks,USD,AAPL,2024-08-30,Inter-Company,In,--,U7069264,50,--,"11,489.50",0.00,0.00,`;
+        const result = parseIBCsv(csvWithTransfer);
+        expect(result.trades).toHaveLength(1);
+        expect(result.trades[0].symbol).toBe('AAPL');
+        expect(result.trades[0].currency).toBe('USD');
+        expect(result.trades[0].quantity).toBe(50);
+        expect(result.trades[0].dateTime).toBe(''); // Empty — user fills in
+        expect(result.trades[0].price).toBe(0); // Empty — user fills in
+    });
+
+    it('skips transfer Out rows', () => {
+        const csvWithOut = `Statement,Header,Field Name,Field Value
+Transfers,Data,Stocks,USD,AAPL,2024-08-30,Inter-Company,Out,--,U7069264,50,--,"11,489.50",0.00,0.00,`;
+        const result = parseIBCsv(csvWithOut);
+        expect(result.trades).toHaveLength(0);
+    });
+
+    it('parses transfer with comma-formatted quantity', () => {
+        const csvComma = `Statement,Header,Field Name,Field Value
+Transfers,Data,Stocks,EUR,LHAd,2024-08-30,Inter-Company,In,--,U7069264,"1,000",--,"5,888.00",0.00,0.00,`;
+        const result = parseIBCsv(csvComma);
+        expect(result.trades).toHaveLength(1);
+        expect(result.trades[0].quantity).toBe(1000);
+    });
+
+    it('skips transfer with invalid quantity', () => {
+        const csvBad = `Statement,Header,Field Name,Field Value
+Transfers,Data,Stocks,USD,AAPL,2024-08-30,Inter-Company,In,--,U7069264,N/A,--,0,0.00,0.00,`;
+        const result = parseIBCsv(csvBad);
+        expect(result.trades).toHaveLength(0);
+    });
+
     it('parses forex trades section without crashing (ignores non-Stocks trades)', () => {
         // Test data with Forex section that should be ignored (only Stocks trades matter)
         const csvWithForex = `Statement,Header,Field Name,Field Value

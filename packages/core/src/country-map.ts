@@ -8,6 +8,7 @@ const COUNTRY_MAP: Record<string, string> = {
     DAL: 'САЩ',
     ESTC: 'САЩ',
     ET: 'САЩ',
+    GOOG: 'САЩ',
     GTLB: 'САЩ',
     META: 'САЩ',
     MDB: 'САЩ',

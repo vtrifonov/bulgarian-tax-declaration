@@ -4,7 +4,10 @@ import {
 } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
+    calcDividendRowTax,
+    getFxRate,
     t,
+    toBaseCurrencyStr,
     validate,
 } from '@bg-tax/core';
 import { useAppStore } from '../store/app-state';
@@ -22,6 +25,18 @@ import type {
 
 type TabType = 'holdings' | 'sales' | 'dividends' | 'ibInterest' | 'revolutInterest' | 'fxRates';
 
+/** Show up to 8 decimals, trimming trailing zeros */
+function formatQuantity(n: number): string {
+    if (n === 0) return '0';
+    const s = n.toFixed(8);
+    // Remove trailing zeros but keep at least 2 decimals
+    const trimmed = s.replace(/0+$/, '');
+    const dotIdx = trimmed.indexOf('.');
+    if (dotIdx === -1) return trimmed;
+    const decimals = trimmed.length - dotIdx - 1;
+    return decimals < 2 ? n.toFixed(2) : trimmed;
+}
+
 // Helper to create an editable column definition
 function createEditableColumn<T extends Record<string, any>>(
     accessorKey: keyof T,
@@ -30,46 +45,51 @@ function createEditableColumn<T extends Record<string, any>>(
         align?: 'left' | 'right' | 'center';
         format?: (value: any) => string;
         onSave?: (rowIndex: number, value: string) => void;
+        inputType?: 'text' | 'number' | 'date' | 'select';
+        selectOptions?: string[];
     },
 ): ColumnDef<T> {
     return {
         accessorKey: accessorKey as string,
         header,
         cell: (info) => {
-            const formatted = options?.format ? options.format(info.getValue()) : String(info.getValue() ?? '');
-            return formatted;
+            const raw = info.getValue();
+            if (options?.format) return options.format(raw);
+            // Format ISO dates as DD.MM.YYYY for display
+            if (options?.inputType === 'date' && typeof raw === 'string') {
+                const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+            }
+            return String(raw ?? '');
         },
         meta: {
             align: options?.align,
             editable: true,
+            inputType: options?.inputType ?? 'text',
+            selectOptions: options?.selectOptions,
             onSave: options?.onSave,
         },
     };
 }
 
-// Helper to convert amounts to base currency
-function createToBaseCcy(fxRates: Record<string, Record<string, number>>, baseCurrency: 'BGN' | 'EUR') {
-    return (amount: number, currency: string, date: string): string => {
-        if (currency === baseCurrency) return amount.toFixed(2);
-        if (currency === 'EUR' && baseCurrency === 'BGN') return (amount * 1.95583).toFixed(2);
-        if (currency === 'BGN' && baseCurrency === 'EUR') return (amount / 1.95583).toFixed(2);
-        const ecbRate = fxRates[currency]?.[date];
-        if (!ecbRate) return '—';
-        if (baseCurrency === 'EUR') return (amount / ecbRate).toFixed(2);
-        return (amount * 1.95583 / ecbRate).toFixed(2);
+// Row number column — shows array position, sortable to restore import order
+function createRowNumColumn<T>(): ColumnDef<T> {
+    return {
+        id: '#',
+        header: '#',
+        cell: (info) => info.row.index + 1,
+        meta: { editable: false, align: 'center' },
+        size: 45,
+        enableResizing: false,
     };
 }
 
-/** Display the FX rate for a currency on a date (handles EUR/BGN fixed rate) */
-function getFxRateDisplay(fxRates: Record<string, Record<string, number>>, baseCurrency: 'BGN' | 'EUR', currency: string, date: string): string {
-    if (currency === baseCurrency) return '1';
-    if (currency === 'EUR' && baseCurrency === 'BGN') return '1.95583';
-    if (currency === 'BGN' && baseCurrency === 'EUR') return (1 / 1.95583).toFixed(6);
-    const ecbRate = fxRates[currency]?.[date];
-    if (!ecbRate) return '—';
-    // Show rate as "1 currency = X baseCurrency"
-    if (baseCurrency === 'EUR') return (1 / ecbRate).toFixed(6);
-    return (1.95583 / ecbRate).toFixed(6);
+// Wrappers using centralized core functions (bound to current fxRates/baseCurrency)
+function useConversionHelpers(fxRates: Record<string, Record<string, number>>, baseCurrency: 'BGN' | 'EUR') {
+    return useMemo(() => ({
+        toBaseCcy: (amount: number, currency: string, date: string) => toBaseCurrencyStr(amount, currency, date, baseCurrency, fxRates),
+        fxRate: (currency: string, date: string) => getFxRate(currency, date, baseCurrency, fxRates),
+    }), [fxRates, baseCurrency]);
 }
 
 export function Workspace() {
@@ -79,6 +99,7 @@ export function Workspace() {
     const [showWarnings, setShowWarnings] = useState(false);
     const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
     const [warningFilter, setWarningFilter] = useState<string>('all');
+    const [editNewRow, setEditNewRow] = useState<{ index: number; nonce: number } | undefined>(undefined);
 
     const {
         holdings,
@@ -110,6 +131,8 @@ export function Workspace() {
         deleteRevolutInterest,
         addRevolutInterest,
     } = useAppStore();
+
+    const { toBaseCcy, fxRate: fxRateDisplay } = useConversionHelpers(fxRates, baseCurrency);
 
     // Compute validation warnings
     const warnings: ValidationWarning[] = useMemo(() => {
@@ -165,27 +188,96 @@ export function Workspace() {
         return tabs;
     };
 
+    // Collect unique values for select dropdowns
+    const brokerOptions = [
+        ...new Set([
+            ...holdings.map(h => h.broker),
+            ...sales.map(s => s.broker),
+        ]),
+    ].filter(Boolean).sort();
+
+    const countryOptions = [
+        ...new Set([
+            'САЩ',
+            'Ирландия',
+            'Германия',
+            'Великобритания',
+            'Хонконг',
+            'Нидерландия (Холандия)',
+            ...holdings.map(h => h.country),
+            ...sales.map(s => s.country),
+            ...dividends.map(d => d.country),
+        ]),
+    ].filter(Boolean).sort();
+
+    const currencyOptions = [
+        ...new Set([
+            'USD',
+            'EUR',
+            'GBP',
+            'HKD',
+            'BGN',
+            ...holdings.map(h => h.currency),
+            ...sales.map(s => s.currency),
+            ...dividends.map(d => d.currency),
+        ]),
+    ].filter(Boolean).sort();
+
+    const symbolOptions = [
+        ...new Set([
+            ...holdings.map(h => h.symbol),
+            ...sales.map(s => s.symbol),
+            ...dividends.map(d => d.symbol),
+        ]),
+    ].filter(Boolean).sort();
+
+    // Symbol → country lookup from existing data (first match wins)
+    const symbolCountryMap = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const h of holdings) if (h.symbol && h.country && !map.has(h.symbol)) map.set(h.symbol, h.country);
+        for (const s of sales) if (s.symbol && s.country && !map.has(s.symbol)) map.set(s.symbol, s.country);
+        for (const d of dividends) if (d.symbol && d.country && !map.has(d.symbol)) map.set(d.symbol, d.country);
+        return map;
+    }, [holdings, sales, dividends]);
+
+    /** Auto-fill handler: when symbol is selected, fill country */
+    const handleAutoFill = (columnId: string, selectedValue: string): Record<string, string> | undefined => {
+        if (columnId === 'symbol') {
+            const country = symbolCountryMap.get(selectedValue);
+            if (country) return { country };
+        }
+        return undefined;
+    };
+
     // Holdings columns
     const holdingsColumns: ColumnDef<Holding>[] = [
+        createRowNumColumn<Holding>(),
         createEditableColumn<Holding>('broker', t('col.broker'), {
+            inputType: 'select',
+            selectOptions: brokerOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], broker: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('country', t('col.country'), {
-            onSave: (rowIndex, value) => {
-                const updated = { ...holdings[rowIndex], country: value };
-                updateHolding(rowIndex, updated);
-            },
-        }),
         createEditableColumn<Holding>('symbol', t('col.symbol'), {
+            inputType: 'select',
+            selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], symbol: value };
                 updateHolding(rowIndex, updated);
             },
         }),
+        createEditableColumn<Holding>('country', t('col.country'), {
+            inputType: 'select',
+            selectOptions: countryOptions,
+            onSave: (rowIndex, value) => {
+                const updated = { ...holdings[rowIndex], country: value };
+                updateHolding(rowIndex, updated);
+            },
+        }),
         createEditableColumn<Holding>('dateAcquired', t('col.dateAcquired'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], dateAcquired: value };
                 updateHolding(rowIndex, updated);
@@ -193,13 +285,16 @@ export function Workspace() {
         }),
         createEditableColumn<Holding>('quantity', t('col.quantity'), {
             align: 'right',
-            format: (v) => (v as number).toFixed(2),
+            inputType: 'number',
+            format: (v) => formatQuantity(v as number),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], quantity: parseFloat(value) || 0 };
                 updateHolding(rowIndex, updated);
             },
         }),
         createEditableColumn<Holding>('currency', t('col.currency'), {
+            inputType: 'select',
+            selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], currency: value };
                 updateHolding(rowIndex, updated);
@@ -207,6 +302,7 @@ export function Workspace() {
         }),
         createEditableColumn<Holding>('unitPrice', t('col.unitPrice'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], unitPrice: parseFloat(value) || 0 };
@@ -223,7 +319,7 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: t('col.fxRate'),
-            accessorFn: (row: Holding) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.dateAcquired),
+            accessorFn: (row: Holding) => fxRateDisplay(row.currency, row.dateAcquired),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -231,7 +327,6 @@ export function Workspace() {
             id: 'totalBase',
             header: `${t('col.totalBase')} (${baseCurrency})`,
             accessorFn: (row: Holding) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.unitPrice, row.currency, row.dateAcquired);
             },
             cell: (info) => info.getValue(),
@@ -244,50 +339,59 @@ export function Workspace() {
             },
         }),
         {
+            id: 'source',
+            header: t('col.source'),
+            accessorFn: (row: Holding) => row.source?.type ?? '',
+            cell: (info) => {
+                const row = info.row.original;
+                return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
+            },
+            meta: { editable: false },
+        },
+        {
             id: 'delete',
             header: '',
-            cell: ({ row }) => (
-                <button
-                    className='delete-button'
-                    onClick={() => {
-                        const index = holdings.indexOf(row.original);
-                        if (index >= 0) deleteHolding(index);
-                    }}
-                >
-                    {t('button.delete')}
-                </button>
-            ),
+            cell: () => null,
             meta: { editable: false },
         },
     ];
 
     // Sales columns
     const salesColumns: ColumnDef<Sale>[] = [
+        createRowNumColumn<Sale>(),
         createEditableColumn<Sale>('broker', t('col.broker'), {
+            inputType: 'select',
+            selectOptions: brokerOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], broker: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('country', t('col.country'), {
-            onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], country: value };
-                updateSale(rowIndex, updated);
-            },
-        }),
         createEditableColumn<Sale>('symbol', t('col.symbol'), {
+            inputType: 'select',
+            selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], symbol: value };
                 updateSale(rowIndex, updated);
             },
         }),
+        createEditableColumn<Sale>('country', t('col.country'), {
+            inputType: 'select',
+            selectOptions: countryOptions,
+            onSave: (rowIndex, value) => {
+                const updated = { ...sales[rowIndex], country: value };
+                updateSale(rowIndex, updated);
+            },
+        }),
         createEditableColumn<Sale>('dateAcquired', t('col.dateAcquired'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], dateAcquired: value };
                 updateSale(rowIndex, updated);
             },
         }),
         createEditableColumn<Sale>('dateSold', t('col.dateSold'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], dateSold: value };
                 updateSale(rowIndex, updated);
@@ -295,13 +399,16 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('quantity', t('col.qty'), {
             align: 'right',
-            format: (v) => (v as number).toFixed(2),
+            inputType: 'number',
+            format: (v) => formatQuantity(v as number),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], quantity: parseFloat(value) || 0 };
                 updateSale(rowIndex, updated);
             },
         }),
         createEditableColumn<Sale>('currency', t('col.currency'), {
+            inputType: 'select',
+            selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], currency: value };
                 updateSale(rowIndex, updated);
@@ -309,6 +416,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('buyPrice', t('col.buyPrice'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], buyPrice: parseFloat(value) || 0 };
@@ -317,6 +425,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('sellPrice', t('col.sellPrice'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], sellPrice: parseFloat(value) || 0 };
@@ -325,6 +434,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('fxRateBuy', t('col.fxRateBuy'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(6),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], fxRateBuy: parseFloat(value) || 1 };
@@ -333,6 +443,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('fxRateSell', t('col.fxRateSell'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(6),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], fxRateSell: parseFloat(value) || 1 };
@@ -343,7 +454,6 @@ export function Workspace() {
             id: 'proceedsBase',
             header: `${t('col.proceedsBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold);
             },
             cell: (info) => info.getValue(),
@@ -353,7 +463,6 @@ export function Workspace() {
             id: 'costBase',
             header: `${t('col.costBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired);
             },
             cell: (info) => info.getValue(),
@@ -363,7 +472,6 @@ export function Workspace() {
             id: 'plBase',
             header: `${t('col.plBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
                 const cost = parseFloat(toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired));
                 if (isNaN(proceeds) || isNaN(cost)) return '—';
@@ -373,44 +481,52 @@ export function Workspace() {
             meta: { align: 'right' as const, editable: false },
         },
         {
+            id: 'source',
+            header: t('col.source'),
+            accessorFn: (row: Sale) => row.source?.type ?? '',
+            cell: (info) => {
+                const row = info.row.original;
+                return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
+            },
+            meta: { editable: false },
+        },
+        {
             id: 'delete',
             header: '',
-            cell: ({ row }) => (
-                <button
-                    className='delete-button'
-                    onClick={() => {
-                        const index = sales.indexOf(row.original);
-                        if (index >= 0) deleteSale(index);
-                    }}
-                >
-                    {t('button.delete')}
-                </button>
-            ),
+            cell: () => null,
             meta: { editable: false },
         },
     ];
 
     // Dividends columns
     const dividendsColumns: ColumnDef<Dividend>[] = [
+        createRowNumColumn<Dividend>(),
         createEditableColumn<Dividend>('symbol', t('col.symbol'), {
+            inputType: 'select',
+            selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], symbol: value };
                 updateDividend(rowIndex, updated);
             },
         }),
         createEditableColumn<Dividend>('country', t('col.country'), {
+            inputType: 'select',
+            selectOptions: countryOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], country: value };
                 updateDividend(rowIndex, updated);
             },
         }),
         createEditableColumn<Dividend>('date', t('col.date'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], date: value };
                 updateDividend(rowIndex, updated);
             },
         }),
         createEditableColumn<Dividend>('currency', t('col.currency'), {
+            inputType: 'select',
+            selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], currency: value };
                 updateDividend(rowIndex, updated);
@@ -418,6 +534,7 @@ export function Workspace() {
         }),
         createEditableColumn<Dividend>('grossAmount', t('col.grossAmount'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], grossAmount: parseFloat(value) || 0 };
@@ -426,6 +543,7 @@ export function Workspace() {
         }),
         createEditableColumn<Dividend>('withholdingTax', t('col.wht'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], withholdingTax: parseFloat(value) || 0 };
@@ -435,7 +553,7 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: t('col.fxRate'),
-            accessorFn: (row: Dividend) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date),
+            accessorFn: (row: Dividend) => fxRateDisplay(row.currency, row.date),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -443,7 +561,6 @@ export function Workspace() {
             id: 'grossBase',
             header: `${t('col.grossBase')} (${baseCurrency})`,
             accessorFn: (row: Dividend) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.grossAmount, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -453,7 +570,6 @@ export function Workspace() {
             id: 'whtBase',
             header: `${t('col.whtBase')} (${baseCurrency})`,
             accessorFn: (row: Dividend) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.withholdingTax, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -461,27 +577,28 @@ export function Workspace() {
         },
         {
             id: 'tax5pct',
-            header: t('col.tax5pct'),
-            accessorFn: (row: Dividend) => row.grossAmount * 0.05,
-            cell: (info) => (info.getValue() as number).toFixed(2),
+            header: `${t('col.tax5pct')} (${baseCurrency})`,
+            accessorFn: (row: Dividend) => {
+                const grossStr = toBaseCcy(row.grossAmount, row.currency, row.date);
+                const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
+                return (grossBase * 0.05).toFixed(2);
+            },
+            cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
-        createEditableColumn<Dividend>('whtCredit', t('col.whtCredit'), {
-            align: 'right',
-            format: (v) => (v as number).toFixed(2),
-            onSave: (rowIndex, value) => {
-                const updated = { ...dividends[rowIndex], whtCredit: parseFloat(value) || 0 };
-                updateDividend(rowIndex, updated);
+        {
+            id: 'bgTaxDue',
+            header: `${t('col.bgTaxDue')} (${baseCurrency})`,
+            accessorFn: (row: Dividend) => {
+                const grossStr = toBaseCcy(row.grossAmount, row.currency, row.date);
+                const whtStr = toBaseCcy(row.withholdingTax, row.currency, row.date);
+                const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
+                const whtBase = whtStr !== '—' ? parseFloat(whtStr) : 0;
+                return Math.max(0, grossBase * 0.05 - whtBase).toFixed(2);
             },
-        }),
-        createEditableColumn<Dividend>('bgTaxDue', t('col.bgTaxDue'), {
-            align: 'right',
-            format: (v) => (v as number).toFixed(2),
-            onSave: (rowIndex, value) => {
-                const updated = { ...dividends[rowIndex], bgTaxDue: parseFloat(value) || 0 };
-                updateDividend(rowIndex, updated);
-            },
-        }),
+            cell: (info) => info.getValue(),
+            meta: { align: 'right' as const, editable: false },
+        },
         createEditableColumn<Dividend>('notes', t('col.notes'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], notes: value };
@@ -489,32 +606,36 @@ export function Workspace() {
             },
         }),
         {
+            id: 'source',
+            header: t('col.source'),
+            accessorFn: (row: Dividend) => row.source?.type ?? '',
+            cell: (info) => {
+                const row = info.row.original;
+                return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
+            },
+            meta: { editable: false },
+        },
+        {
             id: 'delete',
             header: '',
-            cell: ({ row }) => (
-                <button
-                    className='delete-button'
-                    onClick={() => {
-                        const index = dividends.indexOf(row.original);
-                        if (index >= 0) deleteDividend(index);
-                    }}
-                >
-                    {t('button.delete')}
-                </button>
-            ),
+            cell: () => null,
             meta: { editable: false },
         },
     ];
 
     // IB Interest columns
     const ibInterestColumns: ColumnDef<IBInterestEntry>[] = [
+        createRowNumColumn<IBInterestEntry>(),
         createEditableColumn<IBInterestEntry>('date', t('col.date'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], date: value };
                 updateIbInterest(rowIndex, updated);
             },
         }),
         createEditableColumn<IBInterestEntry>('currency', t('col.currency'), {
+            inputType: 'select',
+            selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], currency: value };
                 updateIbInterest(rowIndex, updated);
@@ -528,6 +649,7 @@ export function Workspace() {
         }),
         createEditableColumn<IBInterestEntry>('amount', t('col.amount'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], amount: parseFloat(value) || 0 };
@@ -538,7 +660,7 @@ export function Workspace() {
             id: 'fxRate',
             header: t('col.fxRate'),
             accessorFn: (row: IBInterestEntry) => {
-                return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
+                return fxRateDisplay(row.currency, row.date);
             },
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
@@ -547,45 +669,50 @@ export function Workspace() {
             id: 'amountBase',
             header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: IBInterestEntry) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
         {
+            id: 'source',
+            header: t('col.source'),
+            accessorFn: (row: IBInterestEntry) => row.source?.type ?? '',
+            cell: (info) => {
+                const row = info.row.original;
+                return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
+            },
+            meta: { editable: false },
+        },
+        {
             id: 'delete',
             header: '',
-            cell: ({ row }) => (
-                <button
-                    className='delete-button'
-                    onClick={() => {
-                        const index = ibInterest.indexOf(row.original);
-                        if (index >= 0) deleteIbInterest(index);
-                    }}
-                >
-                    {t('button.delete')}
-                </button>
-            ),
+            cell: () => null,
             meta: { editable: false },
         },
     ];
 
     // Stock Yield columns
     const stockYieldColumns: ColumnDef<StockYieldEntry>[] = [
+        createRowNumColumn<StockYieldEntry>(),
         createEditableColumn<StockYieldEntry>('date', t('col.date'), {
+            inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], date: value };
                 updateStockYield(rowIndex, updated);
             },
         }),
         createEditableColumn<StockYieldEntry>('symbol', t('col.symbol'), {
+            inputType: 'select',
+            selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], symbol: value };
                 updateStockYield(rowIndex, updated);
             },
         }),
         createEditableColumn<StockYieldEntry>('currency', t('col.currency'), {
+            inputType: 'select',
+            selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], currency: value };
                 updateStockYield(rowIndex, updated);
@@ -593,6 +720,7 @@ export function Workspace() {
         }),
         createEditableColumn<StockYieldEntry>('amount', t('col.amount'), {
             align: 'right',
+            inputType: 'number',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], amount: parseFloat(value) || 0 };
@@ -603,7 +731,7 @@ export function Workspace() {
             id: 'fxRate',
             header: t('col.fxRate'),
             accessorFn: (row: StockYieldEntry) => {
-                return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
+                return fxRateDisplay(row.currency, row.date);
             },
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
@@ -612,7 +740,6 @@ export function Workspace() {
             id: 'amountBase',
             header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: StockYieldEntry) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -621,17 +748,7 @@ export function Workspace() {
         {
             id: 'delete',
             header: '',
-            cell: ({ row }) => (
-                <button
-                    className='delete-button'
-                    onClick={() => {
-                        const index = stockYield.indexOf(row.original);
-                        if (index >= 0) deleteStockYield(index);
-                    }}
-                >
-                    {t('button.delete')}
-                </button>
-            ),
+            cell: () => null,
             meta: { editable: false },
         },
     ];
@@ -657,7 +774,7 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: t('col.fxRate'),
-            accessorFn: (row: RevolutInterestEntry) => getFxRateDisplay(fxRates, baseCurrency, currency, row.date),
+            accessorFn: (row: RevolutInterestEntry) => fxRateDisplay(currency, row.date),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -665,7 +782,6 @@ export function Workspace() {
             id: 'amountBase',
             header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: RevolutInterestEntry) => {
-                const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -674,8 +790,6 @@ export function Workspace() {
     ];
 
     const renderHoldingsContent = () => {
-        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
-
         // Calculate footer sums for holdings
         let totalQuantity = 0;
         let totalInCcy = 0;
@@ -692,7 +806,7 @@ export function Workspace() {
 
         const footerRow: Record<string, string> = {
             broker: t('summary.total'),
-            quantity: totalQuantity.toFixed(2),
+            quantity: formatQuantity(totalQuantity),
             totalCcy: totalInCcy.toFixed(2),
             totalBase: totalInBase.toFixed(2),
         };
@@ -702,19 +816,48 @@ export function Workspace() {
                 columns={holdingsColumns}
                 data={holdings}
                 footerRow={footerRow}
+                warningRows={holdingsWarnings.rows}
+                warningMessages={holdingsWarnings.messages}
+                warningCount={holdingsWarnings.rows.size}
+                showWarningsOnly={showHoldingsWarningsOnly}
+                onToggleWarningsOnly={() => setShowHoldingsWarningsOnly(!showHoldingsWarningsOnly)}
+                editRowOnMount={editNewRow}
+                onAutoFill={handleAutoFill}
+                focusColumnOnEdit='symbol'
+                onSaveRow={(rowIndex, values) => {
+                    const original = holdings[rowIndex];
+                    if (!original) return;
+                    updateHolding(rowIndex, {
+                        ...original,
+                        broker: values.broker ?? original.broker,
+                        country: values.country ?? original.country,
+                        symbol: values.symbol ?? original.symbol,
+                        dateAcquired: values.dateAcquired ?? original.dateAcquired,
+                        quantity: values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity,
+                        currency: values.currency ?? original.currency,
+                        unitPrice: values.unitPrice !== undefined ? parseFloat(values.unitPrice) || 0 : original.unitPrice,
+                        notes: values.notes ?? original.notes,
+                    });
+                    setEditNewRow(undefined);
+                }}
+                onDeleteRow={(idx) => deleteHolding(idx)}
                 onAddRow={() => {
+                    const lastBroker = (holdings.length > 0 ? holdings[holdings.length - 1].broker : '')
+                        || (sales.length > 0 ? sales[sales.length - 1].broker : '');
                     const newHolding: Holding = {
                         id: `holding-${Date.now()}`,
-                        broker: '',
+                        broker: lastBroker,
                         country: '',
                         symbol: '',
-                        dateAcquired: new Date().toISOString().split('T')[0],
+                        dateAcquired: '',
                         quantity: 0,
                         currency: 'USD',
                         unitPrice: 0,
                         notes: '',
+                        source: { type: 'Manual' },
                     };
                     addHolding(newHolding);
+                    setEditNewRow({ index: holdings.length, nonce: Date.now() });
                 }}
                 addRowLabel={t('button.addHolding')}
             />
@@ -722,8 +865,6 @@ export function Workspace() {
     };
 
     const renderSalesContent = () => {
-        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
-
         // Calculate summary totals
         let totalProceeds = 0;
         let totalCost = 0;
@@ -748,7 +889,7 @@ export function Workspace() {
 
         const footerRow: Record<string, string> = {
             broker: t('summary.total'),
-            quantity: totalQuantity.toFixed(2),
+            quantity: formatQuantity(totalQuantity),
             proceedsBase: totalProceeds.toFixed(2),
             costBase: totalCost.toFixed(2),
             plBase: totalProfit.toFixed(2),
@@ -793,22 +934,54 @@ export function Workspace() {
                     columns={salesColumns}
                     data={sales}
                     footerRow={footerRow}
+                    warningRows={salesWarnings.rows}
+                    warningMessages={salesWarnings.messages}
+                    warningCount={salesWarnings.rows.size}
+                    showWarningsOnly={showSalesWarningsOnly}
+                    onToggleWarningsOnly={() => setShowSalesWarningsOnly(!showSalesWarningsOnly)}
+                    editRowOnMount={editNewRow}
+                    onAutoFill={handleAutoFill}
+                    focusColumnOnEdit='symbol'
+                    onSaveRow={(rowIndex, values) => {
+                        const original = sales[rowIndex];
+                        if (!original) return;
+                        updateSale(rowIndex, {
+                            ...original,
+                            broker: values.broker ?? original.broker,
+                            country: values.country ?? original.country,
+                            symbol: values.symbol ?? original.symbol,
+                            dateAcquired: values.dateAcquired ?? original.dateAcquired,
+                            dateSold: values.dateSold ?? original.dateSold,
+                            quantity: values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity,
+                            currency: values.currency ?? original.currency,
+                            buyPrice: values.buyPrice !== undefined ? parseFloat(values.buyPrice) || 0 : original.buyPrice,
+                            sellPrice: values.sellPrice !== undefined ? parseFloat(values.sellPrice) || 0 : original.sellPrice,
+                            fxRateBuy: values.fxRateBuy !== undefined ? parseFloat(values.fxRateBuy) || 1 : original.fxRateBuy,
+                            fxRateSell: values.fxRateSell !== undefined ? parseFloat(values.fxRateSell) || 1 : original.fxRateSell,
+                        });
+                        setEditNewRow(undefined);
+                    }}
+                    onDeleteRow={(idx) => deleteSale(idx)}
                     onAddRow={() => {
+                        const lastBroker = (sales.length > 0 ? sales[sales.length - 1].broker : '')
+                            || (holdings.length > 0 ? holdings[holdings.length - 1].broker : '');
                         const newSale: Sale = {
                             id: `sale-${Date.now()}`,
-                            broker: '',
+                            broker: lastBroker,
                             country: '',
                             symbol: '',
-                            dateAcquired: new Date().toISOString().split('T')[0],
-                            dateSold: new Date().toISOString().split('T')[0],
+                            dateAcquired: '',
+                            dateSold: '',
                             quantity: 0,
                             currency: 'USD',
                             buyPrice: 0,
                             sellPrice: 0,
                             fxRateBuy: 1,
                             fxRateSell: 1,
+                            source: { type: 'Manual' },
                         };
                         addSale(newSale);
+                        setEditNewRow({ index: sales.length, nonce: Date.now() });
                     }}
                     addRowLabel={t('button.addSale')}
                 />
@@ -816,12 +989,39 @@ export function Workspace() {
         );
     };
 
-    const sortedDividends = [...dividends].sort((a, b) => {
-        // Empty/new rows go to the bottom
-        if (!a.symbol) return 1;
-        if (!b.symbol) return -1;
-        return a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date);
-    });
+    // Build warning rows/messages for a given tab name
+    const buildWarningData = (tabName: string) => {
+        const tabWarnings = warnings.filter(w => w.tab === tabName && w.rowIndex !== undefined);
+        const rows = new Set<number>();
+        const messages = new Map<number, string[]>();
+        for (const w of tabWarnings) {
+            rows.add(w.rowIndex!);
+            const msgs = messages.get(w.rowIndex!) ?? [];
+            msgs.push(w.message);
+            messages.set(w.rowIndex!, msgs);
+        }
+        return { rows, messages };
+    };
+
+    const holdingsWarnings = useMemo(() => buildWarningData('Holdings'), [warnings]);
+    const salesWarnings = useMemo(() => buildWarningData('Sales'), [warnings]);
+    const ibInterestWarnings = useMemo(() => buildWarningData('IB Interest'), [warnings]);
+    const stockYieldWarnings = useMemo(() => buildWarningData('Stock Yield'), [warnings]);
+
+    const [showHoldingsWarningsOnly, setShowHoldingsWarningsOnly] = useState(false);
+    const [showSalesWarningsOnly, setShowSalesWarningsOnly] = useState(false);
+
+    const sortedDividends = useMemo(() => {
+        const indexed = dividends.map((d, origIdx) => ({ d, origIdx }));
+        indexed.sort((a, b) => {
+            if (!a.d.symbol) return 1;
+            if (!b.d.symbol) return -1;
+            return a.d.symbol.localeCompare(b.d.symbol) || a.d.date.localeCompare(b.d.date);
+        });
+        return indexed;
+    }, [dividends]);
+
+    const sortedDividendData = useMemo(() => sortedDividends.map(s => s.d), [sortedDividends]);
 
     // Build warning data for dividends table
     const [showDividendWarningsOnly, setShowDividendWarningsOnly] = useState(false);
@@ -830,11 +1030,10 @@ export function Workspace() {
         const rows = new Set<number>();
         const messages = new Map<number, string[]>();
 
-        // Map original indices to sorted indices
+        // Map original indices to sorted indices (O(n), no indexOf)
         const originalToSorted = new Map<number, number>();
-        sortedDividends.forEach((sd, sortedIdx) => {
-            const origIdx = dividends.indexOf(sd);
-            if (origIdx >= 0) originalToSorted.set(origIdx, sortedIdx);
+        sortedDividends.forEach((item, sortedIdx) => {
+            originalToSorted.set(item.origIdx, sortedIdx);
         });
 
         for (const w of divWarnings) {
@@ -850,13 +1049,10 @@ export function Workspace() {
     }, [warnings, sortedDividends, dividends]);
 
     const renderDividendsContent = () => {
-        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
-
         // Calculate summary totals — sum each column as displayed
         let totalGrossBase = 0;
         let totalWhtBase = 0;
         let totalTax5pct = 0;
-        let totalWhtCredit = 0;
         let totalBgTaxDue = 0;
         let totalGrossOrig = 0;
         let totalWhtOrig = 0;
@@ -864,14 +1060,14 @@ export function Workspace() {
         dividends.forEach(dividend => {
             const grossStr = toBaseCcy(dividend.grossAmount, dividend.currency, dividend.date);
             const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
-            totalGrossBase += grossStr !== '—' ? parseFloat(grossStr) : 0;
-            totalWhtBase += whtStr !== '—' ? parseFloat(whtStr) : 0;
             const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
-            totalTax5pct += grossBase * 0.05;
-            const whtCreditStr = toBaseCcy(dividend.whtCredit, dividend.currency, dividend.date);
-            totalWhtCredit += whtCreditStr !== '—' ? parseFloat(whtCreditStr) : 0;
-            const bgTaxDueStr = toBaseCcy(dividend.bgTaxDue, dividend.currency, dividend.date);
-            totalBgTaxDue += bgTaxDueStr !== '—' ? parseFloat(bgTaxDueStr) : 0;
+            const whtBase = whtStr !== '—' ? parseFloat(whtStr) : 0;
+            totalGrossBase += grossBase;
+            totalWhtBase += whtBase;
+            const tax5pct = grossBase * 0.05;
+            totalTax5pct += tax5pct;
+            // BG Tax Due = max(0, Tax 5% - WHT)
+            totalBgTaxDue += Math.max(0, tax5pct - whtBase);
             totalGrossOrig += dividend.grossAmount;
             totalWhtOrig += dividend.withholdingTax;
         });
@@ -883,7 +1079,6 @@ export function Workspace() {
             grossBase: totalGrossBase.toFixed(2),
             whtBase: totalWhtBase.toFixed(2),
             tax5pct: totalTax5pct.toFixed(2),
-            whtCredit: totalWhtCredit.toFixed(2),
             bgTaxDue: totalBgTaxDue.toFixed(2),
         };
 
@@ -913,10 +1108,6 @@ export function Workspace() {
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax5pct.toFixed(2)}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalWhtCredit')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWhtCredit.toFixed(2)}</div>
-                    </div>
-                    <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>BG Tax Due ({baseCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalBgTaxDue.toFixed(2)}</div>
                     </div>
@@ -927,27 +1118,51 @@ export function Workspace() {
                 </div>
                 <DataTable
                     columns={dividendsColumns}
-                    data={sortedDividends}
+                    data={sortedDividendData}
                     footerRow={footerRow}
+                    onAutoFill={handleAutoFill}
                     warningRows={dividendWarningRows.rows}
                     warningMessages={dividendWarningRows.messages}
                     warningCount={dividendWarningRows.rows.size}
                     showWarningsOnly={showDividendWarningsOnly}
                     onToggleWarningsOnly={() => setShowDividendWarningsOnly(!showDividendWarningsOnly)}
+                    editRowOnMount={editNewRow}
+                    onSaveRow={(sortedIdx, values) => {
+                        const item = sortedDividends[sortedIdx];
+                        if (!item) return;
+                        const d = item.d;
+                        updateDividend(item.origIdx, {
+                            ...d,
+                            symbol: values.symbol ?? d.symbol,
+                            country: values.country ?? d.country,
+                            date: values.date ?? d.date,
+                            currency: values.currency ?? d.currency,
+                            grossAmount: values.grossAmount !== undefined ? parseFloat(values.grossAmount) || 0 : d.grossAmount,
+                            withholdingTax: values.withholdingTax !== undefined ? parseFloat(values.withholdingTax) || 0 : d.withholdingTax,
+                            notes: values.notes ?? d.notes,
+                        });
+                        setEditNewRow(undefined);
+                    }}
+                    onDeleteRow={(sortedIdx) => {
+                        const item = sortedDividends[sortedIdx];
+                        if (!item) return;
+                        deleteDividend(item.origIdx);
+                    }}
                     onAddRow={() => {
                         const newDividend: Dividend = {
                             symbol: '',
                             country: '',
-                            date: new Date().toISOString().split('T')[0],
+                            date: '',
                             currency: 'USD',
                             grossAmount: 0,
                             withholdingTax: 0,
                             bgTaxDue: 0,
                             whtCredit: 0,
                             notes: '',
+                            source: { type: 'Manual' },
                         };
                         addDividend(newDividend);
-                        // Switch to unsorted to show new row at bottom
+                        setEditNewRow({ index: dividends.length, nonce: Date.now() });
                     }}
                     addRowLabel={t('button.addDividend')}
                 />
@@ -959,22 +1174,38 @@ export function Workspace() {
         <DataTable
             columns={stockYieldColumns}
             data={stockYield}
+            warningRows={stockYieldWarnings.rows}
+            warningMessages={stockYieldWarnings.messages}
+            warningCount={stockYieldWarnings.rows.size}
+            editRowOnMount={editNewRow}
+            onSaveRow={(rowIndex, values) => {
+                const original = stockYield[rowIndex];
+                if (!original) return;
+                updateStockYield(rowIndex, {
+                    ...original,
+                    date: values.date ?? original.date,
+                    symbol: values.symbol ?? original.symbol,
+                    currency: values.currency ?? original.currency,
+                    amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : original.amount,
+                });
+                setEditNewRow(undefined);
+            }}
+            onDeleteRow={(idx) => deleteStockYield(idx)}
             onAddRow={() => {
                 const newEntry: StockYieldEntry = {
-                    date: new Date().toISOString().split('T')[0],
+                    date: '',
                     symbol: '',
                     currency: 'USD',
                     amount: 0,
                 };
                 addStockYield(newEntry);
+                setEditNewRow({ index: stockYield.length, nonce: Date.now() });
             }}
             addRowLabel='Add Stock Yield Entry'
         />
     );
 
     const renderIbInterestContent = () => {
-        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
-
         // Calculate summary totals
         let totalInterest = 0;
         let totalInterestBase = 0;
@@ -1026,14 +1257,33 @@ export function Workspace() {
                     columns={ibInterestColumns}
                     data={ibInterest}
                     footerRow={footerRow}
+                    warningRows={ibInterestWarnings.rows}
+                    warningMessages={ibInterestWarnings.messages}
+                    warningCount={ibInterestWarnings.rows.size}
+                    editRowOnMount={editNewRow}
+                    onSaveRow={(rowIndex, values) => {
+                        const original = ibInterest[rowIndex];
+                        if (!original) return;
+                        updateIbInterest(rowIndex, {
+                            ...original,
+                            date: values.date ?? original.date,
+                            currency: values.currency ?? original.currency,
+                            description: values.description ?? original.description,
+                            amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : original.amount,
+                        });
+                        setEditNewRow(undefined);
+                    }}
+                    onDeleteRow={(idx) => deleteIbInterest(idx)}
                     onAddRow={() => {
                         const newEntry: IBInterestEntry = {
-                            date: new Date().toISOString().split('T')[0],
+                            date: '',
                             currency: 'USD',
                             description: '',
                             amount: 0,
+                            source: { type: 'Manual' },
                         };
                         addIbInterest(newEntry);
+                        setEditNewRow({ index: ibInterest.length, nonce: Date.now() });
                     }}
                     addRowLabel={t('button.addInterest')}
                 />
@@ -1053,7 +1303,6 @@ export function Workspace() {
         }
 
         const currentTab = revolutTab || 'total';
-        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
         const midDate = `${useAppStore.getState().taxYear}-06-30`;
 
         // Compute per-currency summaries for total tab
@@ -1381,23 +1630,47 @@ export function Workspace() {
                                         All ({visibleWarnings.length})
                                     </button>
                                     {warningTypes.map(type => {
-                                        const count = warnings.filter(w => w.type === type && !dismissedWarnings.has(`${w.type}:${w.message}`)).length;
+                                        const typeWarnings = warnings.filter(w => w.type === type && !dismissedWarnings.has(`${w.type}:${w.message}`));
+                                        const count = typeWarnings.length;
                                         return (
-                                            <button
-                                                key={type}
-                                                onClick={() => setWarningFilter(warningFilter === type ? 'all' : type)}
-                                                style={{
-                                                    padding: '0.25rem 0.75rem',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.8rem',
-                                                    border: '1px solid var(--border)',
-                                                    cursor: 'pointer',
-                                                    backgroundColor: warningFilter === type ? 'var(--accent)' : 'transparent',
-                                                    color: warningFilter === type ? 'white' : 'var(--text-secondary)',
-                                                }}
-                                            >
-                                                {type.replace(/-/g, ' ')} ({count})
-                                            </button>
+                                            <span key={type} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                <button
+                                                    onClick={() => setWarningFilter(warningFilter === type ? 'all' : type)}
+                                                    style={{
+                                                        padding: '0.25rem 0.75rem',
+                                                        borderRadius: '12px',
+                                                        fontSize: '0.8rem',
+                                                        border: '1px solid var(--border)',
+                                                        cursor: 'pointer',
+                                                        backgroundColor: warningFilter === type ? 'var(--accent)' : 'transparent',
+                                                        color: warningFilter === type ? 'white' : 'var(--text-secondary)',
+                                                    }}
+                                                >
+                                                    {type.replace(/-/g, ' ')} ({count})
+                                                </button>
+                                                {count > 0 && (
+                                                    <button
+                                                        onClick={() =>
+                                                            setDismissedWarnings(prev => {
+                                                                const next = new Set(prev);
+                                                                for (const w of typeWarnings) next.add(`${w.type}:${w.message}`);
+                                                                return next;
+                                                            })}
+                                                        title={`Dismiss all ${type.replace(/-/g, ' ')} warnings`}
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: 'var(--text-secondary)',
+                                                            fontSize: '0.75rem',
+                                                            padding: '0 0.25rem',
+                                                            textDecoration: 'underline',
+                                                        }}
+                                                    >
+                                                        dismiss all
+                                                    </button>
+                                                )}
+                                            </span>
                                         );
                                     })}
                                 </div>

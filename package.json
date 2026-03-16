@@ -6,6 +6,7 @@
     "test:core": "pnpm --filter @bg-tax/core test",
     "build": "pnpm -r build",
     "dev": "pnpm --filter @bg-tax/ui dev",
+    "bundle": "pnpm --filter @bg-tax/ui exec tauri build && node scripts/copy-bundle.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "dprint fmt",
@@ -16,6 +17,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@cspell/dict-bg-bg": "^3.0.8",
     "@stylistic/eslint-plugin": "^5.9.0",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",

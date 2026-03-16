@@ -1,3 +1,8 @@
+export interface DataSource {
+    type: 'Initial import' | 'IB' | 'Revolut' | 'Manual';
+    file?: string;
+}
+
 export interface Holding {
     id: string;
     broker: string;
@@ -8,6 +13,7 @@ export interface Holding {
     currency: string;
     unitPrice: number;
     notes?: string;
+    source?: DataSource;
 }
 
 export interface Sale {
@@ -23,6 +29,7 @@ export interface Sale {
     sellPrice: number;
     fxRateBuy: number;
     fxRateSell: number;
+    source?: DataSource;
 }
 
 export interface Dividend {
@@ -35,6 +42,7 @@ export interface Dividend {
     bgTaxDue: number;
     whtCredit: number;
     notes?: string;
+    source?: DataSource;
 }
 
 export interface StockYieldEntry {
@@ -42,6 +50,7 @@ export interface StockYieldEntry {
     symbol: string;
     currency: string;
     amount: number;
+    source?: DataSource;
 }
 
 export interface RevolutInterestEntry {
@@ -80,7 +89,7 @@ export interface AppState {
 
 /** Validation warning — non-blocking */
 export interface ValidationWarning {
-    type: 'negative-holdings' | 'unmatched-wht' | 'missing-fx' | 'duplicate' | 'year-mismatch';
+    type: 'negative-holdings' | 'unmatched-wht' | 'missing-fx' | 'duplicate-holding' | 'year-mismatch' | 'incomplete-row';
     message: string;
     tab: string;
     rowId?: string;
@@ -93,6 +102,7 @@ export interface IBInterestEntry {
     date: string;
     description: string;
     amount: number;
+    source?: DataSource;
 }
 
 /** IB CSV raw parsed data before FIFO processing */

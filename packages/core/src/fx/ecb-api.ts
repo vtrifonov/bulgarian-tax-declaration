@@ -17,6 +17,7 @@ export async function fetchEcbRates(
     startDate: string,
     endDate: string,
 ): Promise<Record<string, number>> {
+    if (!/^[A-Z]{3}$/.test(currency)) throw new Error(`Invalid currency code: ${currency}`);
     const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}`;
 
     const resp = await fetch(url);

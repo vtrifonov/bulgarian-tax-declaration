@@ -8,4 +8,7 @@ export default defineConfig({
         port: 5115,
         strictPort: true,
     },
+    build: {
+        chunkSizeWarningLimit: 1500,
+    },
 });

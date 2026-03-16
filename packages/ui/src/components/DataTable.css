@@ -94,6 +94,13 @@
     background-color: rgba(220, 53, 69, 0.15) !important;
 }
 
+/* Editing row highlight */
+.data-table tbody tr.editing-row {
+    background-color: rgba(77, 159, 255, 0.08) !important;
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
 .data-table td {
     padding: 0.75rem;
     border-right: 1px solid var(--border);
@@ -119,7 +126,6 @@
 }
 
 .data-table td.cell {
-    cursor: text;
     position: relative;
 }
 
@@ -135,20 +141,148 @@
     font-weight: 700;
 }
 
+/* Edit action column */
+.edit-col-header {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+}
+
+.edit-action-cell {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+    padding: 0.25rem !important;
+    text-align: center;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.edit-actions {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+}
+
+.edit-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: background-color 0.15s;
+}
+
+.edit-action-btn.pencil-btn {
+    opacity: 0.5;
+}
+
+.edit-action-btn.pencil-btn:hover {
+    opacity: 1;
+    background-color: var(--drop-bg);
+}
+
+.edit-action-btn.save-btn {
+    color: #28a745;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.edit-action-btn.save-btn:hover {
+    background-color: rgba(40, 167, 69, 0.15);
+}
+
+.edit-action-btn.cancel-btn {
+    color: #dc3545;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.edit-action-btn.cancel-btn:hover {
+    background-color: rgba(220, 53, 69, 0.15);
+}
+
+/* Inline edit inputs */
 .edit-input {
     width: 100%;
-    padding: 0.5rem;
-    border: 2px solid var(--accent);
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--accent);
     border-radius: 2px;
     font-family: inherit;
     font-size: inherit;
     color: var(--text);
     background: var(--bg);
+    box-sizing: border-box;
 }
 
 .edit-input:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(77, 159, 255, 0.2);
+    box-shadow: 0 0 0 2px rgba(77, 159, 255, 0.25);
+    border-color: var(--accent);
+}
+
+.edit-input-error {
+    border-color: #dc3545 !important;
+    background-color: rgba(220, 53, 69, 0.08);
+}
+
+.edit-input-error:focus {
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Autocomplete dropdown */
+.autocomplete-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.autocomplete-option {
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    font-size: inherit;
+    color: var(--text);
+}
+
+.autocomplete-option.highlighted {
+    background: var(--accent);
+    color: white;
+}
+
+.autocomplete-option:hover {
+    background: var(--drop-bg);
+}
+
+.edit-input.edit-select {
+    appearance: auto;
+    padding-right: 1.5rem;
+}
+
+.edit-input.edit-date {
+    min-width: 120px;
+}
+
+.edit-input.edit-number {
+    text-align: right;
+    font-family: 'Courier New', monospace;
 }
 
 .delete-button {
@@ -165,6 +299,32 @@
 
 .delete-button:hover {
     background-color: #c82333;
+}
+
+.delete-confirm {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+.delete-confirm-btn {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.9rem !important;
+}
+
+.delete-cancel-btn {
+    padding: 0.3rem 0.6rem;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.delete-cancel-btn:hover {
+    background-color: var(--drop-bg);
 }
 
 .add-row-button {

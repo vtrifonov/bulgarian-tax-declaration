@@ -80,7 +80,7 @@ describe('FifoEngine', () => {
         expect(result.holdings.find(h => h.symbol === 'TEST')?.quantity).toBe(5);
     });
 
-    it('generates validation warning for sell without sufficient holdings', () => {
+    it('generates warning AND sale record for sell without sufficient holdings', () => {
         const engine = new FifoEngine([]);
         const trades: IBTrade[] = [
             { currency: 'USD', symbol: 'GHOST', dateTime: '2025-06-01, 10:00:00', quantity: -10, price: 50.00, proceeds: 500, commission: -1 },
@@ -90,6 +90,13 @@ describe('FifoEngine', () => {
         expect(result.warnings).toContainEqual(
             expect.objectContaining({ type: 'negative-holdings', message: expect.stringContaining('GHOST') }),
         );
+        // Unmatched sell should still create a sale with empty buy data
+        expect(result.sales).toHaveLength(1);
+        expect(result.sales[0].symbol).toBe('GHOST');
+        expect(result.sales[0].quantity).toBe(10);
+        expect(result.sales[0].sellPrice).toBe(50);
+        expect(result.sales[0].dateAcquired).toBe('');
+        expect(result.sales[0].buyPrice).toBe(0);
     });
 
     it('handles multiple buys then multiple sells consuming across lots', () => {

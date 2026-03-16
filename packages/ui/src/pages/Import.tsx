@@ -14,6 +14,7 @@ import {
     matchWhtToDividends,
     parseIBCsv,
     parseRevolutCsv,
+    parseRevolutInvestmentsCsv,
     resolveCountry,
     t,
 } from '@bg-tax/core';
@@ -22,18 +23,22 @@ import type {
     RevolutInterest,
 } from '@bg-tax/core';
 
+type FileType = 'ib' | 'revolut' | 'revolut-investments';
+
 interface ImportedFile {
     name: string;
-    type: 'ib' | 'revolut';
+    type: FileType;
     status: 'success' | 'error';
     message: string;
 }
 
-function detectFileType(content: string, filename: string): 'ib' | 'revolut' | null {
+function detectFileType(content: string, filename: string): FileType | null {
     if (content.startsWith('Statement,Header,Field Name')) return 'ib';
     if (filename.startsWith('savings-statement') || content.includes('Interest PAID')) return 'revolut';
     // Check for IB CSV by looking for known sections
     if (content.includes('Trades,Header,DataDiscriminator')) return 'ib';
+    // Revolut Investments yearly statement: Date,Ticker,Type,...
+    if (content.startsWith('Date,Ticker,Type')) return 'revolut-investments';
     return null;
 }
 
@@ -67,7 +72,15 @@ export function Import() {
         // Collect all currencies and years from data
         for (const h of state.holdings) {
             if (h.currency) currencies.add(h.currency);
-            if (h.dateAcquired) years.add(parseInt(h.dateAcquired.substring(0, 4)));
+            const yr = h.dateAcquired ? parseInt(h.dateAcquired.substring(0, 4)) : NaN;
+            if (!isNaN(yr)) years.add(yr);
+        }
+        for (const s of state.sales) {
+            if (s.currency) currencies.add(s.currency);
+            const buyYear = s.dateAcquired ? parseInt(s.dateAcquired.substring(0, 4)) : NaN;
+            const sellYear = s.dateSold ? parseInt(s.dateSold.substring(0, 4)) : NaN;
+            if (!isNaN(buyYear)) years.add(buyYear);
+            if (!isNaN(sellYear)) years.add(sellYear);
         }
         for (const d of state.dividends) {
             if (d.currency) currencies.add(d.currency);
@@ -101,19 +114,18 @@ export function Import() {
         setFetchingFx(true);
         const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
         // Fetch all needed years in parallel
-        Promise.all(
+        Promise.allSettled(
             yearsArr.map(yr => fxService.fetchRates(needed, yr)),
         ).then(results => {
-            // Merge all year results
             const merged: Record<string, Record<string, number>> = {};
-            for (const rates of results) {
-                for (const [ccy, dateRates] of Object.entries(rates)) {
-                    merged[ccy] = { ...merged[ccy], ...dateRates };
+            for (const result of results) {
+                if (result.status === 'fulfilled') {
+                    for (const [ccy, dateRates] of Object.entries(result.value)) {
+                        merged[ccy] = { ...merged[ccy], ...dateRates };
+                    }
                 }
             }
-            setFxRates(merged);
-            setFetchingFx(false);
-        }).catch(() => {
+            if (Object.keys(merged).length > 0) setFxRates(merged);
             setFetchingFx(false);
         });
     }, [importedFiles.length]); // Re-run after each file import
@@ -127,7 +139,7 @@ export function Import() {
                 name: file.name,
                 type: 'ib',
                 status: 'error',
-                message: 'Unrecognized file format. Expected IB activity statement or Revolut savings CSV.',
+                message: 'Unrecognized file format. Expected IB activity statement, Revolut savings CSV, or Revolut investments CSV.',
             }]);
             return;
         }
@@ -159,14 +171,15 @@ export function Import() {
                 // Resolve countries and calculate BG tax for dividends
                 for (const d of allDividends) {
                     d.country = resolveCountry(d.symbol);
-                    // Calculate BG tax due and WHT credit (amounts are in original currency for now,
-                    // final base-currency conversion happens at export/declaration time)
                     const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
                     d.bgTaxDue = bgTaxDue;
                     d.whtCredit = whtCredit;
+                    d.source = { type: 'IB', file: file.name };
                 }
                 importDividends(allDividends);
+                for (const s of parsed.stockYield) s.source = { type: 'IB', file: file.name };
                 importStockYield(parsed.stockYield);
+                for (const i of parsed.interest) i.source = { type: 'IB', file: file.name };
                 importIbInterest(parsed.interest);
 
                 // Build country map for FIFO engine
@@ -179,6 +192,8 @@ export function Import() {
                 const fifo = new FifoEngine([...holdings]);
                 const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
 
+                for (const h of newHoldings) if (!h.source) h.source = { type: 'IB', file: file.name };
+                for (const s of newSales) if (!s.source) s.source = { type: 'IB', file: file.name };
                 importHoldings(newHoldings);
                 importSales(newSales);
 
@@ -193,6 +208,54 @@ export function Import() {
                     status: 'success',
                     message:
                         `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}${dupMsg}`,
+                }]);
+            } else if (fileType === 'revolut-investments') {
+                const { trades, holdings: parsedHoldings } = parseRevolutInvestmentsCsv(content);
+
+                if (parsedHoldings.length === 0 && trades.length === 0) {
+                    setImportedFiles(prev => [...prev, {
+                        name: file.name,
+                        type: 'revolut-investments',
+                        status: 'error',
+                        message: 'No trades found in this file.',
+                    }]);
+                    return;
+                }
+
+                // Build country map and run FIFO for Revolut trades
+                const countryMap: Record<string, string> = {};
+                for (const t of trades) {
+                    countryMap[t.ticker] = resolveCountry(t.ticker);
+                }
+
+                // Convert trades to the format FifoEngine expects
+                const fifoTrades = trades.map(t => ({
+                    symbol: t.ticker,
+                    dateTime: t.date,
+                    quantity: t.type.includes('SELL') ? -t.quantity : t.quantity,
+                    price: t.pricePerShare,
+                    proceeds: t.type.includes('SELL') ? t.totalAmount : 0,
+                    commission: 0,
+                    currency: t.currency,
+                }));
+
+                const fifo = new FifoEngine([...holdings]);
+                const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
+
+                for (const h of newHoldings) if (!h.source) h.source = { type: 'Revolut', file: file.name };
+                for (const s of newSales) if (!s.source) s.source = { type: 'Revolut', file: file.name };
+                importHoldings(newHoldings);
+                importSales(newSales);
+
+                const buys = trades.filter(t => t.type.includes('BUY')).length;
+                const sells = trades.filter(t => t.type.includes('SELL')).length;
+                const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
+
+                setImportedFiles(prev => [...prev, {
+                    name: file.name,
+                    type: 'revolut-investments',
+                    status: 'success',
+                    message: `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings${warnMsg}`,
                 }]);
             } else {
                 const revolut: RevolutInterest = parseRevolutCsv(content);
@@ -230,7 +293,7 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             }]);
         }
-    }, [holdings, importHoldings, importDividends, importStockYield, importIbInterest, importRevolutInterest]);
+    }, [holdings, importHoldings, importSales, importDividends, importStockYield, importIbInterest, importRevolutInterest]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
@@ -400,13 +463,13 @@ export function Import() {
                                             style={{
                                                 marginLeft: '0.5rem',
                                                 fontSize: '0.8rem',
-                                                backgroundColor: f.type === 'ib' ? 'var(--accent)' : '#28a745',
+                                                backgroundColor: f.type === 'ib' ? 'var(--accent)' : f.type === 'revolut-investments' ? '#6f42c1' : '#28a745',
                                                 color: 'white',
                                                 padding: '0.1rem 0.4rem',
                                                 borderRadius: '3px',
                                             }}
                                         >
-                                            {f.type === 'ib' ? 'IB' : 'Revolut'}
+                                            {f.type === 'ib' ? 'IB' : f.type === 'revolut-investments' ? 'Revolut Inv.' : 'Revolut'}
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -453,20 +516,17 @@ export function Import() {
                                 Go to <em>Performance & Reports → Statements</em>
                             </li>
                             <li>
-                                Click <em>Activity</em> statement
+                                Click <em>Activity Statement</em>
                             </li>
                             <li>
-                                Period: <strong>Annual</strong> (or custom: Jan 1 — Dec 31)
+                                Period: <strong>Annual</strong>, Date: the tax year
                             </li>
                             <li>
-                                Format: <strong>CSV</strong>
-                            </li>
-                            <li>
-                                Click <em>Run</em>, then download the file
+                                Click <strong>Download CSV</strong>
                             </li>
                         </ol>
                     </div>
-                    <div>
+                    <div style={{ marginBottom: '0.75rem' }}>
                         <strong>Revolut Savings:</strong>
                         <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
                             <li>
@@ -474,6 +534,16 @@ export function Import() {
                             </li>
                             <li>Select the tax year period</li>
                             <li>Download one CSV per currency vault (EUR, USD, GBP)</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <strong>Revolut Investments:</strong>
+                        <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+                            <li>
+                                Go to <em>Invest → Statements</em>
+                            </li>
+                            <li>Select the tax year</li>
+                            <li>Download the yearly statement CSV</li>
                         </ol>
                     </div>
                 </div>

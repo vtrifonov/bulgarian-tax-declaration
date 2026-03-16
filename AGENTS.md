@@ -7,6 +7,7 @@
 - Every new module must have a corresponding test file
 - Run `pnpm --filter @bg-tax/core test` after every change to verify nothing broke
 - Test edge cases: empty inputs, missing data, boundary values
+- **Integration tests** (`tests/integration/round-trip.test.ts`) verify the full pipeline: sample CSV import → Excel export → re-import → export again. Run concurrently via `describe.concurrent`. Uses sample files from `samples/` at repo root.
 
 ## Code Style
 
@@ -60,7 +61,7 @@ pnpm format                        # Format code with dprint
 pnpm spell                         # Spellcheck with cspell
 ```
 
-If cspell flags a legitimate word, add it to `cspell-dict.txt`.
+If cspell flags a legitimate word, add it to `cspell-dict.txt`. Keep entries **lowercase and alphabetically sorted**. Bulgarian words are handled by `@cspell/dict-bg-bg` (configured in `cspell.json`) — only add Bulgarian words to the project dict if they are missing from the standard dictionary.
 
 ## Public Release Considerations
 

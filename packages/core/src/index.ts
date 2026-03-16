@@ -5,12 +5,25 @@ export {
     fetchYearRates,
 } from './fx/ecb-api.js';
 export { FxService } from './fx/fx-service.js';
+export {
+    BGN_EUR_RATE,
+    calcDividendRowTax,
+    getFxRate,
+    toBaseCurrency,
+    toBaseCurrencyStr,
+} from './fx/convert.js';
 export { InMemoryFxCache } from './fx/fx-cache.js';
 export type { FxCache } from './fx/fx-cache.js';
 export { parseIBCsv } from './parsers/ib-csv.js';
 export { parseRevolutCsv } from './parsers/revolut-csv.js';
+export { parseRevolutInvestmentsCsv } from './parsers/revolut-investments.js';
 export { matchWhtToDividends } from './parsers/wht-matcher.js';
-export { importHoldingsFromExcel } from './parsers/excel-import.js';
+export {
+    importHoldingsFromCsv,
+    importHoldingsFromExcel,
+} from './parsers/excel-import.js';
+export { importFullExcel } from './parsers/excel-full-import.js';
+export type { FullExcelImport } from './parsers/excel-full-import.js';
 export { resolveCountry } from './country-map.js';
 export {
     getLanguage,
@@ -49,3 +62,5 @@ export {
 } from './tax/calculator.js';
 export { validate } from './validation/validator.js';
 export { generateExcel } from './excel/generator.js';
+export { generateNraAppendix8 } from './excel/nra-appendix8.js';
+export { generateNraAppendix8Part3 } from './excel/nra-appendix8-part3.js';

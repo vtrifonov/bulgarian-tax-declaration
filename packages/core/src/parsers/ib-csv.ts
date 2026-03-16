@@ -37,6 +37,10 @@ export function parseIBCsv(csv: string): IBParsedData {
             // Cash interest: SYEP interest, debit interest, etc.
             const entry = parseInterestLine(fields);
             if (entry) interest.push(entry);
+        } else if (section === 'Transfers' && fields[2] === 'Stocks' && fields[7] === 'In') {
+            // Position transfers in — treat as buy lots so FIFO can match sells
+            const transfer = parseTransferLine(fields);
+            if (transfer) trades.push(transfer);
         }
     }
 
@@ -133,6 +137,27 @@ function parseInterestLine(fields: string[]): IBInterestEntry | null {
     const amount = parseFloat(fields[5]);
     if (isNaN(amount)) return null;
     return { currency, date, description, amount };
+}
+
+/**
+ * Parse a Transfers row (position transfer in) as a synthetic buy trade.
+ * Format: Transfers,Data,Stocks,{ccy},{symbol},{date},{type},{dir},{co},{acct},{qty},{price},{mktVal},...
+ * Date and price are left empty — user must fill in the original acquisition details.
+ */
+function parseTransferLine(fields: string[]): IBTrade | null {
+    const currency = fields[3];
+    const symbol = fields[4];
+    const qty = parseFloat(fields[10]?.replace(/,/g, ''));
+    if (!symbol || isNaN(qty) || qty <= 0) return null;
+    return {
+        currency,
+        symbol,
+        dateTime: '', // Unknown — user fills in original acquisition date
+        quantity: qty,
+        price: 0, // Unknown — user fills in original buy price
+        proceeds: 0,
+        commission: 0,
+    };
 }
 
 /** Combine dividends by symbol+date+currency (sum amounts) */

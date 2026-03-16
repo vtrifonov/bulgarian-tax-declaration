@@ -1,13 +1,17 @@
 import {
+    useMemo,
+    useState,
+} from 'react';
+import {
+    calcDividendRowTax,
     generateExcel,
-    mapToDeclaration,
+    generateNraAppendix8,
+    generateNraAppendix8Part3,
     t,
     TaxCalculator,
+    toBaseCurrency,
 } from '@bg-tax/core';
 import { useAppStore } from '../store/app-state';
-import formConfig2025 from '@bg-tax/core/src/declaration/form-config/2025.json';
-import formConfig2026 from '@bg-tax/core/src/declaration/form-config/2026.json';
-import type { TaxResults } from '@bg-tax/core';
 
 export function Declaration() {
     const {
@@ -47,29 +51,156 @@ export function Declaration() {
     const totalInterestGross = stockYieldResult.totalGross + revolutTotalGross;
     const totalInterestTax = stockYieldResult.totalTax + revolutTotalTax;
 
-    const taxResults: TaxResults = {
-        capitalGains: capitalGainsResult,
-        dividends: dividendsTaxResult,
-        interest: {
-            totalGross: totalInterestGross,
-            totalTax: totalInterestTax,
-        },
-    };
-
-    // Get the appropriate form config
-    const formConfig = taxYear === 2025 ? formConfig2025 : formConfig2026;
-
-    // Map to declaration sections
-    const sections = mapToDeclaration(taxResults, formConfig);
-
     // Calculate total tax due
     const totalTaxDue = capitalGainsResult.taxDue
         + dividendsTaxResult.totalBgTax
         + totalInterestTax;
 
+    // Приложение 5, Част I — Holdings as of Dec 31
+    const holdingsForDeclaration = useMemo(() => {
+        return holdings
+            .filter(h => h.symbol && h.quantity > 0)
+            .map(h => {
+                const totalCcy = h.quantity * h.unitPrice;
+                const totalBgn = toBaseCurrency(totalCcy, h.currency, h.dateAcquired, 'BGN', fxRates);
+                return {
+                    symbol: h.symbol,
+                    country: h.country,
+                    quantity: h.quantity,
+                    dateAcquired: h.dateAcquired,
+                    currency: h.currency,
+                    totalCcy,
+                    totalBgn: isNaN(totalBgn) ? totalCcy : totalBgn,
+                };
+            })
+            .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    }, [holdings, fxRates]);
+
+    const formatDate = (iso: string): string => {
+        const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+    };
+
+    // Приложение 5, Таблица 2 — Sales summary (code 508)
+    const salesTable2 = useMemo(() => {
+        const toBgn = (amount: number, ccy: string, date: string) => {
+            const v = toBaseCurrency(amount, ccy, date, 'BGN', fxRates);
+            return isNaN(v) ? amount : v;
+        };
+
+        let totalProceeds = 0;
+        let totalCost = 0;
+        let totalGains = 0;
+        let totalLosses = 0;
+
+        for (const s of sales) {
+            if (!s.symbol || s.quantity === 0) continue;
+            const proceeds = toBgn(s.quantity * s.sellPrice, s.currency, s.dateSold);
+            const cost = toBgn(s.quantity * s.buyPrice, s.currency, s.dateAcquired);
+            totalProceeds += proceeds;
+            totalCost += cost;
+            const pl = proceeds - cost;
+            if (pl > 0) totalGains += pl;
+            else totalLosses += Math.abs(pl);
+        }
+
+        const row5 = Math.max(0, totalGains - totalLosses); // difference (0 if negative)
+        const row6 = row5 * 0.10; // 10% expense deduction
+        const row7 = row5 - row6; // taxable income
+
+        return { totalProceeds, totalCost, totalGains, totalLosses, row5, row6, row7 };
+    }, [sales, fxRates]);
+
+    // Приложение 8, Част III — Dividends per-row detail (code 8141)
+    const dividendsForDeclaration = useMemo(() => {
+        return dividends
+            .filter(d => d.symbol && d.grossAmount > 0)
+            .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date))
+            .map(d => {
+                const { grossBase, whtBase, tax5pct, bgTaxDue } = calcDividendRowTax(
+                    d.grossAmount,
+                    d.withholdingTax,
+                    d.currency,
+                    d.date,
+                    'BGN',
+                    fxRates,
+                );
+                return {
+                    symbol: d.symbol,
+                    country: d.country,
+                    grossBgn: grossBase,
+                    whtBgn: whtBase,
+                    allowedCredit: tax5pct,
+                    recognizedCredit: Math.min(whtBase, tax5pct),
+                    taxDue: bgTaxDue,
+                };
+            });
+    }, [dividends, fxRates]);
+
+    // Приложение 6, Част I — Interest income (code 603)
+    // totalInterestGross is already computed above in BGN (from stockYield + revolut)
+    const interestBgn = totalInterestGross;
+
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
+
+    // Shared styles for declaration tables
+    const thL: React.CSSProperties = { padding: '0.5rem', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 };
+    const thR: React.CSSProperties = { padding: '0.5rem', textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 };
+    const thNum: React.CSSProperties = { padding: '0.25rem 0.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.8rem' };
+    const tdL: React.CSSProperties = { padding: '0.5rem', color: 'var(--text)' };
+    const tdM: React.CSSProperties = { padding: '0.5rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text)' };
+    const rowBorder: React.CSSProperties = { borderBottom: '1px solid var(--border)' };
+
+    const renderSection = (key: string, title: string, subtitle: string, show: boolean, content: () => React.ReactNode) => {
+        if (!show) return null;
+        const isCollapsed = collapsed[key] ?? false;
+        return (
+            <div key={key} style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '1rem', overflow: 'hidden' }}>
+                <div
+                    onClick={() => toggleSection(key)}
+                    style={{ padding: '1rem 1.5rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', userSelect: 'none' }}
+                >
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text)' }}>{title}</h2>
+                        <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{subtitle}</p>
+                    </div>
+                    <span style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+                        ▼
+                    </span>
+                </div>
+                {!isCollapsed && <div style={{ padding: '0 1.5rem 1.5rem' }}>{content()}</div>}
+            </div>
+        );
+    };
+
+    const summaryRow = (label: string, value: number, bold = false) => (
+        <div
+            style={{
+                display: 'grid',
+                gridTemplateColumns: '3fr 1fr',
+                padding: '0.5rem',
+                borderBottom: bold ? 'none' : '1px solid var(--border)',
+                backgroundColor: bold ? 'var(--bg)' : 'transparent',
+                borderRadius: bold ? '4px' : '0',
+            }}
+        >
+            <span style={{ color: 'var(--text)', fontWeight: bold ? 700 : 400 }}>{label}</span>
+            <span style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: bold ? 700 : 600, fontSize: bold ? '1.05rem' : 'inherit', color: 'var(--accent)' }}>
+                {value.toFixed(2)}
+            </span>
+        </div>
+    );
+
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+    const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+
     const handleExportExcel = async () => {
+        setExporting(true);
+        setExportError(null);
+        setExportSuccess(null);
         try {
-            // Convert state to AppState format expected by generateExcel
             const stateAsAppState = {
                 taxYear,
                 baseCurrency,
@@ -90,13 +221,84 @@ export function Declaration() {
             });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
+            const filename = `Данъчна_${taxYear}.xlsx`;
             a.href = url;
-            a.download = `Данъчна ${taxYear}.xlsx`;
+            a.download = filename;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            setExportSuccess(filename);
+            setTimeout(() => setExportSuccess(null), 5000);
         } catch (error) {
             console.error('Failed to export Excel:', error);
-            alert('Failed to export Excel file');
+            setExportError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const [nraExporting, setNraExporting] = useState(false);
+    const [nraSuccess, setNraSuccess] = useState<string | null>(null);
+    const [nraError, setNraError] = useState<string | null>(null);
+
+    const handleExportNraAppendix8 = async () => {
+        setNraExporting(true);
+        setNraSuccess(null);
+        setNraError(null);
+        try {
+            const buffer = await generateNraAppendix8(holdings, fxRates);
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const filename = `Приложение_8_Част_I_${taxYear}.xlsx`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setNraSuccess(filename);
+            setTimeout(() => setNraSuccess(null), 5000);
+        } catch (error) {
+            console.error('Failed to export NRA Appendix 8:', error);
+            setNraError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setNraExporting(false);
+        }
+    };
+
+    const [nra3Exporting, setNra3Exporting] = useState(false);
+    const [nra3Success, setNra3Success] = useState<string | null>(null);
+    const [nra3Error, setNra3Error] = useState<string | null>(null);
+
+    const handleExportNraPart3 = async () => {
+        setNra3Exporting(true);
+        setNra3Success(null);
+        setNra3Error(null);
+        try {
+            const buffer = await generateNraAppendix8Part3(dividends, fxRates);
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const filename = `Приложение_8_Част_III_${taxYear}.xlsx`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setNra3Success(filename);
+            setTimeout(() => setNra3Success(null), 5000);
+        } catch (error) {
+            console.error('Failed to export NRA Appendix 8 Part III:', error);
+            setNra3Error(error instanceof Error ? error.message : String(error));
+        } finally {
+            setNra3Exporting(false);
         }
     };
 
@@ -111,97 +313,282 @@ export function Declaration() {
                 }}
             >
                 <h1>{t('page.declaration')}</h1>
-                <button
-                    onClick={handleExportExcel}
-                    style={{
-                        padding: '0.75rem 1.5rem',
-                        backgroundColor: 'var(--accent)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '1rem',
-                        fontWeight: 500,
-                    }}
-                >
-                    {t('button.export')}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {exportError && (
+                        <span style={{ color: '#dc3545', fontSize: '0.9rem' }}>
+                            {exportError}
+                        </span>
+                    )}
+                    {exportSuccess && (
+                        <span
+                            style={{
+                                color: '#28a745',
+                                fontSize: '0.9rem',
+                                padding: '0.3rem 0.75rem',
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                borderRadius: '4px',
+                            }}
+                        >
+                            ✓ Downloaded {exportSuccess}
+                        </span>
+                    )}
+                    <button
+                        onClick={handleExportExcel}
+                        disabled={exporting}
+                        style={{
+                            padding: '0.75rem 1.5rem',
+                            backgroundColor: exporting ? 'var(--text-secondary)' : 'var(--accent)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: exporting ? 'wait' : 'pointer',
+                            fontSize: '1rem',
+                            fontWeight: 500,
+                            opacity: exporting ? 0.7 : 1,
+                        }}
+                    >
+                        {exporting ? 'Exporting...' : t('button.export')}
+                    </button>
+                </div>
             </div>
 
             <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-                Tax year {taxYear} • Base currency {baseCurrency}
+                Данъчна година {taxYear} • Базова валута {baseCurrency}
             </p>
 
-            <div style={{ display: 'grid', gap: '2rem', marginBottom: '2rem' }}>
-                {sections.map((section, sectionIndex) => (
-                    <div
-                        key={sectionIndex}
-                        style={{
-                            backgroundColor: 'var(--bg-secondary)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '4px',
-                            padding: '1.5rem',
-                        }}
-                    >
-                        <h2
-                            style={{
-                                marginTop: 0,
-                                marginBottom: '1.5rem',
-                                fontSize: '1.2rem',
-                                color: 'var(--text)',
-                            }}
-                        >
-                            {section.title}
-                        </h2>
-
-                        <div style={{ display: 'grid', gap: '1rem' }}>
-                            {section.fields.map((field, fieldIndex) => (
-                                <div
-                                    key={fieldIndex}
-                                    style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr 2fr 1fr',
-                                        gap: '1rem',
-                                        alignItems: 'center',
-                                        paddingBottom: '1rem',
-                                        borderBottom: fieldIndex < section.fields.length - 1
-                                            ? '1px solid var(--border)'
-                                            : 'none',
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            fontSize: '0.85rem',
-                                            color: 'var(--text-secondary)',
-                                        }}
-                                    >
-                                        {field.ref}
-                                    </div>
-                                    <div
-                                        style={{
-                                            color: 'var(--text)',
-                                        }}
-                                    >
-                                        {field.label}
-                                    </div>
-                                    <div
-                                        style={{
-                                            textAlign: 'right',
-                                            fontWeight: 'bold',
-                                            fontSize: '1.1rem',
-                                            color: 'var(--accent)',
-                                        }}
-                                    >
-                                        {field.value.toFixed(2)} {baseCurrency}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+            {renderSection('p5t2', 'Приложение 5, Таблица 2', 'Доходи от продажба или замяна на финансови активи (код 508)', sales.length > 0, () => (
+                <>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                <th style={thL}>№</th>
+                                <th style={thL}>Код</th>
+                                <th style={thR}>Общ размер на продажната цена</th>
+                                <th style={thR}>Обща цена на придобиване</th>
+                                <th style={thR}>Реализирани печалби</th>
+                                <th style={thR}>Реализирани загуби</th>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                {['1', '2', '3', '4', '5', '6'].map(n => <th key={n} style={thNum}>{n}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style={rowBorder}>
+                                <td style={tdL}>1.1</td>
+                                <td style={tdL}>508</td>
+                                <td style={tdM}>{salesTable2.totalProceeds.toFixed(2)}</td>
+                                <td style={tdM}>{salesTable2.totalCost.toFixed(2)}</td>
+                                <td style={tdM}>{salesTable2.totalGains.toFixed(2)}</td>
+                                <td style={tdM}>{salesTable2.totalLosses.toFixed(2)}</td>
+                            </tr>
+                            <tr style={{ ...rowBorder, backgroundColor: 'var(--bg)' }}>
+                                <td colSpan={4} style={{ ...tdL, fontWeight: 600 }}>4. Обща сума за годината</td>
+                                <td style={{ ...tdM, fontWeight: 600 }}>{salesTable2.totalGains.toFixed(2)}</td>
+                                <td style={{ ...tdM, fontWeight: 600 }}>{salesTable2.totalLosses.toFixed(2)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style={{ marginTop: '1rem', display: 'grid', gap: '0.5rem', fontSize: '0.9rem' }}>
+                        {summaryRow('5. Разлика (ред 4, кол. 5 минус кол. 6; ако е отрицателна — нула)', salesTable2.row5)}
+                        {summaryRow('6. Разходи за дейността (10 на сто от ред 5)', salesTable2.row6)}
+                        {summaryRow('7. Облагаем доход по Таблица 2 (ред 5 – ред 6)', salesTable2.row7, true)}
                     </div>
-                ))}
-            </div>
+                </>
+            ))}
 
-            {/* Total tax due summary card */}
+            {renderSection(
+                'p6c1',
+                'Приложение 6, Част I',
+                'Доходи от други източници по чл. 35 от ЗДДФЛ — Лихви (код 603)',
+                interestBgn > 0,
+                () => (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                <th style={thL}>№</th>
+                                <th style={thL}>Описание</th>
+                                <th style={{ ...thR, textAlign: 'center' }}>Код</th>
+                                <th style={thR}>Размер на дохода</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style={rowBorder}>
+                                <td style={{ ...tdL, color: 'var(--text-secondary)' }}>2</td>
+                                <td style={tdL}>Обща сума на доходите с код 601</td>
+                                <td style={{ ...tdM, textAlign: 'center' }}>601</td>
+                                <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                            </tr>
+                            <tr style={{ ...rowBorder, backgroundColor: 'var(--bg)' }}>
+                                <td style={tdL}>3</td>
+                                <td style={{ ...tdL, fontWeight: 500 }}>Обща сума на доходите с код 603 (Лихви) — Revolut + IB</td>
+                                <td style={{ ...tdM, textAlign: 'center', fontWeight: 600 }}>603</td>
+                                <td style={{ ...tdM, fontWeight: 700, color: 'var(--accent)' }}>{interestBgn.toFixed(2)}</td>
+                            </tr>
+                            {['604', '605', '606'].map((code, i) => (
+                                <tr key={code} style={rowBorder}>
+                                    <td style={{ ...tdL, color: 'var(--text-secondary)' }}>{i + 4}</td>
+                                    <td style={tdL}>Обща сума на доходите с код {code}</td>
+                                    <td style={{ ...tdM, textAlign: 'center' }}>{code}</td>
+                                    <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ),
+            )}
+
+            {renderSection(
+                'p8c1',
+                'Приложение 8, Част I',
+                `Притежавани към 31.12.${taxYear} акции и дялови участия в дружества в чужбина`,
+                holdingsForDeclaration.length > 0,
+                () => (
+                    <>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                    <th style={thL}>Вид</th>
+                                    <th style={thL}>Символ</th>
+                                    <th style={thL}>Държава</th>
+                                    <th style={thR}>Брой</th>
+                                    <th style={thL}>Дата на придобиване</th>
+                                    <th style={thR}>Обща цена (валута)</th>
+                                    <th style={thR}>В лева</th>
+                                </tr>
+                                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                    {['1', '', '2', '3', '4', '5', '6'].map((n, i) => <th key={i} style={thNum}>{n}</th>)}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {holdingsForDeclaration.map((h, idx) => (
+                                    <tr key={idx} style={rowBorder}>
+                                        <td style={tdL}>Акции</td>
+                                        <td style={tdL}>{h.symbol}</td>
+                                        <td style={tdL}>{h.country}</td>
+                                        <td style={tdM}>{h.quantity}</td>
+                                        <td style={tdL}>{formatDate(h.dateAcquired)}</td>
+                                        <td style={tdM}>{h.totalCcy.toFixed(2)} {h.currency}</td>
+                                        <td style={{ ...tdM, fontWeight: 600, color: 'var(--accent)' }}>{h.totalBgn.toFixed(2)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr style={{ borderTop: '2px solid var(--border)' }}>
+                                    <td colSpan={6} style={{ ...tdL, fontWeight: 700 }}>Общо</td>
+                                    <td style={{ ...tdM, fontWeight: 700, color: 'var(--accent)' }}>{holdingsForDeclaration.reduce((s, h) => s + h.totalBgn, 0).toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <button
+                                onClick={handleExportNraAppendix8}
+                                disabled={nraExporting}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    backgroundColor: nraExporting ? 'var(--text-secondary)' : 'var(--accent)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: nraExporting ? 'wait' : 'pointer',
+                                    fontSize: '0.9rem',
+                                    opacity: nraExporting ? 0.7 : 1,
+                                }}
+                            >
+                                {nraExporting ? 'Генериране...' : 'Изтегли за НАП (Excel)'}
+                            </button>
+                            {nraSuccess && (
+                                <span style={{ color: '#28a745', fontSize: '0.85rem', padding: '0.2rem 0.5rem', backgroundColor: 'rgba(40, 167, 69, 0.1)', borderRadius: '4px' }}>
+                                    ✓ {nraSuccess}
+                                </span>
+                            )}
+                            {nraError && <span style={{ color: '#dc3545', fontSize: '0.85rem' }}>{nraError}</span>}
+                            {!nraSuccess && !nraError && !nraExporting && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    Прикачете файла в портала на НАП
+                                </span>
+                            )}
+                        </div>
+                    </>
+                ),
+            )}
+
+            {renderSection(
+                'p8c3',
+                'Приложение 8, Част III',
+                'Дължим окончателен данък — Дивиденти (код 8141)',
+                dividendsForDeclaration.length > 0,
+                () => (
+                    <>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', minWidth: '900px' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                        {[
+                                            '№',
+                                            'Наименование',
+                                            'Държава',
+                                            'Код',
+                                            'Метод',
+                                            'Брутен размер',
+                                            'Цена придоб.',
+                                            'Разлика',
+                                            'Данък в чужбина',
+                                            'Допустим кредит',
+                                            'Признат кредит',
+                                            'Дължим данък',
+                                        ].map((h, i) => (
+                                            <th
+                                                key={i}
+                                                style={i >= 5
+                                                    ? { padding: '0.4rem', textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }
+                                                    : { padding: '0.4rem', textAlign: i >= 3 ? 'center' : 'left', color: 'var(--text-secondary)', fontWeight: 600 }}
+                                            >
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                        {Array.from({ length: 12 }, (_, i) => <th key={i} style={thNum}>{i + 1}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {dividendsForDeclaration.map((d, idx) => (
+                                        <tr key={idx} style={rowBorder}>
+                                            <td style={tdL}>{idx + 1}.1</td>
+                                            <td style={{ ...tdL, fontWeight: 500 }}>{d.symbol}</td>
+                                            <td style={tdL}>{d.country}</td>
+                                            <td style={{ ...tdM, textAlign: 'center' }}>8141</td>
+                                            <td style={{ ...tdM, textAlign: 'center' }}>1</td>
+                                            <td style={tdM}>{d.grossBgn.toFixed(2)}</td>
+                                            <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                                            <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                                            <td style={tdM}>{d.whtBgn.toFixed(2)}</td>
+                                            <td style={tdM}>{d.allowedCredit.toFixed(2)}</td>
+                                            <td style={tdM}>{d.recognizedCredit.toFixed(2)}</td>
+                                            <td style={{ ...tdM, fontWeight: 600, color: 'var(--accent)' }}>{d.taxDue.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr style={{ borderTop: '2px solid var(--border)' }}>
+                                        <td colSpan={5} style={{ ...tdL, fontWeight: 700 }}>Общо</td>
+                                        <td style={{ ...tdM, fontWeight: 700 }}>{dividendsForDeclaration.reduce((s, d) => s + d.grossBgn, 0).toFixed(2)}</td>
+                                        <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                                        <td style={{ ...tdM, color: 'var(--text-secondary)' }}>0.00</td>
+                                        <td style={{ ...tdM, fontWeight: 700 }}>{dividendsForDeclaration.reduce((s, d) => s + d.whtBgn, 0).toFixed(2)}</td>
+                                        <td style={{ ...tdM, fontWeight: 700 }}>{dividendsForDeclaration.reduce((s, d) => s + d.allowedCredit, 0).toFixed(2)}</td>
+                                        <td style={{ ...tdM, fontWeight: 700 }}>{dividendsForDeclaration.reduce((s, d) => s + d.recognizedCredit, 0).toFixed(2)}</td>
+                                        <td style={{ ...tdM, fontWeight: 700, color: 'var(--accent)' }}>{dividendsForDeclaration.reduce((s, d) => s + d.taxDue, 0).toFixed(2)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        {/* NRA upload button hidden — no upload field on NRA portal yet */}
+                    </>
+                ),
+            )}
+
+            {/* Част IV — Total tax due */}
             <div
                 style={{
                     backgroundColor: 'var(--accent)',
@@ -210,22 +597,12 @@ export function Declaration() {
                     borderRadius: '4px',
                     padding: '2rem',
                     textAlign: 'center',
+                    marginTop: '1rem',
                 }}
             >
-                <h2 style={{ marginTop: 0, marginBottom: '0.5rem' }}>
-                    Част IV - Дължим данък
-                </h2>
-                <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.9 }}>
-                    {t('label.totalTax')}
-                </p>
-                <div
-                    style={{
-                        fontSize: '2.5rem',
-                        fontWeight: 'bold',
-                    }}
-                >
-                    {totalTaxDue.toFixed(2)} {baseCurrency}
-                </div>
+                <h2 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Част IV — Дължим данък</h2>
+                <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.9 }}>{t('label.totalTax')}</p>
+                <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>{totalTaxDue.toFixed(2)} {baseCurrency}</div>
             </div>
         </div>
     );

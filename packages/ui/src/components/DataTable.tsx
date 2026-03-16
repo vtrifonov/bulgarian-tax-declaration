@@ -6,8 +6,14 @@ import {
     type SortingState,
     useReactTable,
 } from '@tanstack/react-table';
-import { useState } from 'react';
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { t } from '@bg-tax/core';
+import { AutocompleteInput } from './AutocompleteInput';
 import './DataTable.css';
 
 declare module '@tanstack/react-table' {
@@ -15,6 +21,8 @@ declare module '@tanstack/react-table' {
     interface ColumnMeta<TData extends unknown, TValue> {
         align?: 'left' | 'right' | 'center';
         editable?: boolean;
+        inputType?: 'text' | 'number' | 'date' | 'select';
+        selectOptions?: string[];
         onSave?: (rowIndex: number, value: string) => void;
     }
 }
@@ -34,6 +42,16 @@ export interface DataTableProps<TData> {
     warningCount?: number;
     /** Footer row with totals — maps column accessor key or id to display value */
     footerRow?: Record<string, string>;
+    /** If set, this row index enters edit mode immediately (used for new rows). Nonce ensures re-trigger. */
+    editRowOnMount?: { index: number; nonce: number };
+    /** Called when a row is saved — receives row index and all edited field values */
+    onSaveRow?: (rowIndex: number, values: Record<string, string>) => void;
+    /** Called when an autocomplete option is selected — returns fields to auto-fill */
+    onAutoFill?: (columnId: string, selectedValue: string) => Record<string, string> | undefined;
+    /** Column accessorKey to focus when entering edit mode (defaults to first editable) */
+    focusColumnOnEdit?: string;
+    /** Called to delete a row by index */
+    onDeleteRow?: (rowIndex: number) => void;
 }
 
 export function DataTable<TData extends Record<string, any>>({
@@ -47,15 +65,111 @@ export function DataTable<TData extends Record<string, any>>({
     onToggleWarningsOnly,
     warningCount = 0,
     footerRow,
+    editRowOnMount,
+    onSaveRow,
+    onAutoFill,
+    focusColumnOnEdit,
+    onDeleteRow,
 }: DataTableProps<TData>) {
     const [sorting, setSorting] = useState<SortingState>([]);
-    const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(
-        null,
-    );
-    const [editValue, setEditValue] = useState('');
+    const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
+    const [editValues, setEditValues] = useState<Record<string, string>>({});
+    const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
+    const firstInputRef = useRef<HTMLInputElement | null>(null);
+    const consumedNonce = useRef<number | undefined>(undefined);
+
+    // Date conversion helpers: ISO (YYYY-MM-DD) ↔ display (DD.MM.YYYY)
+    const isoToDisplay = (iso: string): string => {
+        const m = iso.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (!m) return iso;
+        return `${m[3].padStart(2, '0')}.${m[2].padStart(2, '0')}.${m[1]}`;
+    };
+    const displayToIso = (display: string): string => {
+        const m = display.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        if (!m) return display;
+        return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    };
+    const isValidIsoDate = (iso: string): boolean => {
+        const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return false;
+        const [, y, mo, d] = m.map(Number);
+        const date = new Date(y, mo - 1, d);
+        return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d;
+    };
+    const hasDateErrors = (): boolean => {
+        for (const col of columns) {
+            const meta = col.meta;
+            if (meta?.inputType !== 'date' || meta?.editable === false) continue;
+            const key = (col as { accessorKey?: string }).accessorKey;
+            if (!key) continue;
+            const val = editValues[key];
+            if (val !== undefined && val !== '' && !isValidIsoDate(displayToIso(val))) return true;
+        }
+        return false;
+    };
+
+    // Handle editRowOnMount — wait until data actually contains the row, fire only once per nonce
+    useEffect(() => {
+        if (
+            editRowOnMount
+            && editRowOnMount.index >= 0
+            && editRowOnMount.index < data.length
+            && consumedNonce.current !== editRowOnMount.nonce
+        ) {
+            consumedNonce.current = editRowOnMount.nonce;
+            // Save current editing row before switching to the new one
+            if (editingRowIndex !== null && !hasDateErrors()) {
+                const saveValues: Record<string, string> = {};
+                for (const [key, val] of Object.entries(editValues)) {
+                    const col = columns.find((c) => (c as { accessorKey?: string }).accessorKey === key);
+                    saveValues[key] = col?.meta?.inputType === 'date' ? displayToIso(val) : val;
+                }
+                onSaveRow?.(editingRowIndex, saveValues);
+            }
+            enterEditMode(editRowOnMount.index);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editRowOnMount, data.length]);
+
+    // Cancel edit if the edited row was deleted
+    useEffect(() => {
+        if (editingRowIndex !== null && editingRowIndex >= data.length) {
+            setEditingRowIndex(null);
+            setEditValues({});
+        }
+    }, [data.length, editingRowIndex]);
+
+    // Merge editValues into the editing row so computed columns update live
+    const tableData = useMemo(() => {
+        if (editingRowIndex === null) return data;
+        // Build a set of date column keys for conversion
+        const dateKeys = new Set<string>();
+        for (const col of columns) {
+            if (col.meta?.inputType === 'date') {
+                const key = (col as { accessorKey?: string }).accessorKey;
+                if (key) dateKeys.add(key);
+            }
+        }
+        return data.map((row, idx) => {
+            if (idx !== editingRowIndex) return row;
+            const merged = { ...row };
+            for (const [key, val] of Object.entries(editValues)) {
+                const original = (row as Record<string, unknown>)[key];
+                if (typeof original === 'number') {
+                    (merged as Record<string, unknown>)[key] = parseFloat(val) || 0;
+                } else if (dateKeys.has(key)) {
+                    // Convert display format back to ISO for computed columns
+                    (merged as Record<string, unknown>)[key] = displayToIso(val);
+                } else {
+                    (merged as Record<string, unknown>)[key] = val;
+                }
+            }
+            return merged;
+        });
+    }, [data, editingRowIndex, editValues, columns]);
 
     const table = useReactTable({
-        data,
+        data: tableData,
         columns,
         state: {
             sorting,
@@ -67,43 +181,205 @@ export function DataTable<TData extends Record<string, any>>({
         enableColumnResizing: true,
     });
 
-    const handleCellDoubleClick = (rowIndex: number, columnId: string, currentValue: any) => {
-        setEditingCell({ rowIndex, columnId });
-        setEditValue(String(currentValue ?? ''));
-    };
-
-    const handleSaveEdit = (
-        rowIndex: number,
-        _columnId: string,
-        value: string,
-        onSave?: (rowIndex: number, value: string) => void,
-    ) => {
-        onSave?.(rowIndex, value);
-        setEditingCell(null);
-    };
-
-    const handleCancelEdit = () => {
-        setEditingCell(null);
-        setEditValue('');
-    };
-
-    const handleKeyDown = (
-        e: React.KeyboardEvent<HTMLInputElement>,
-        rowIndex: number,
-        _columnId: string,
-        onSave?: (rowIndex: number, value: string) => void,
-    ) => {
-        if (e.key === 'Enter') {
-            handleSaveEdit(rowIndex, _columnId, editValue, onSave);
-        } else if (e.key === 'Escape') {
-            handleCancelEdit();
+    const enterEditMode = (rowIndex: number) => {
+        // Collect current values for all editable columns
+        const row = data[rowIndex];
+        if (!row) return;
+        const values: Record<string, string> = {};
+        for (const col of columns) {
+            const meta = col.meta;
+            if (meta?.editable === false) continue;
+            const key = (col as { accessorKey?: string }).accessorKey;
+            if (!key) continue;
+            const raw = String(row[key] ?? '');
+            // Store date fields as display format (DD.MM.YYYY)
+            values[key] = meta?.inputType === 'date' ? isoToDisplay(raw) : raw;
         }
+        setEditValues(values);
+
+        setEditingRowIndex(rowIndex);
+    };
+
+    const handleSaveRow = () => {
+        if (editingRowIndex === null) return;
+        if (hasDateErrors()) return;
+        // Convert date display values back to ISO for saving
+        const saveValues: Record<string, string> = {};
+        for (const [key, val] of Object.entries(editValues)) {
+            const col = columns.find((c) => (c as { accessorKey?: string }).accessorKey === key);
+            saveValues[key] = col?.meta?.inputType === 'date' ? displayToIso(val) : val;
+        }
+        if (onSaveRow) {
+            onSaveRow(editingRowIndex, saveValues);
+        } else {
+            // Fallback: call per-column onSave (note: may overwrite if multiple columns)
+            for (const col of columns) {
+                const meta = col.meta;
+                if (meta?.editable === false || !meta?.onSave) continue;
+                const key = (col as { accessorKey?: string }).accessorKey;
+                if (!key) continue;
+                const newValue = saveValues[key];
+                if (newValue !== undefined) {
+                    meta.onSave(editingRowIndex, newValue);
+                }
+            }
+        }
+        setEditingRowIndex(null);
+        setEditValues({});
+    };
+
+    const handleCancelRow = () => {
+        setEditingRowIndex(null);
+        setEditValues({});
+    };
+
+    const handleRowKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSaveRow();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            handleCancelRow();
+        }
+    };
+
+    const updateEditValue = (key: string, value: string) => {
+        setEditValues((prev) => ({ ...prev, [key]: value }));
     };
 
     const filteredRows = table.getRowModel().rows.filter((_, idx) => {
         if (!showWarningsOnly) return true;
         return warningRows?.has(idx) ?? false;
     });
+
+    const renderEditInput = (
+        columnId: string,
+        meta: NonNullable<ColumnDef<TData>['meta']>,
+        isFirst: boolean,
+    ) => {
+        const value = editValues[columnId] ?? '';
+        const inputType = meta.inputType ?? 'text';
+        const refProp = isFirst
+            ? {
+                ref: (el: HTMLInputElement | null) => {
+                    firstInputRef.current = el;
+                },
+            }
+            : {};
+
+        // Autocomplete input for select fields
+        if (inputType === 'select') {
+            const options = meta.selectOptions ?? [];
+            return (
+                <AutocompleteInput
+                    inputRef={isFirst
+                        ? (el) => {
+                            firstInputRef.current = el;
+                        }
+                        : undefined}
+                    className='edit-input edit-autocomplete'
+                    data-column={columnId}
+                    value={value}
+                    options={options}
+                    onChange={(v) => updateEditValue(columnId, v)}
+                    onSelect={(v) => {
+                        const fills = onAutoFill?.(columnId, v);
+                        if (fills) {
+                            setEditValues((prev) => ({ ...prev, ...fills }));
+                            // Skip auto-filled fields: focus the next input after the filled ones
+                            const filledKeys = new Set(Object.keys(fills));
+                            setTimeout(() => {
+                                const row = document.querySelector('tr.editing-row');
+                                if (!row) return;
+                                const inputs = Array.from(row.querySelectorAll<HTMLInputElement>('.edit-input'));
+                                const currentIdx = inputs.findIndex((el) => el.dataset.column === columnId);
+                                // Find the next input that wasn't auto-filled
+                                for (let i = currentIdx + 1; i < inputs.length; i++) {
+                                    const col = inputs[i].dataset.column;
+                                    if (col && !filledKeys.has(col)) {
+                                        inputs[i].focus();
+                                        return;
+                                    }
+                                }
+                            }, 0);
+                        }
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCancelRow();
+                        }
+                    }}
+                />
+            );
+        }
+
+        // Date input as text with DD.MM.YYYY format
+        // editValues stores display format (DD.MM.YYYY) for dates; converted to ISO on save
+        if (inputType === 'date') {
+            const iso = displayToIso(value);
+            const isInvalid = value !== '' && !isValidIsoDate(iso);
+            return (
+                <input
+                    {...refProp}
+                    type='text'
+                    data-column={columnId}
+                    className={`edit-input edit-date ${isInvalid ? 'edit-input-error' : ''}`}
+                    value={value}
+                    placeholder='DD.MM.YYYY'
+                    title={isInvalid ? 'Invalid date — use DD.MM.YYYY' : undefined}
+                    onChange={(e) => updateEditValue(columnId, e.target.value)}
+                    onBlur={() => {
+                        // Normalize: "1.5.2025" → "01.05.2025"
+                        const normalized = displayToIso(value);
+                        if (isValidIsoDate(normalized)) {
+                            updateEditValue(columnId, isoToDisplay(normalized));
+                        }
+                    }}
+                    onKeyDown={handleRowKeyDown}
+                />
+            );
+        }
+
+        if (inputType === 'number') {
+            return (
+                <input
+                    {...refProp}
+                    type='number'
+                    step='any'
+                    data-column={columnId}
+                    className='edit-input edit-number'
+                    value={value}
+                    onChange={(e) => updateEditValue(columnId, e.target.value)}
+                    onKeyDown={handleRowKeyDown}
+                />
+            );
+        }
+
+        // Default: text input
+        return (
+            <input
+                {...refProp}
+                type='text'
+                data-column={columnId}
+                className='edit-input'
+                value={value}
+                onChange={(e) => updateEditValue(columnId, e.target.value)}
+                onKeyDown={handleRowKeyDown}
+            />
+        );
+    };
+
+    // Focus first input when entering edit mode
+    useEffect(() => {
+        if (editingRowIndex !== null) {
+            // Small delay to allow render
+            const timer = setTimeout(() => {
+                firstInputRef.current?.focus();
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+    }, [editingRowIndex]);
 
     return (
         <div className='data-table-container'>
@@ -130,6 +406,7 @@ export function DataTable<TData extends Record<string, any>>({
                 <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
+                            <th className='edit-col-header' style={{ width: 60 }} />
                             {headerGroup.headers.map((header) => (
                                 <th
                                     key={header.id}
@@ -165,59 +442,107 @@ export function DataTable<TData extends Record<string, any>>({
                 <tbody>
                     {filteredRows.map((row) => {
                         const rowIndex = row.index;
+                        const isEditing = editingRowIndex === rowIndex;
                         const hasWarning = warningRows?.has(rowIndex) ?? false;
                         const rowWarnings = warningMessages?.get(rowIndex);
+                        let firstEditableFound = false;
                         return (
                             <tr
                                 key={row.id}
-                                className={`${rowIndex % 2 === 0 ? 'even' : 'odd'} ${hasWarning ? 'warning-row' : ''}`}
+                                className={`${rowIndex % 2 === 0 ? 'even' : 'odd'} ${hasWarning ? 'warning-row' : ''} ${isEditing ? 'editing-row' : ''}`}
+                                onDoubleClick={() => {
+                                    if (!isEditing) enterEditMode(rowIndex);
+                                }}
                                 title={hasWarning && rowWarnings ? rowWarnings.join('\n') : undefined}
                             >
+                                <td className='edit-action-cell'>
+                                    {isEditing
+                                        ? (
+                                            <div className='edit-actions'>
+                                                <button
+                                                    className='edit-action-btn save-btn'
+                                                    onClick={handleSaveRow}
+                                                    title='Save (Enter)'
+                                                    aria-label='Save row changes'
+                                                >
+                                                    ✓
+                                                </button>
+                                                <button
+                                                    className='edit-action-btn cancel-btn'
+                                                    onClick={handleCancelRow}
+                                                    title='Cancel (Escape)'
+                                                    aria-label='Cancel row edit'
+                                                >
+                                                    ✗
+                                                </button>
+                                            </div>
+                                        )
+                                        : (
+                                            <button
+                                                className='edit-action-btn pencil-btn'
+                                                onClick={() => enterEditMode(rowIndex)}
+                                                title='Edit row'
+                                                aria-label={`Edit row ${rowIndex + 1}`}
+                                            >
+                                                ✏️
+                                            </button>
+                                        )}
+                                </td>
                                 {row.getVisibleCells().map((cell) => {
-                                    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === cell.column.id;
                                     const isDeleteColumn = cell.column.id === 'delete';
                                     const meta = cell.column.columnDef.meta;
+                                    const accessorKey = (cell.column.columnDef as { accessorKey?: string }).accessorKey;
+                                    const isEditableCell = isEditing && meta?.editable !== false && !!accessorKey;
+                                    const isFocusTarget = focusColumnOnEdit
+                                        ? isEditableCell && accessorKey === focusColumnOnEdit && !firstEditableFound
+                                        : isEditableCell && !firstEditableFound;
+                                    if (isFocusTarget) firstEditableFound = true;
 
                                     return (
                                         <td
                                             key={cell.id}
                                             className={`
-                      cell
-                      ${isDeleteColumn ? 'delete-cell' : ''}
-                      ${
-                                                meta?.align === 'right'
-                                                    ? 'align-right'
-                                                    : ''
-                                            }
-                      ${
-                                                meta?.align === 'center'
-                                                    ? 'align-center'
-                                                    : ''
-                                            }
-                    `}
-                                            onDoubleClick={() => {
-                                                if (!isDeleteColumn && meta?.editable !== false) {
-                                                    handleCellDoubleClick(rowIndex, cell.column.id, cell.getValue());
-                                                }
-                                            }}
+                                                cell
+                                                ${isDeleteColumn ? 'delete-cell' : ''}
+                                                ${meta?.align === 'right' ? 'align-right' : ''}
+                                                ${meta?.align === 'center' ? 'align-center' : ''}
+                                            `}
                                         >
-                                            {isEditing
-                                                ? (
-                                                    <input
-                                                        autoFocus
-                                                        type='text'
-                                                        value={editValue}
-                                                        onChange={(e) => setEditValue(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            handleKeyDown(e, rowIndex, cell.column.id, meta?.onSave);
-                                                        }}
-                                                        onBlur={() => handleCancelEdit()}
-                                                        className='edit-input'
-                                                    />
-                                                )
-                                                : (
-                                                    flexRender(cell.column.columnDef.cell, cell.getContext())
-                                                )}
+                                            {isEditableCell
+                                                ? renderEditInput(accessorKey, meta!, isFocusTarget)
+                                                : isDeleteColumn && onDeleteRow
+                                                ? pendingDeleteIndex === rowIndex
+                                                    ? (
+                                                        <div className='delete-confirm'>
+                                                            <button
+                                                                className='delete-button delete-confirm-btn'
+                                                                aria-label='Confirm delete'
+                                                                onClick={() => {
+                                                                    if (isEditing) handleCancelRow();
+                                                                    setPendingDeleteIndex(null);
+                                                                    onDeleteRow(rowIndex);
+                                                                }}
+                                                            >
+                                                                ✓
+                                                            </button>
+                                                            <button
+                                                                className='delete-cancel-btn'
+                                                                aria-label='Cancel delete'
+                                                                onClick={() => setPendingDeleteIndex(null)}
+                                                            >
+                                                                ✗
+                                                            </button>
+                                                        </div>
+                                                    )
+                                                    : (
+                                                        <button
+                                                            className='delete-button'
+                                                            onClick={() => setPendingDeleteIndex(rowIndex)}
+                                                        >
+                                                            {t('button.delete')}
+                                                        </button>
+                                                    )
+                                                : flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </td>
                                     );
                                 })}
@@ -228,6 +553,7 @@ export function DataTable<TData extends Record<string, any>>({
                 {footerRow && (
                     <tfoot>
                         <tr className='footer-row'>
+                            <td />
                             {table.getAllColumns().map((col) => {
                                 const key = col.id || (col.columnDef as any).accessorKey;
                                 const value = footerRow[key];
