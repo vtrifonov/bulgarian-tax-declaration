@@ -57,28 +57,61 @@ export function Import() {
         holdings,
     } = useAppStore();
 
-    // Auto-fetch FX rates when new currencies are detected
+    // Auto-fetch FX rates when new currencies are detected — includes prior-year dates
     useEffect(() => {
         const state = useAppStore.getState();
         const currencies = new Set<string>();
-        for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
-        for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
+        const years = new Set<number>();
+        years.add(taxYear);
+
+        // Collect all currencies and years from data
+        for (const h of state.holdings) {
+            if (h.currency) currencies.add(h.currency);
+            if (h.dateAcquired) years.add(parseInt(h.dateAcquired.substring(0, 4)));
+        }
+        for (const d of state.dividends) {
+            if (d.currency) currencies.add(d.currency);
+            if (d.date) years.add(parseInt(d.date.substring(0, 4)));
+        }
         for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
-        for (const i of state.ibInterest) if (i.currency) currencies.add(i.currency);
+        for (const i of state.ibInterest) {
+            if (i.currency) currencies.add(i.currency);
+            if (i.date) years.add(parseInt(i.date.substring(0, 4)));
+        }
         for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
 
         const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
         if (needed.length === 0) return;
 
-        // Check if we already have rates for all needed currencies
-        const existing = Object.keys(state.fxRates);
-        const missing = needed.filter(c => !existing.includes(c));
-        if (missing.length === 0) return;
+        // Check if we need to fetch any missing year+currency combo
+        const yearsArr = [...years].filter(y => y >= 2020).sort();
+        let hasMissing = false;
+        for (const ccy of needed) {
+            for (const yr of yearsArr) {
+                const dateToCheck = `${yr}-06-15`;
+                if (!state.fxRates[ccy]?.[dateToCheck]) {
+                    hasMissing = true;
+                    break;
+                }
+            }
+            if (hasMissing) break;
+        }
+        if (!hasMissing) return;
 
         setFetchingFx(true);
         const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
-        fxService.fetchRates(needed, taxYear).then(rates => {
-            setFxRates(rates);
+        // Fetch all needed years in parallel
+        Promise.all(
+            yearsArr.map(yr => fxService.fetchRates(needed, yr)),
+        ).then(results => {
+            // Merge all year results
+            const merged: Record<string, Record<string, number>> = {};
+            for (const rates of results) {
+                for (const [ccy, dateRates] of Object.entries(rates)) {
+                    merged[ccy] = { ...merged[ccy], ...dateRates };
+                }
+            }
+            setFxRates(merged);
             setFetchingFx(false);
         }).catch(() => {
             setFetchingFx(false);
@@ -386,33 +419,7 @@ export function Import() {
 
                     <button
                         disabled={fetchingFx}
-                        onClick={async () => {
-                            // Collect all currencies from imported data
-                            const state = useAppStore.getState();
-                            const currencies = new Set<string>();
-                            for (const h of state.holdings) if (h.currency) currencies.add(h.currency);
-                            for (const d of state.dividends) if (d.currency) currencies.add(d.currency);
-                            for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
-                            for (const i of state.ibInterest) if (i.currency) currencies.add(i.currency);
-                            for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
-
-                            // Fetch FX rates from ECB
-                            const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
-                            if (needed.length > 0) {
-                                setFetchingFx(true);
-                                try {
-                                    const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
-                                    const rates = await fxService.fetchRates(needed, taxYear);
-                                    setFxRates(rates);
-                                } catch (err) {
-                                    console.error('Failed to fetch FX rates:', err);
-                                } finally {
-                                    setFetchingFx(false);
-                                }
-                            }
-
-                            navigate('/workspace');
-                        }}
+                        onClick={() => navigate('/workspace')}
                         style={{
                             padding: '0.75rem 2rem',
                             fontSize: '1rem',

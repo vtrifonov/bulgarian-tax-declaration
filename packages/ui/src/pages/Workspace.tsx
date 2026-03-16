@@ -847,26 +847,35 @@ export function Workspace() {
     const renderDividendsContent = () => {
         const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
 
-        // Calculate summary totals — all in base currency
+        // Calculate summary totals — sum each column as displayed
         let totalGrossBase = 0;
         let totalWhtBase = 0;
+        let totalTax5pct = 0;
+        let totalWhtCredit = 0;
+        let totalBgTaxDue = 0;
+        let totalGrossOrig = 0;
+        let totalWhtOrig = 0;
 
         dividends.forEach(dividend => {
             const grossStr = toBaseCcy(dividend.grossAmount, dividend.currency, dividend.date);
             const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
             totalGrossBase += grossStr !== '—' ? parseFloat(grossStr) : 0;
             totalWhtBase += whtStr !== '—' ? parseFloat(whtStr) : 0;
+            totalTax5pct += dividend.grossAmount * 0.05;
+            totalWhtCredit += dividend.whtCredit;
+            totalBgTaxDue += dividend.bgTaxDue;
+            totalGrossOrig += dividend.grossAmount;
+            totalWhtOrig += dividend.withholdingTax;
         });
-
-        const totalTax5pct = totalGrossBase * 0.05;
-        const totalWhtCredit = Math.min(totalWhtBase, totalTax5pct);
-        const totalBgTaxDue = Math.max(0, totalTax5pct - totalWhtBase);
 
         const footerRow: Record<string, string> = {
             symbol: t('summary.total'),
+            grossAmount: totalGrossOrig.toFixed(2),
+            withholdingTax: totalWhtOrig.toFixed(2),
             grossBase: totalGrossBase.toFixed(2),
             whtBase: totalWhtBase.toFixed(2),
             tax5pct: totalTax5pct.toFixed(2),
+            whtCredit: totalWhtCredit.toFixed(2),
             bgTaxDue: totalBgTaxDue.toFixed(2),
         };
 
