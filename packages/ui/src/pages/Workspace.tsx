@@ -153,7 +153,7 @@ export function Workspace() {
                 labelKey: 'tab.ibInterest',
                 count: ibInterest.length,
                 warningCount: warningsByTab['ib interest'] || 0,
-                tooltip: 'IB Stock Yield Enhancement Program — monthly interest payments for securities lending',
+                tooltip: 'IB interest income — securities lending (SYEP), cash deposits, debit interest',
             });
         }
         if (revolutInterest.length > 0) {
