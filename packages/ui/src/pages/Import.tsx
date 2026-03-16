@@ -270,9 +270,9 @@ export function Import() {
                             {isDragOver ? '📂' : '📄'}
                         </div>
                         <p style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0', fontWeight: 'bold' }}>
-                            {isDragOver ? 'Drop files here' : 'Drag & drop CSV files here'}
+                            {isDragOver ? t('import.dropHere') : t('import.dragDrop')}
                         </p>
-                        <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>or</p>
+                        <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>{t('import.or')}</p>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -288,7 +288,7 @@ export function Import() {
                                 cursor: 'pointer',
                             }}
                         >
-                            Browse Files
+                            {t('button.browseFiles')}
                         </button>
                         <input
                             ref={fileInputRef}
@@ -299,7 +299,7 @@ export function Import() {
                             style={{ display: 'none' }}
                         />
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '1rem', marginBottom: 0 }}>
-                            Supported: Interactive Brokers CSV, Revolut Savings CSV
+                            {t('import.supported')}
                         </p>
                     </div>
 
@@ -325,7 +325,7 @@ export function Import() {
                                         animation: 'spin 0.8s linear infinite',
                                     }}
                                 />
-                                Fetching FX rates from ECB...
+                                {t('import.fetchingFx')}
                             </div>
                             <div style={{ height: '4px', backgroundColor: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
                                 <div
@@ -349,7 +349,7 @@ export function Import() {
                     {/* Imported files list */}
                     {importedFiles.length > 0 && (
                         <div style={{ marginBottom: '1.5rem' }}>
-                            <h3 style={{ marginBottom: '0.5rem' }}>Imported Files</h3>
+                            <h3 style={{ marginBottom: '0.5rem' }}>{t('import.importedFiles')}</h3>
                             {importedFiles.map((f, i) => (
                                 <div
                                     key={i}
@@ -438,7 +438,7 @@ export function Import() {
                         lineHeight: '1.6',
                     }}
                 >
-                    <h3 style={{ marginBottom: '0.75rem' }}>How to export your statements</h3>
+                    <h3 style={{ marginBottom: '0.75rem' }}>{t('import.howTo')}</h3>
                     <div style={{ marginBottom: '0.75rem' }}>
                         <strong>Interactive Brokers:</strong>
                         <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>

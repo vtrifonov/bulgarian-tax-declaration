@@ -216,7 +216,7 @@ export function Declaration() {
                     Част IV - Дължим данък
                 </h2>
                 <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.9 }}>
-                    Total tax due
+                    {t('label.totalTax')}
                 </p>
                 <div
                     style={{

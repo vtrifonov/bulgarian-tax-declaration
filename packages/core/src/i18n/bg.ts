@@ -78,4 +78,40 @@ export const bg = {
     'button.continue': 'Продължи',
     'button.export': 'Експорт Excel',
     'button.reset': 'Изчисти данните',
+    'button.addHolding': 'Добави притежание',
+    'button.addSale': 'Добави продажба',
+    'button.addDividend': 'Добави дивидент',
+    'button.addInterest': 'Добави лихва',
+    'button.delete': 'Изтрий',
+    'button.addRow': 'Добави ред',
+    'button.showAll': 'Покажи всички',
+    'button.browseFiles': 'Избери файлове',
+    'button.chooseFile': 'Избери файл',
+
+    // Labels
+    'label.taxYear': 'Данъчна година',
+    'label.baseCurrency': 'Базова валута',
+    'label.fixedFor2025': '(фиксирано за ≤2025)',
+    'label.fixedFor2026': '(фиксирано за ≥2026)',
+    'label.importHoldings': 'Импорт на предишни притежания',
+    'label.validationWarnings': 'Предупреждения',
+    'label.allDismissed': 'Всички предупреждения са скрити',
+    'label.totalTax': 'Общ дължим данък',
+
+    // Import page labels
+    'import.fresh': 'Започни отначало',
+    'import.freshDesc': 'Без предишни притежания',
+    'import.json': 'От експорт на приложението (.json)',
+    'import.excel': 'От генериран Excel (.xlsx)',
+    'import.dragDrop': 'Плъзнете CSV файлове тук',
+    'import.dropHere': 'Пуснете файловете тук',
+    'import.or': 'или',
+    'import.supported': 'Поддържани: Interactive Brokers CSV, Revolut Savings CSV',
+    'import.howTo': 'Как да експортирате извлеченията',
+    'import.importedFiles': 'Импортирани файлове',
+    'import.fetchingFx': 'Извличане на валутни курсове от ЕЦБ...',
+
+    // Column headers (for UI display, not data table headers which use mixed language)
+    'col.broker': 'Брокер',
+    'col.country': 'Страна',
 };

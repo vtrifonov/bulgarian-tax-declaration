@@ -254,7 +254,7 @@ export function Workspace() {
                         if (index >= 0) deleteHolding(index);
                     }}
                 >
-                    Delete
+                    {t('button.delete')}
                 </button>
             ),
             meta: { editable: false },
@@ -691,7 +691,7 @@ export function Workspace() {
                 };
                 addHolding(newHolding);
             }}
-            addRowLabel='Add Holding'
+            addRowLabel={t('button.addHolding')}
         />
     );
 
@@ -716,7 +716,7 @@ export function Workspace() {
                 };
                 addSale(newSale);
             }}
-            addRowLabel='Add Sale'
+            addRowLabel={t('button.addSale')}
         />
     );
 
@@ -771,7 +771,7 @@ export function Workspace() {
                 };
                 addDividend(newDividend);
             }}
-            addRowLabel='Add Dividend'
+            addRowLabel={t('button.addDividend')}
         />
     );
 
@@ -805,7 +805,7 @@ export function Workspace() {
                 };
                 addIbInterest(newEntry);
             }}
-            addRowLabel='Add IB Interest Entry'
+            addRowLabel={t('button.addInterest')}
         />
     );
 
@@ -1006,7 +1006,7 @@ export function Workspace() {
                         >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <span style={{ fontWeight: 600 }}>
-                                    Validation Warnings ({visibleWarnings.length}
+                                    {t('label.validationWarnings')} ({visibleWarnings.length}
                                     {dismissedWarnings.size > 0 ? ` / ${warnings.length} total` : ''})
                                 </span>
                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -1028,7 +1028,7 @@ export function Workspace() {
                                         textDecoration: 'underline',
                                     }}
                                 >
-                                    Show all
+                                    {t('button.showAll')}
                                 </button>
                             )}
                         </div>
@@ -1108,7 +1108,7 @@ export function Workspace() {
                                 ))}
                                 {visibleWarnings.length === 0 && (
                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                                        All warnings dismissed
+                                        {t('label.allDismissed')}
                                     </div>
                                 )}
                             </div>

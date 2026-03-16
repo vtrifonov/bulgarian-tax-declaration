@@ -54,9 +54,9 @@ export function YearSetup() {
     };
 
     const options: { value: ImportOption; label: string; description: string; accept?: string }[] = [
-        { value: 'fresh', label: 'Start fresh', description: 'No previous holdings' },
-        { value: 'json', label: 'From app export (.json)', description: "Previous year's app export — recommended, lossless", accept: '.json' },
-        { value: 'excel', label: 'From app-generated Excel (.xlsx)', description: "Previous year's Данъчна {YEAR}.xlsx — reads Притежания sheet", accept: '.xlsx' },
+        { value: 'fresh', label: t('import.fresh'), description: t('import.freshDesc') },
+        { value: 'json', label: t('import.json'), description: "Previous year's app export — recommended, lossless", accept: '.json' },
+        { value: 'excel', label: t('import.excel'), description: "Previous year's Данъчна {YEAR}.xlsx — reads Притежания sheet", accept: '.xlsx' },
     ];
 
     return (
@@ -65,7 +65,7 @@ export function YearSetup() {
 
             <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                    Tax Year (Данъчна година)
+                    {t('label.taxYear')}
                 </label>
                 <input
                     type='number'
@@ -79,7 +79,7 @@ export function YearSetup() {
 
             <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                    Base Currency (Базова валута)
+                    {t('label.baseCurrency')}
                 </label>
                 <div
                     style={{
@@ -92,14 +92,14 @@ export function YearSetup() {
                 >
                     {baseCurrency}
                     <span style={{ marginLeft: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        {baseCurrency === 'BGN' ? '(fixed for ≤2025)' : '(fixed for ≥2026)'}
+                        {baseCurrency === 'BGN' ? t('label.fixedFor2025') : t('label.fixedFor2026')}
                     </span>
                 </div>
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                    Import Previous Holdings
+                    {t('label.importHoldings')}
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {options.map((opt) => (
@@ -161,7 +161,7 @@ export function YearSetup() {
                             cursor: 'pointer',
                         }}
                     >
-                        Choose {importOption === 'json' ? '.json' : '.xlsx'} file
+                        {t('button.chooseFile')}
                     </button>
                 </div>
             )}

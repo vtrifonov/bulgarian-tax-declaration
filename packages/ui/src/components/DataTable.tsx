@@ -7,6 +7,7 @@ import {
     useReactTable,
 } from '@tanstack/react-table';
 import { useState } from 'react';
+import { t } from '@bg-tax/core';
 import './DataTable.css';
 
 declare module '@tanstack/react-table' {
@@ -37,7 +38,7 @@ export function DataTable<TData extends Record<string, any>>({
     columns,
     data,
     onAddRow,
-    addRowLabel = 'Add Row',
+    addRowLabel = t('button.addRow'),
     warningRows,
     warningMessages,
     showWarningsOnly = false,

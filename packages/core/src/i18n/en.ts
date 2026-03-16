@@ -78,4 +78,40 @@ export const en = {
     'button.continue': 'Continue',
     'button.export': 'Export Excel',
     'button.reset': 'Reset All Data',
+    'button.addHolding': 'Add Holding',
+    'button.addSale': 'Add Sale',
+    'button.addDividend': 'Add Dividend',
+    'button.addInterest': 'Add IB Interest Entry',
+    'button.delete': 'Delete',
+    'button.addRow': 'Add Row',
+    'button.showAll': 'Show all',
+    'button.browseFiles': 'Browse Files',
+    'button.chooseFile': 'Choose file',
+
+    // Labels
+    'label.taxYear': 'Tax Year',
+    'label.baseCurrency': 'Base Currency',
+    'label.fixedFor2025': '(fixed for ≤2025)',
+    'label.fixedFor2026': '(fixed for ≥2026)',
+    'label.importHoldings': 'Import Previous Holdings',
+    'label.validationWarnings': 'Validation Warnings',
+    'label.allDismissed': 'All warnings dismissed',
+    'label.totalTax': 'Total Tax Due',
+
+    // Import page labels
+    'import.fresh': 'Start fresh',
+    'import.freshDesc': 'No previous holdings',
+    'import.json': 'From app export (.json)',
+    'import.excel': 'From app-generated Excel (.xlsx)',
+    'import.dragDrop': 'Drag & drop CSV files here',
+    'import.dropHere': 'Drop files here',
+    'import.or': 'or',
+    'import.supported': 'Supported: Interactive Brokers CSV, Revolut Savings CSV',
+    'import.howTo': 'How to export your statements',
+    'import.importedFiles': 'Imported Files',
+    'import.fetchingFx': 'Fetching FX rates from ECB...',
+
+    // Column headers (for UI display, not data table headers which use mixed language)
+    'col.broker': 'Broker',
+    'col.country': 'Country',
 };
