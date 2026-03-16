@@ -62,6 +62,16 @@ pnpm spell                         # Spellcheck with cspell
 
 If cspell flags a legitimate word, add it to `cspell-dict.txt`.
 
+## Public Release Considerations
+
+This repo will be made public eventually. Keep in mind:
+- **No secrets/credentials** in code or config files
+- **No personal data** (account numbers, real tax amounts) in test fixtures
+- **No hardcoded paths** like `/Users/trifonov/` — use relative paths
+- **License-compatible dependencies** only (MIT/Apache preferred)
+- **GitHub Pages deployment** is pre-configured (`.github/workflows/deploy-pages.yml`) — will auto-deploy when repo goes public
+- The app should work as both a Tauri desktop app AND a browser SPA on GitHub Pages
+
 ## Commit Messages
 
 Format: `type: description`
