@@ -77,6 +77,8 @@ export function Workspace() {
     const [fxTab, setFxTab] = useState<string | null>(null);
     const [revolutTab, setRevolutTab] = useState<string | null>(null);
     const [showWarnings, setShowWarnings] = useState(false);
+    const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
+    const [warningFilter, setWarningFilter] = useState<string>('all');
 
     const {
         holdings,
@@ -947,35 +949,141 @@ export function Workspace() {
             <h1>{t('page.workspace')}</h1>
 
             {/* Warnings Panel */}
-            {warnings.length > 0 && (
-                <div
-                    style={{
-                        marginBottom: '2rem',
-                        padding: '1rem',
-                        backgroundColor: 'var(--bg-secondary)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                    }}
-                    onClick={() => setShowWarnings(!showWarnings)}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontWeight: 600 }}>Validation Warnings ({warnings.length})</span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                            {showWarnings ? '▼' : '▶'}
-                        </span>
-                    </div>
-                    {showWarnings && (
-                        <div style={{ marginTop: '1rem' }}>
-                            {warnings.map((warning, idx) => (
-                                <div key={idx} style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                                    <strong>[{warning.tab}]</strong> {warning.message}
-                                </div>
-                            ))}
+            {warnings.length > 0 && (() => {
+                const visibleWarnings = warnings.filter(w => {
+                    const key = `${w.type}:${w.message}`;
+                    if (dismissedWarnings.has(key)) return false;
+                    if (warningFilter !== 'all' && w.type !== warningFilter) return false;
+                    return true;
+                });
+                const warningTypes = [...new Set(warnings.map(w => w.type))];
+
+                return (
+                    <div
+                        style={{
+                            marginBottom: '2rem',
+                            padding: '1rem',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '4px',
+                        }}
+                    >
+                        <div
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                            onClick={() => setShowWarnings(!showWarnings)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontWeight: 600 }}>
+                                    Validation Warnings ({visibleWarnings.length}
+                                    {dismissedWarnings.size > 0 ? ` / ${warnings.length} total` : ''})
+                                </span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    {showWarnings ? '▼' : '▶'}
+                                </span>
+                            </div>
+                            {dismissedWarnings.size > 0 && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDismissedWarnings(new Set());
+                                    }}
+                                    style={{
+                                        fontSize: '0.8rem',
+                                        color: 'var(--accent)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline',
+                                    }}
+                                >
+                                    Show all
+                                </button>
+                            )}
                         </div>
-                    )}
-                </div>
-            )}
+                        {showWarnings && (
+                            <div style={{ marginTop: '1rem' }}>
+                                {/* Filter buttons */}
+                                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                                    <button
+                                        onClick={() => setWarningFilter('all')}
+                                        style={{
+                                            padding: '0.25rem 0.75rem',
+                                            borderRadius: '12px',
+                                            fontSize: '0.8rem',
+                                            border: '1px solid var(--border)',
+                                            cursor: 'pointer',
+                                            backgroundColor: warningFilter === 'all' ? 'var(--accent)' : 'transparent',
+                                            color: warningFilter === 'all' ? 'white' : 'var(--text-secondary)',
+                                        }}
+                                    >
+                                        All ({visibleWarnings.length})
+                                    </button>
+                                    {warningTypes.map(type => {
+                                        const count = warnings.filter(w => w.type === type && !dismissedWarnings.has(`${w.type}:${w.message}`)).length;
+                                        return (
+                                            <button
+                                                key={type}
+                                                onClick={() => setWarningFilter(warningFilter === type ? 'all' : type)}
+                                                style={{
+                                                    padding: '0.25rem 0.75rem',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.8rem',
+                                                    border: '1px solid var(--border)',
+                                                    cursor: 'pointer',
+                                                    backgroundColor: warningFilter === type ? 'var(--accent)' : 'transparent',
+                                                    color: warningFilter === type ? 'white' : 'var(--text-secondary)',
+                                                }}
+                                            >
+                                                {type.replace(/-/g, ' ')} ({count})
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {/* Warning list */}
+                                {visibleWarnings.map((warning, idx) => (
+                                    <div
+                                        key={idx}
+                                        style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            marginBottom: '0.5rem',
+                                            fontSize: '0.9rem',
+                                            color: 'var(--text-secondary)',
+                                            padding: '0.4rem 0.5rem',
+                                            borderRadius: '4px',
+                                            backgroundColor: idx % 2 === 0 ? 'transparent' : 'var(--bg)',
+                                        }}
+                                    >
+                                        <span>
+                                            <strong>[{warning.tab}]</strong> {warning.message}
+                                        </span>
+                                        <button
+                                            onClick={() => setDismissedWarnings(prev => new Set([...prev, `${warning.type}:${warning.message}`]))}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                color: 'var(--text-secondary)',
+                                                fontSize: '1rem',
+                                                padding: '0 0.25rem',
+                                            }}
+                                            title='Dismiss'
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                                {visibleWarnings.length === 0 && (
+                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                        All warnings dismissed
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* Tabs */}
             <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
