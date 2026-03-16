@@ -817,36 +817,91 @@ export function Workspace() {
         }
 
         if (!revolutTab) {
-            setRevolutTab(currencies[0]);
+            setRevolutTab('total');
         }
 
-        const currentCurrency = revolutTab || currencies[0];
-        const currentData = revolutInterest.find((r) => r.currency === currentCurrency);
-
-        if (!currentData) {
-            return <div>Currency not found</div>;
-        }
-
-        // Summary row
-        const netInterest = currentData.entries.reduce((sum, e) => sum + e.amount, 0);
+        const currentTab = revolutTab || 'total';
         const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
-        // Use mid-year date for approximate conversion of totals
         const midDate = `${useAppStore.getState().taxYear}-06-30`;
-        const netBase = toBaseCcy(netInterest, currentCurrency, midDate);
-        const taxBase = netBase !== '—' ? (parseFloat(netBase) * 0.1).toFixed(2) : '—';
-        const tax = netInterest * 0.1;
+
+        // Compute per-currency summaries for total tab
+        const currencySummaries = currencies.map(ccy => {
+            const data = revolutInterest.find(r => r.currency === ccy)!;
+            const net = data.entries.reduce((sum, e) => sum + e.amount, 0);
+            const netBaseStr = toBaseCcy(net, ccy, midDate);
+            const netBaseNum = netBaseStr !== '—' ? parseFloat(netBaseStr) : 0;
+            return { currency: ccy, entries: data.entries.length, net, netBase: netBaseNum, netBaseStr };
+        });
+        const totalEntries = currencySummaries.reduce((s, c) => s + c.entries, 0);
+        const totalNetBase = currencySummaries.reduce((s, c) => s + c.netBase, 0);
+        const totalTaxBase = totalNetBase * 0.1;
+
+        const renderSummaryCard = (label: string, ccyLabel: string, net: number, netBase: string, tax: number, taxBase: string, entries: number) => (
+            <div
+                style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: '1rem',
+                    marginBottom: '1rem',
+                    padding: '1rem',
+                    backgroundColor: 'var(--bg-secondary)',
+                    borderRadius: '4px',
+                }}
+            >
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.currency')}</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{label}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.entries')}</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{entries}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({ccyLabel})</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{net.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({baseCurrency})</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netBase}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({ccyLabel})</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{taxBase}</div>
+                </div>
+            </div>
+        );
+
+        const currentData = revolutInterest.find((r) => r.currency === currentTab);
 
         return (
             <div>
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <button
+                        onClick={() => setRevolutTab('total')}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            backgroundColor: currentTab === 'total' ? 'var(--accent)' : 'var(--bg-secondary)',
+                            color: currentTab === 'total' ? 'white' : 'var(--text)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontWeight: 600,
+                        }}
+                    >
+                        {t('summary.total') || 'Total'}
+                    </button>
                     {currencies.map((curr) => (
                         <button
                             key={curr}
                             onClick={() => setRevolutTab(curr)}
                             style={{
                                 padding: '0.5rem 1rem',
-                                backgroundColor: currentCurrency === curr ? 'var(--accent)' : 'var(--bg-secondary)',
-                                color: currentCurrency === curr ? 'white' : 'var(--text)',
+                                backgroundColor: currentTab === curr ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: currentTab === curr ? 'white' : 'var(--text)',
                                 border: 'none',
                                 cursor: 'pointer',
                                 borderRadius: '4px',
@@ -857,44 +912,78 @@ export function Workspace() {
                     ))}
                 </div>
 
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(6, 1fr)',
-                        gap: '1rem',
-                        marginBottom: '2rem',
-                        padding: '1rem',
-                        backgroundColor: 'var(--bg-secondary)',
-                        borderRadius: '4px',
-                    }}
-                >
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.currency')}</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currentCurrency}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.entries')}</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currentData.entries.length}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({currentCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netInterest.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netBase}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({currentCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{taxBase}</div>
-                    </div>
-                </div>
-
-                <DataTable columns={getRevolutEntryColumns(currentCurrency)} data={currentData.entries} />
+                {currentTab === 'total'
+                    ? (
+                        <div>
+                            {currencySummaries.map(s =>
+                                renderSummaryCard(
+                                    s.currency,
+                                    s.currency,
+                                    s.net,
+                                    s.netBaseStr,
+                                    s.net * 0.1,
+                                    (s.netBase * 0.1).toFixed(2),
+                                    s.entries,
+                                )
+                            )}
+                            <div
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(6, 1fr)',
+                                    gap: '1rem',
+                                    padding: '1rem',
+                                    backgroundColor: 'var(--accent)',
+                                    color: 'white',
+                                    borderRadius: '4px',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.total') || 'Total'}</div>
+                                    <div style={{ fontSize: '1.1rem' }}>{currencies.join(' + ')}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.entries')}</div>
+                                    <div style={{ fontSize: '1.1rem' }}>{totalEntries}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>&nbsp;</div>
+                                    <div>&nbsp;</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.netInterest')} ({baseCurrency})</div>
+                                    <div style={{ fontSize: '1.1rem' }}>{totalNetBase.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>&nbsp;</div>
+                                    <div>&nbsp;</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.tax10pct')} ({baseCurrency})</div>
+                                    <div style={{ fontSize: '1.1rem' }}>{totalTaxBase.toFixed(2)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                    : currentData
+                    ? (
+                        <div>
+                            {renderSummaryCard(
+                                currentTab,
+                                currentTab,
+                                currentData.entries.reduce((s, e) => s + e.amount, 0),
+                                toBaseCcy(currentData.entries.reduce((s, e) => s + e.amount, 0), currentTab, midDate),
+                                currentData.entries.reduce((s, e) => s + e.amount, 0) * 0.1,
+                                (() => {
+                                    const nb = toBaseCcy(currentData.entries.reduce((s, e) => s + e.amount, 0), currentTab, midDate);
+                                    return nb !== '—' ? (parseFloat(nb) * 0.1).toFixed(2) : '—';
+                                })(),
+                                currentData.entries.length,
+                            )}
+                            <DataTable columns={getRevolutEntryColumns(currentTab)} data={currentData.entries} />
+                        </div>
+                    )
+                    : null}
             </div>
         );
     };

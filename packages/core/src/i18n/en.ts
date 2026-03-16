@@ -145,6 +145,7 @@ export const en = {
     'col.qty': 'Qty',
 
     // Summary labels
+    'summary.total': 'Total',
     'summary.currency': 'Currency',
     'summary.entries': 'Entries',
     'summary.netInterest': 'Net Interest',

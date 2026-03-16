@@ -145,6 +145,7 @@ export const bg = {
     'col.qty': 'Кол.',
 
     // Summary labels
+    'summary.total': 'Общо',
     'summary.currency': 'Валута',
     'summary.entries': 'Записи',
     'summary.netInterest': 'Нетна лихва',
