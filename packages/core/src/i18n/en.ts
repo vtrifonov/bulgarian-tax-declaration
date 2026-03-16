@@ -70,7 +70,7 @@ export const en = {
     'tab.sales': 'Sales',
     'tab.dividends': 'Dividends',
     'tab.stockYield': 'Lending Income',
-    'tab.ibInterest': 'IB Interest',
+    'tab.ibInterest': 'IB Lending Income',
     'tab.revolutInterest': 'Revolut Interest',
     'tab.fxRates': 'FX Rates',
 

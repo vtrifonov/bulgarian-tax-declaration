@@ -70,7 +70,7 @@ export const bg = {
     'tab.sales': 'Продажби',
     'tab.dividends': 'Дивиденти',
     'tab.stockYield': 'Заем на ценни книжа',
-    'tab.ibInterest': 'IB Лихви',
+    'tab.ibInterest': 'IB Заем на ЦК',
     'tab.revolutInterest': 'Revolut Лихва',
     'tab.fxRates': 'Валутни курсове',
 

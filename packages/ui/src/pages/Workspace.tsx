@@ -20,7 +20,7 @@ import type {
     ValidationWarning,
 } from '@bg-tax/core';
 
-type TabType = 'holdings' | 'sales' | 'dividends' | 'stockYield' | 'ibInterest' | 'revolutInterest' | 'fxRates';
+type TabType = 'holdings' | 'sales' | 'dividends' | 'ibInterest' | 'revolutInterest' | 'fxRates';
 
 // Helper to create an editable column definition
 function createEditableColumn<T extends Record<string, any>>(
@@ -147,17 +147,14 @@ export function Workspace() {
             { id: 'dividends', labelKey: 'tab.dividends', count: dividends.length, warningCount: warningsByTab['dividends'] || 0 },
         ];
         // Show only if data exists (populated from IB/Revolut import)
-        if (stockYield.length > 0) {
-            tabs.push({
-                id: 'stockYield',
-                labelKey: 'tab.stockYield',
-                count: stockYield.length,
-                warningCount: warningsByTab['stock yield'] || 0,
-                tooltip: 'IB Stock Yield Enhancement Program — income from securities lending',
-            });
-        }
         if (ibInterest.length > 0) {
-            tabs.push({ id: 'ibInterest', labelKey: 'tab.ibInterest', count: ibInterest.length, warningCount: warningsByTab['ib interest'] || 0 });
+            tabs.push({
+                id: 'ibInterest',
+                labelKey: 'tab.ibInterest',
+                count: ibInterest.length,
+                warningCount: warningsByTab['ib interest'] || 0,
+                tooltip: 'IB Stock Yield Enhancement Program — monthly interest payments for securities lending',
+            });
         }
         if (revolutInterest.length > 0) {
             tabs.push({ id: 'revolutInterest', labelKey: 'tab.revolutInterest', count: revolutInterest.length, warningCount: warningsByTab['revolut interest'] || 0 });
@@ -966,8 +963,6 @@ export function Workspace() {
                 return renderSalesContent();
             case 'dividends':
                 return renderDividendsContent();
-            case 'stockYield':
-                return renderStockYieldContent();
             case 'ibInterest':
                 return renderIbInterestContent();
             case 'revolutInterest':
