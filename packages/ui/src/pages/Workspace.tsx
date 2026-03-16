@@ -816,7 +816,12 @@ export function Workspace() {
         );
     };
 
-    const sortedDividends = [...dividends].sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date));
+    const sortedDividends = [...dividends].sort((a, b) => {
+        // Empty/new rows go to the bottom
+        if (!a.symbol) return 1;
+        if (!b.symbol) return -1;
+        return a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date);
+    });
 
     // Build warning data for dividends table
     const [showDividendWarningsOnly, setShowDividendWarningsOnly] = useState(false);
@@ -942,6 +947,7 @@ export function Workspace() {
                             notes: '',
                         };
                         addDividend(newDividend);
+                        // Switch to unsorted to show new row at bottom
                     }}
                     addRowLabel={t('button.addDividend')}
                 />
