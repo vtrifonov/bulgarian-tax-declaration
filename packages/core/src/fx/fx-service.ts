@@ -65,7 +65,8 @@ export class FxService {
         const result: Record<string, Record<string, number>> = {};
         const uniqueCurrencies = [...new Set(currencies.filter(c => c !== 'EUR' && c !== 'BGN'))];
 
-        for (const ccy of uniqueCurrencies) {
+        // Fetch all currencies in parallel
+        await Promise.all(uniqueCurrencies.map(async (ccy) => {
             let rates = await this.cache.get(ccy, year);
             if (!rates) {
                 try {
@@ -76,7 +77,7 @@ export class FxService {
                 }
             }
             result[ccy] = gapFillRates(rates, `${year}-01-01`, `${year}-12-31`);
-        }
+        }));
         return result;
     }
 }

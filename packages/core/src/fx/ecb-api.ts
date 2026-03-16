@@ -63,13 +63,14 @@ export async function fetchYearRates(
         [`${year}-07-01`, `${year}-09-30`],
         [`${year}-10-01`, `${year}-12-31`],
     ];
+    // Fetch all 4 quarters in parallel
+    const results = await Promise.allSettled(
+        quarters.map(([start, end]) => fetchEcbRates(currency, start, end)),
+    );
     const all: Record<string, number> = {};
-    for (const [start, end] of quarters) {
-        try {
-            const rates = await fetchEcbRates(currency, start, end);
-            Object.assign(all, rates);
-        } catch {
-            // Continue with other quarters if one fails
+    for (const result of results) {
+        if (result.status === 'fulfilled') {
+            Object.assign(all, result.value);
         }
     }
     return all;
