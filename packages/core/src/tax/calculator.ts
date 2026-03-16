@@ -79,12 +79,19 @@ export class TaxCalculator {
             let grossInBaseCcy = div.grossAmount;
             let whtInBaseCcy = Math.abs(div.withholdingTax);
 
-            if (div.currency !== this.baseCurrency && div.currency !== 'EUR') {
-                const rate = fxRates[div.currency]?.[div.date];
-                if (rate !== undefined) {
-                    const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
-                    grossInBaseCcy = div.grossAmount * fxRate;
-                    whtInBaseCcy = Math.abs(div.withholdingTax) * fxRate;
+            if (div.currency !== this.baseCurrency) {
+                if (div.currency === 'EUR' && this.baseCurrency === 'BGN') {
+                    // Convert EUR to BGN using fixed rate
+                    grossInBaseCcy = div.grossAmount * BGN_TO_EUR;
+                    whtInBaseCcy = Math.abs(div.withholdingTax) * BGN_TO_EUR;
+                } else if (div.currency !== 'EUR') {
+                    // Convert other currencies using ECB rates
+                    const rate = fxRates[div.currency]?.[div.date];
+                    if (rate !== undefined) {
+                        const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
+                        grossInBaseCcy = div.grossAmount * fxRate;
+                        whtInBaseCcy = Math.abs(div.withholdingTax) * fxRate;
+                    }
                 }
             }
 
@@ -113,11 +120,17 @@ export class TaxCalculator {
         for (const entry of entries) {
             let amountInBaseCcy = entry.amount;
 
-            if (entry.currency !== this.baseCurrency && entry.currency !== 'EUR') {
-                const rate = fxRates[entry.currency]?.[entry.date];
-                if (rate !== undefined) {
-                    const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
-                    amountInBaseCcy = entry.amount * fxRate;
+            if (entry.currency !== this.baseCurrency) {
+                if (entry.currency === 'EUR' && this.baseCurrency === 'BGN') {
+                    // Convert EUR to BGN using fixed rate
+                    amountInBaseCcy = entry.amount * BGN_TO_EUR;
+                } else if (entry.currency !== 'EUR') {
+                    // Convert other currencies using ECB rates
+                    const rate = fxRates[entry.currency]?.[entry.date];
+                    if (rate !== undefined) {
+                        const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
+                        amountInBaseCcy = entry.amount * fxRate;
+                    }
                 }
             }
 

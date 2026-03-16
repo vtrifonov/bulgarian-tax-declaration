@@ -57,4 +57,25 @@ export const en = {
     'ui.save': 'Save',
     'ui.undo': 'Undo',
     'ui.redo': 'Redo',
+
+    // App title and pages
+    'app.title': 'Tax Declaration',
+    'page.setup': 'Setup',
+    'page.import': 'Import',
+    'page.workspace': 'Workspace',
+    'page.declaration': 'Declaration',
+
+    // Tab labels
+    'tab.holdings': 'Holdings',
+    'tab.sales': 'Sales',
+    'tab.dividends': 'Dividends',
+    'tab.stockYield': 'Stock Yield',
+    'tab.ibInterest': 'IB Interest',
+    'tab.revolutInterest': 'Revolut Interest',
+    'tab.fxRates': 'FX Rates',
+
+    // Button labels
+    'button.continue': 'Continue',
+    'button.export': 'Export Excel',
+    'button.reset': 'Reset All Data',
 };

@@ -15,14 +15,18 @@ import { YearSetup } from './pages/YearSetup';
 import { Import } from './pages/Import';
 import { Workspace } from './pages/Workspace';
 import { Declaration } from './pages/Declaration';
-import { generateExcel } from '@bg-tax/core';
+import {
+    generateExcel,
+    setLanguage as setCoreLanguage,
+    t,
+} from '@bg-tax/core';
 import './App.css';
 
 const steps = [
-    { path: '/', label: 'Setup', name: 'setup' },
-    { path: '/import', label: 'Import', name: 'import' },
-    { path: '/workspace', label: 'Workspace', name: 'workspace' },
-    { path: '/declaration', label: 'Declaration', name: 'declaration' },
+    { path: '/', labelKey: 'page.setup', name: 'setup' },
+    { path: '/import', labelKey: 'page.import', name: 'import' },
+    { path: '/workspace', labelKey: 'page.workspace', name: 'workspace' },
+    { path: '/declaration', labelKey: 'page.declaration', name: 'declaration' },
 ];
 
 function Layout() {
@@ -45,7 +49,10 @@ function Layout() {
             if (saved.revolutInterest) store.importRevolutInterest(saved.revolutInterest as any);
             if (saved.fxRates) store.setFxRates(saved.fxRates as any);
             if (saved.taxYear) store.setTaxYear(saved.taxYear as number);
-            if (saved.language) store.setLanguage(saved.language as 'en' | 'bg');
+            if (saved.language) {
+                store.setLanguage(saved.language as 'en' | 'bg');
+                setCoreLanguage(saved.language as 'en' | 'bg');
+            }
         }
     }, []);
 
@@ -79,6 +86,12 @@ function Layout() {
 
     const currentStepIndex = steps.findIndex((step) => step.path === location.pathname);
 
+    const handleLanguageToggle = () => {
+        const newLanguage = language === 'en' ? 'bg' : 'en';
+        setLanguage(newLanguage);
+        setCoreLanguage(newLanguage);
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <nav
@@ -91,7 +104,7 @@ function Layout() {
                     alignItems: 'center',
                 }}
             >
-                <h2 style={{ margin: 0 }}>Bulgarian Tax Declaration</h2>
+                <h2 style={{ margin: 0 }}>{t('app.title')}</h2>
 
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -108,13 +121,13 @@ function Layout() {
                                     borderRadius: '4px',
                                 }}
                             >
-                                {step.label}
+                                {t(step.labelKey)}
                             </Link>
                         ))}
                     </div>
 
                     <button
-                        onClick={() => setLanguage(language === 'en' ? 'bg' : 'en')}
+                        onClick={handleLanguageToggle}
                         style={{
                             padding: '0.5rem 1rem',
                             backgroundColor: language === 'bg' ? '#28a745' : 'var(--bg)',

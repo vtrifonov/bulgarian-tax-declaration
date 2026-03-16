@@ -4,7 +4,10 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
-import { importHoldingsFromExcel } from '@bg-tax/core';
+import {
+    importHoldingsFromExcel,
+    t,
+} from '@bg-tax/core';
 import type { AppState } from '@bg-tax/core';
 
 type ImportOption = 'none' | 'json' | 'excel' | 'fresh';
@@ -58,7 +61,7 @@ export function YearSetup() {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '600px' }}>
-            <h1>Year Setup</h1>
+            <h1>{t('page.setup')}</h1>
 
             <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
@@ -203,7 +206,7 @@ export function YearSetup() {
                     cursor: 'pointer',
                 }}
             >
-                Continue to Import
+                {t('button.continue')}
             </button>
 
             <button
@@ -227,7 +230,7 @@ export function YearSetup() {
                     marginLeft: '1rem',
                 }}
             >
-                Reset All Data
+                {t('button.reset')}
             </button>
         </div>
     );

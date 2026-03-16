@@ -1,5 +1,12 @@
-import { useState } from 'react';
+import {
+    useMemo,
+    useState,
+} from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import {
+    t,
+    validate,
+} from '@bg-tax/core';
 import { useAppStore } from '../store/app-state';
 import { DataTable } from '../components/DataTable';
 import type {
@@ -10,6 +17,7 @@ import type {
     RevolutInterestEntry,
     Sale,
     StockYieldEntry,
+    ValidationWarning,
 } from '@bg-tax/core';
 
 type TabType = 'holdings' | 'sales' | 'dividends' | 'stockYield' | 'ibInterest' | 'revolutInterest' | 'fxRates';
@@ -68,6 +76,7 @@ export function Workspace() {
     const [activeTab, setActiveTab] = useState<TabType>('holdings');
     const [fxTab, setFxTab] = useState<string | null>(null);
     const [revolutTab, setRevolutTab] = useState<string | null>(null);
+    const [showWarnings, setShowWarnings] = useState(false);
 
     const {
         holdings,
@@ -78,6 +87,8 @@ export function Workspace() {
         revolutInterest,
         fxRates,
         baseCurrency,
+        taxYear,
+        language,
         updateHolding,
         deleteHolding,
         addHolding,
@@ -98,25 +109,53 @@ export function Workspace() {
         addRevolutInterest,
     } = useAppStore();
 
+    // Compute validation warnings
+    const warnings: ValidationWarning[] = useMemo(() => {
+        const appState = {
+            taxYear,
+            baseCurrency,
+            language,
+            holdings,
+            sales,
+            dividends,
+            stockYield,
+            ibInterest,
+            revolutInterest,
+            fxRates,
+            manualEntries: [],
+        };
+        return validate(appState);
+    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, ibInterest, revolutInterest, fxRates]);
+
     const getTabs = () => {
+        // Count warnings per tab
+        const warningsByTab = warnings.reduce(
+            (acc, warning) => {
+                const normalizedTab = warning.tab.toLowerCase();
+                acc[normalizedTab] = (acc[normalizedTab] || 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>,
+        );
+
         // Always show: Holdings, Sales, Dividends (user can fill manually)
         const tabs = [
-            { id: 'holdings', label: 'Holdings', count: holdings.length },
-            { id: 'sales', label: 'Sales', count: sales.length },
-            { id: 'dividends', label: 'Dividends', count: dividends.length },
+            { id: 'holdings', labelKey: 'tab.holdings', count: holdings.length, warningCount: warningsByTab['holdings'] || 0 },
+            { id: 'sales', labelKey: 'tab.sales', count: sales.length, warningCount: warningsByTab['sales'] || 0 },
+            { id: 'dividends', labelKey: 'tab.dividends', count: dividends.length, warningCount: warningsByTab['dividends'] || 0 },
         ];
         // Show only if data exists (populated from IB/Revolut import)
         if (stockYield.length > 0) {
-            tabs.push({ id: 'stockYield', label: 'Stock Yield', count: stockYield.length });
+            tabs.push({ id: 'stockYield', labelKey: 'tab.stockYield', count: stockYield.length, warningCount: warningsByTab['stock yield'] || 0 });
         }
         if (ibInterest.length > 0) {
-            tabs.push({ id: 'ibInterest', label: 'IB Interest', count: ibInterest.length });
+            tabs.push({ id: 'ibInterest', labelKey: 'tab.ibInterest', count: ibInterest.length, warningCount: warningsByTab['ib interest'] || 0 });
         }
         if (revolutInterest.length > 0) {
-            tabs.push({ id: 'revolutInterest', label: 'Revolut Interest', count: revolutInterest.length });
+            tabs.push({ id: 'revolutInterest', labelKey: 'tab.revolutInterest', count: revolutInterest.length, warningCount: warningsByTab['revolut interest'] || 0 });
         }
         if (Object.keys(fxRates).length > 0) {
-            tabs.push({ id: 'fxRates', label: 'FX Rates', count: Object.keys(fxRates).length });
+            tabs.push({ id: 'fxRates', labelKey: 'tab.fxRates', count: Object.keys(fxRates).length, warningCount: warningsByTab['fx rates'] || 0 });
         }
         return tabs;
     };
@@ -848,7 +887,7 @@ export function Workspace() {
             },
             {
                 accessorKey: 'rate',
-                header: 'Rate (to BGN)',
+                header: `Rate (to ${baseCurrency})`,
                 cell: (info) => (info.getValue() as number).toFixed(6),
                 meta: { align: 'right' },
             },
@@ -901,11 +940,46 @@ export function Workspace() {
         }
     };
 
+    const tabs = getTabs();
+
     return (
         <div style={{ padding: '2rem' }}>
-            <h1>Workspace</h1>
+            <h1>{t('page.workspace')}</h1>
+
+            {/* Warnings Panel */}
+            {warnings.length > 0 && (
+                <div
+                    style={{
+                        marginBottom: '2rem',
+                        padding: '1rem',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                    }}
+                    onClick={() => setShowWarnings(!showWarnings)}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600 }}>Validation Warnings ({warnings.length})</span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            {showWarnings ? '▼' : '▶'}
+                        </span>
+                    </div>
+                    {showWarnings && (
+                        <div style={{ marginTop: '1rem' }}>
+                            {warnings.map((warning, idx) => (
+                                <div key={idx} style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    <strong>[{warning.tab}]</strong> {warning.message}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Tabs */}
             <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
-                {getTabs().map((tab) => (
+                {tabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as TabType)}
@@ -916,12 +990,33 @@ export function Workspace() {
                             color: activeTab === tab.id ? 'white' : 'var(--text)',
                             border: 'none',
                             cursor: 'pointer',
+                            position: 'relative',
                         }}
                     >
-                        {tab.label} ({tab.count})
+                        {t(tab.labelKey)} ({tab.count})
+                        {tab.warningCount > 0 && (
+                            <span
+                                style={{
+                                    display: 'inline-block',
+                                    marginLeft: '0.5rem',
+                                    backgroundColor: '#ff6b6b',
+                                    color: 'white',
+                                    borderRadius: '50%',
+                                    width: '20px',
+                                    height: '20px',
+                                    textAlign: 'center',
+                                    fontSize: '0.75rem',
+                                    lineHeight: '20px',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {tab.warningCount}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
+
             <div>{renderContent()}</div>
         </div>
     );

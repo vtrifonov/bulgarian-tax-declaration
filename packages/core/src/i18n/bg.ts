@@ -57,4 +57,25 @@ export const bg = {
     'ui.save': 'Запази',
     'ui.undo': 'Отмени',
     'ui.redo': 'Повтори',
+
+    // App title and pages
+    'app.title': 'Данъчна декларация',
+    'page.setup': 'Настройка',
+    'page.import': 'Импорт',
+    'page.workspace': 'Работно пространство',
+    'page.declaration': 'Декларация',
+
+    // Tab labels
+    'tab.holdings': 'Притежания',
+    'tab.sales': 'Продажби',
+    'tab.dividends': 'Дивиденти',
+    'tab.stockYield': 'Доходи от ценни книжа',
+    'tab.ibInterest': 'IB Лихви',
+    'tab.revolutInterest': 'Revolut Лихва',
+    'tab.fxRates': 'Валутни курсове',
+
+    // Button labels
+    'button.continue': 'Продължи',
+    'button.export': 'Експорт Excel',
+    'button.reset': 'Изчисти данните',
 };

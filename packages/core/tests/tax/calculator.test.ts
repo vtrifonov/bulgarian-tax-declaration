@@ -211,4 +211,47 @@ describe('TaxCalculator', () => {
         const result = calc.calcRevolutInterest([]);
         expect(result).toHaveLength(0);
     });
+
+    it('calculates EUR dividend tax with BGN base currency', () => {
+        const dividends: Dividend[] = [
+            {
+                symbol: 'ASML',
+                country: 'Нидерландия',
+                date: '2025-03-15',
+                currency: 'EUR',
+                grossAmount: 10.64,
+                withholdingTax: -1.596, // 15% NL WHT
+                bgTaxDue: 0,
+                whtCredit: 0,
+            },
+        ];
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcDividendsTax(dividends, {});
+        // EUR amounts should be multiplied by 1.95583
+        // Gross: 10.64 × 1.95583 ≈ 20.81 BGN
+        // WHT: 1.596 × 1.95583 ≈ 3.12 BGN
+        // BG tax (5%) = 20.81 × 0.05 ≈ 1.04, WHT credit = min(3.12, 1.04) = 1.04
+        expect(result.totalGross).toBeCloseTo(20.81, 1);
+        expect(result.totalWht).toBeCloseTo(3.12, 1);
+        expect(result.totalBgTax).toBe(0);
+        expect(result.totalWhtCredit).toBeCloseTo(1.04, 1);
+    });
+
+    it('calculates EUR stock yield tax with BGN base currency', () => {
+        const entries: StockYieldEntry[] = [
+            {
+                symbol: 'TEST',
+                date: '2025-02-15',
+                currency: 'EUR',
+                amount: 25.50,
+            },
+        ];
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcStockYieldTax(entries, {});
+        // EUR amount should be multiplied by 1.95583
+        // Amount: 25.50 × 1.95583 ≈ 49.87 BGN
+        // Tax (10%) = 49.87 × 0.10 ≈ 4.99
+        expect(result.totalGross).toBeCloseTo(49.87, 1);
+        expect(result.totalTax).toBeCloseTo(4.99, 1);
+    });
 });

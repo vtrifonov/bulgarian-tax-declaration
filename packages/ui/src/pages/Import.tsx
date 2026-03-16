@@ -15,6 +15,7 @@ import {
     parseIBCsv,
     parseRevolutCsv,
     resolveCountry,
+    t,
 } from '@bg-tax/core';
 import type {
     IBParsedData,
@@ -102,6 +103,22 @@ export function Import() {
             if (fileType === 'ib') {
                 const parsed: IBParsedData = parseIBCsv(content);
 
+                // Check for duplicate IB holdings
+                const duplicateHoldings: Set<string> = new Set();
+                for (const trade of parsed.trades) {
+                    const tradeDate = trade.dateTime.split(' ')[0]; // Extract YYYY-MM-DD from "YYYY-MM-DD HH:MM:SS"
+                    for (const existingHolding of holdings) {
+                        if (
+                            existingHolding.broker === 'IB'
+                            && existingHolding.symbol === trade.symbol
+                            && existingHolding.dateAcquired === tradeDate
+                            && existingHolding.quantity === Math.abs(trade.quantity)
+                        ) {
+                            duplicateHoldings.add(`${trade.symbol}-${tradeDate}-${trade.quantity}`);
+                        }
+                    }
+                }
+
                 // Match WHT to dividends
                 const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
                 const allDividends = [...matched, ...unmatched];
@@ -135,17 +152,32 @@ export function Import() {
                 const buys = parsed.trades.filter(t => t.quantity > 0).length;
                 const sells = parsed.trades.filter(t => t.quantity < 0).length;
                 const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
+                const dupMsg = duplicateHoldings.size > 0 ? ` [WARNING: ${duplicateHoldings.size} potential duplicate holdings detected]` : '';
 
                 setImportedFiles(prev => [...prev, {
                     name: file.name,
                     type: 'ib',
                     status: 'success',
                     message:
-                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}`,
+                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}${dupMsg}`,
                 }]);
             } else {
                 const revolut: RevolutInterest = parseRevolutCsv(content);
                 const existing = useAppStore.getState().revolutInterest;
+
+                // Check for duplicate Revolut currency
+                const isDuplicate = existing.some(r => r.currency === revolut.currency);
+
+                if (isDuplicate) {
+                    setImportedFiles(prev => [...prev, {
+                        name: file.name,
+                        type: 'revolut',
+                        status: 'error',
+                        message: `This file appears to already be imported (${revolut.currency} already exists). Skipping to prevent duplicates.`,
+                    }]);
+                    return;
+                }
+
                 importRevolutInterest([...existing, revolut]);
 
                 const netInterest = revolut.entries.reduce((sum, e) => sum + e.amount, 0);
@@ -212,7 +244,7 @@ export function Import() {
 
     return (
         <div style={{ padding: '2rem' }}>
-            <h1>Data Import</h1>
+            <h1>{t('page.import')}</h1>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'start' }}>
                 {/* Left column: drop zone + files + continue */}
@@ -392,7 +424,7 @@ export function Import() {
                             opacity: fetchingFx ? 0.7 : 1,
                         }}
                     >
-                        {fetchingFx ? 'Fetching FX rates...' : 'Continue to Workspace'}
+                        {fetchingFx ? 'Fetching FX rates...' : t('button.continue')}
                     </button>
                 </div>
 

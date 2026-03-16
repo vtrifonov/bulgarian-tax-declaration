@@ -1,6 +1,7 @@
 import {
     generateExcel,
     mapToDeclaration,
+    t,
     TaxCalculator,
 } from '@bg-tax/core';
 import { useAppStore } from '../store/app-state';
@@ -109,7 +110,7 @@ export function Declaration() {
                     marginBottom: '2rem',
                 }}
             >
-                <h1>Declaration Guide</h1>
+                <h1>{t('page.declaration')}</h1>
                 <button
                     onClick={handleExportExcel}
                     style={{
@@ -123,7 +124,7 @@ export function Declaration() {
                         fontWeight: 500,
                     }}
                 >
-                    Export Excel
+                    {t('button.export')}
                 </button>
             </div>
 
