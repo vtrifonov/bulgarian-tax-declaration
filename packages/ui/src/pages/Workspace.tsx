@@ -979,7 +979,7 @@ export function Workspace() {
             totalInterestBase += amount;
         });
 
-        const totalTax = totalInterest * 0.1;
+        const totalTax = totalInterestBase * 0.1;
 
         const footerRow: Record<string, string> = {
             date: t('summary.total'),
