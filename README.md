@@ -1,5 +1,11 @@
 # Bulgarian Tax Declaration (Данъчна декларация)
 
+**[Open the app](https://vtrifonov.github.io/bulgarian-tax-declaration/)** — hosted version, runs entirely in your browser.
+
+> **Privacy:** All data stays on your machine. Nothing is sent to any server — everything is stored in your browser's local storage. No analytics, no tracking.
+>
+> **Access:** The app requires a Google login. To get access, contact **Vasil Trifonov** ([v.trifonov@gmail.com](mailto:v.trifonov@gmail.com)).
+
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
 Parses Interactive Brokers and Revolut savings statements, calculates Bulgarian taxes using FIFO lot matching, and exports a formatted Excel declaration.
