@@ -32,6 +32,8 @@ export interface DataTableProps<TData> {
     showWarningsOnly?: boolean;
     onToggleWarningsOnly?: () => void;
     warningCount?: number;
+    /** Footer row with totals — maps column accessor key or id to display value */
+    footerRow?: Record<string, string>;
 }
 
 export function DataTable<TData extends Record<string, any>>({
@@ -44,6 +46,7 @@ export function DataTable<TData extends Record<string, any>>({
     showWarningsOnly = false,
     onToggleWarningsOnly,
     warningCount = 0,
+    footerRow,
 }: DataTableProps<TData>) {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(
@@ -222,6 +225,26 @@ export function DataTable<TData extends Record<string, any>>({
                         );
                     })}
                 </tbody>
+                {footerRow && (
+                    <tfoot>
+                        <tr className='footer-row'>
+                            {table.getAllColumns().map((col) => {
+                                const key = col.id || (col.columnDef as any).accessorKey;
+                                const value = footerRow[key];
+                                const meta = col.columnDef.meta;
+                                return (
+                                    <td
+                                        key={col.id}
+                                        className={meta?.align === 'right' ? 'align-right' : ''}
+                                        style={{ fontWeight: 700 }}
+                                    >
+                                        {value ?? ''}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    </tfoot>
+                )}
             </table>
 
             {onAddRow && (

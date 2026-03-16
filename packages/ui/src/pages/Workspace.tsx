@@ -673,27 +673,53 @@ export function Workspace() {
         },
     ];
 
-    const renderHoldingsContent = () => (
-        <DataTable
-            columns={holdingsColumns}
-            data={holdings}
-            onAddRow={() => {
-                const newHolding: Holding = {
-                    id: `holding-${Date.now()}`,
-                    broker: '',
-                    country: '',
-                    symbol: '',
-                    dateAcquired: new Date().toISOString().split('T')[0],
-                    quantity: 0,
-                    currency: 'USD',
-                    unitPrice: 0,
-                    notes: '',
-                };
-                addHolding(newHolding);
-            }}
-            addRowLabel={t('button.addHolding')}
-        />
-    );
+    const renderHoldingsContent = () => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+
+        // Calculate footer sums for holdings
+        let totalQuantity = 0;
+        let totalInCcy = 0;
+        let totalInBase = 0;
+
+        holdings.forEach(holding => {
+            totalQuantity += holding.quantity;
+            const cyyTotal = holding.quantity * holding.unitPrice;
+            totalInCcy += cyyTotal;
+            const baseStr = toBaseCcy(cyyTotal, holding.currency, holding.dateAcquired);
+            const baseNum = baseStr !== '—' ? parseFloat(baseStr) : 0;
+            totalInBase += baseNum;
+        });
+
+        const footerRow: Record<string, string> = {
+            broker: t('summary.total'),
+            quantity: totalQuantity.toFixed(2),
+            totalCcy: totalInCcy.toFixed(2),
+            totalBase: totalInBase.toFixed(2),
+        };
+
+        return (
+            <DataTable
+                columns={holdingsColumns}
+                data={holdings}
+                footerRow={footerRow}
+                onAddRow={() => {
+                    const newHolding: Holding = {
+                        id: `holding-${Date.now()}`,
+                        broker: '',
+                        country: '',
+                        symbol: '',
+                        dateAcquired: new Date().toISOString().split('T')[0],
+                        quantity: 0,
+                        currency: 'USD',
+                        unitPrice: 0,
+                        notes: '',
+                    };
+                    addHolding(newHolding);
+                }}
+                addRowLabel={t('button.addHolding')}
+            />
+        );
+    };
 
     const renderSalesContent = () => {
         const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
@@ -703,6 +729,7 @@ export function Workspace() {
         let totalCost = 0;
         let totalProfit = 0;
         let totalTax = 0;
+        let totalQuantity = 0;
 
         sales.forEach(sale => {
             const proceedsStr = toBaseCcy(sale.quantity * sale.sellPrice, sale.currency, sale.dateSold);
@@ -712,11 +739,20 @@ export function Workspace() {
             const cost = costStr !== '—' ? parseFloat(costStr) : 0;
             const profit = proceeds - cost;
 
+            totalQuantity += sale.quantity;
             totalProceeds += proceeds;
             totalCost += cost;
             totalProfit += profit;
             totalTax += profit > 0 ? profit * 0.1 : 0;
         });
+
+        const footerRow: Record<string, string> = {
+            broker: t('summary.total'),
+            quantity: totalQuantity.toFixed(2),
+            proceedsBase: totalProceeds.toFixed(2),
+            costBase: totalCost.toFixed(2),
+            plBase: totalProfit.toFixed(2),
+        };
 
         return (
             <div>
@@ -756,6 +792,7 @@ export function Workspace() {
                 <DataTable
                     columns={salesColumns}
                     data={sales}
+                    footerRow={footerRow}
                     onAddRow={() => {
                         const newSale: Sale = {
                             id: `sale-${Date.now()}`,
@@ -810,24 +847,28 @@ export function Workspace() {
     const renderDividendsContent = () => {
         const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
 
-        // Calculate summary totals
-        let totalGross = 0;
-        let totalWht = 0;
-        let totalTax = 0;
-        let totalWhtCredit = 0;
+        // Calculate summary totals — all in base currency
+        let totalGrossBase = 0;
+        let totalWhtBase = 0;
 
         dividends.forEach(dividend => {
             const grossStr = toBaseCcy(dividend.grossAmount, dividend.currency, dividend.date);
             const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
-
-            const gross = grossStr !== '—' ? parseFloat(grossStr) : 0;
-            const wht = whtStr !== '—' ? parseFloat(whtStr) : 0;
-
-            totalGross += gross;
-            totalWht += wht;
-            totalTax += dividend.bgTaxDue;
-            totalWhtCredit += dividend.whtCredit;
+            totalGrossBase += grossStr !== '—' ? parseFloat(grossStr) : 0;
+            totalWhtBase += whtStr !== '—' ? parseFloat(whtStr) : 0;
         });
+
+        const totalTax5pct = totalGrossBase * 0.05;
+        const totalWhtCredit = Math.min(totalWhtBase, totalTax5pct);
+        const totalBgTaxDue = Math.max(0, totalTax5pct - totalWhtBase);
+
+        const footerRow: Record<string, string> = {
+            symbol: t('summary.total'),
+            grossBase: totalGrossBase.toFixed(2),
+            whtBase: totalWhtBase.toFixed(2),
+            tax5pct: totalTax5pct.toFixed(2),
+            bgTaxDue: totalBgTaxDue.toFixed(2),
+        };
 
         return (
             <div>
@@ -844,29 +885,33 @@ export function Workspace() {
                 >
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalGross')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalGross.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalGrossBase.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalWht')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWht.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWhtBase.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax5pct')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax5pct.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalWhtCredit')} ({baseCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWhtCredit.toFixed(2)}</div>
                     </div>
                     <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>BG Tax Due ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalBgTaxDue.toFixed(2)}</div>
+                    </div>
+                    <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.count')}</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{dividends.length}</div>
                     </div>
-                    <div />
                 </div>
                 <DataTable
                     columns={dividendsColumns}
                     data={sortedDividends}
+                    footerRow={footerRow}
                     warningRows={dividendWarningRows.rows}
                     warningMessages={dividendWarningRows.messages}
                     warningCount={dividendWarningRows.rows.size}
@@ -914,13 +959,21 @@ export function Workspace() {
 
         // Calculate summary totals
         let totalInterest = 0;
+        let totalInterestBase = 0;
         ibInterest.forEach(entry => {
+            totalInterest += entry.amount;
             const amountStr = toBaseCcy(entry.amount, entry.currency, entry.date);
             const amount = amountStr !== '—' ? parseFloat(amountStr) : 0;
-            totalInterest += amount;
+            totalInterestBase += amount;
         });
 
         const totalTax = totalInterest * 0.1;
+
+        const footerRow: Record<string, string> = {
+            date: t('summary.total'),
+            amount: totalInterest.toFixed(2),
+            amountBase: totalInterestBase.toFixed(2),
+        };
 
         return (
             <div>
@@ -937,7 +990,7 @@ export function Workspace() {
                 >
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalInterest')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalInterest.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalInterestBase.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
@@ -954,6 +1007,7 @@ export function Workspace() {
                 <DataTable
                     columns={ibInterestColumns}
                     data={ibInterest}
+                    footerRow={footerRow}
                     onAddRow={() => {
                         const newEntry: IBInterestEntry = {
                             date: new Date().toISOString().split('T')[0],
@@ -1140,7 +1194,16 @@ export function Workspace() {
                                 })(),
                                 currentData.entries.length,
                             )}
-                            <DataTable columns={getRevolutEntryColumns(currentTab)} data={currentData.entries} />
+                            {(() => {
+                                const totalAmount = currentData.entries.reduce((s, e) => s + e.amount, 0);
+                                const totalAmountBase = toBaseCcy(totalAmount, currentTab, midDate);
+                                const footerRow: Record<string, string> = {
+                                    date: t('summary.total'),
+                                    amount: totalAmount.toFixed(2),
+                                    amountBase: totalAmountBase,
+                                };
+                                return <DataTable columns={getRevolutEntryColumns(currentTab)} data={currentData.entries} footerRow={footerRow} />;
+                            })()}
                         </div>
                     )
                     : null}

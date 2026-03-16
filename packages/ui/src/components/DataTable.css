@@ -123,6 +123,18 @@
     position: relative;
 }
 
+.data-table tfoot .footer-row {
+    background: var(--bg-secondary);
+    border-top: 2px solid var(--border);
+}
+
+.data-table tfoot .footer-row td {
+    padding: 0.75rem;
+    border-right: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 700;
+}
+
 .edit-input {
     width: 100%;
     padding: 0.5rem;
