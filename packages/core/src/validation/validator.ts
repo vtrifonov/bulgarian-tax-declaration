@@ -13,18 +13,22 @@ export function validate(state: AppState): ValidationWarning[] {
 
 function checkUnmatchedWht(state: AppState): ValidationWarning[] {
     return (state.dividends ?? [])
-        .filter(d => d.grossAmount === 0 && d.withholdingTax !== 0)
-        .map(d => ({
+        .map((d, idx) => ({ d, idx }))
+        .filter(({ d }) => d.grossAmount === 0 && d.withholdingTax !== 0)
+        .map(({ d, idx }) => ({
             type: 'unmatched-wht' as const,
             message: `Unmatched WHT for ${d.symbol} on ${d.date}: ${d.withholdingTax}`,
             tab: 'Dividends',
+            rowId: `dividend-${idx}`,
+            rowIndex: idx,
         }));
 }
 
 function checkMissingFx(state: AppState): ValidationWarning[] {
-    if (state.baseCurrency === 'EUR') return []; // EUR dividends don't need FX
+    if (state.baseCurrency === 'EUR') return [];
     const warnings: ValidationWarning[] = [];
-    for (const d of state.dividends ?? []) {
+    for (let i = 0; i < (state.dividends ?? []).length; i++) {
+        const d = state.dividends[i];
         if (d.currency !== state.baseCurrency && d.currency !== 'EUR') {
             const rate = state.fxRates?.[d.currency]?.[d.date];
             if (rate === undefined) {
@@ -32,6 +36,8 @@ function checkMissingFx(state: AppState): ValidationWarning[] {
                     type: 'missing-fx',
                     message: `Missing FX rate for ${d.currency} on ${d.date}`,
                     tab: 'Dividends',
+                    rowId: `dividend-${i}`,
+                    rowIndex: i,
                 });
             }
         }
@@ -42,10 +48,13 @@ function checkMissingFx(state: AppState): ValidationWarning[] {
 function checkYearMismatch(state: AppState): ValidationWarning[] {
     const year = String(state.taxYear);
     return (state.dividends ?? [])
-        .filter(d => !d.date.startsWith(year))
-        .map(d => ({
+        .map((d, idx) => ({ d, idx }))
+        .filter(({ d }) => !d.date.startsWith(year))
+        .map(({ d, idx }) => ({
             type: 'year-mismatch' as const,
             message: `${d.symbol} dividend on ${d.date} is outside tax year ${state.taxYear}`,
             tab: 'Dividends',
+            rowId: `dividend-${idx}`,
+            rowIndex: idx,
         }));
 }

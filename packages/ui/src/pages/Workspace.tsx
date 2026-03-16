@@ -719,10 +719,41 @@ export function Workspace() {
 
     const sortedDividends = [...dividends].sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date));
 
+    // Build warning data for dividends table
+    const [showDividendWarningsOnly, setShowDividendWarningsOnly] = useState(false);
+    const dividendWarningRows = useMemo(() => {
+        const divWarnings = warnings.filter(w => w.tab === 'Dividends' && w.rowIndex !== undefined);
+        const rows = new Set<number>();
+        const messages = new Map<number, string[]>();
+
+        // Map original indices to sorted indices
+        const originalToSorted = new Map<number, number>();
+        sortedDividends.forEach((sd, sortedIdx) => {
+            const origIdx = dividends.indexOf(sd);
+            if (origIdx >= 0) originalToSorted.set(origIdx, sortedIdx);
+        });
+
+        for (const w of divWarnings) {
+            const sortedIdx = originalToSorted.get(w.rowIndex!);
+            if (sortedIdx !== undefined) {
+                rows.add(sortedIdx);
+                const msgs = messages.get(sortedIdx) ?? [];
+                msgs.push(w.message);
+                messages.set(sortedIdx, msgs);
+            }
+        }
+        return { rows, messages };
+    }, [warnings, sortedDividends, dividends]);
+
     const renderDividendsContent = () => (
         <DataTable
             columns={dividendsColumns}
             data={sortedDividends}
+            warningRows={dividendWarningRows.rows}
+            warningMessages={dividendWarningRows.messages}
+            warningCount={dividendWarningRows.rows.size}
+            showWarningsOnly={showDividendWarningsOnly}
+            onToggleWarningsOnly={() => setShowDividendWarningsOnly(!showDividendWarningsOnly)}
             onAddRow={() => {
                 const newDividend: Dividend = {
                     symbol: '',

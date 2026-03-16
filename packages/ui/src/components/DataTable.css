@@ -85,6 +85,15 @@
     background-color: var(--drop-bg);
 }
 
+.data-table tbody tr.warning-row {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    border-left: 3px solid #dc3545;
+}
+
+.data-table tbody tr.warning-row:hover {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+}
+
 .data-table td {
     padding: 0.75rem;
     border-right: 1px solid var(--border);

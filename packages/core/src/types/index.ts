@@ -84,6 +84,7 @@ export interface ValidationWarning {
     message: string;
     tab: string;
     rowId?: string;
+    rowIndex?: number;
 }
 
 /** IB cash interest entry (SYEP interest, debit interest, etc.) */

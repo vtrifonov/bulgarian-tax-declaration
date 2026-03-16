@@ -23,6 +23,14 @@ export interface DataTableProps<TData> {
     data: TData[];
     onAddRow?: () => void;
     addRowLabel?: string;
+    /** Row indices that have warnings — these rows get highlighted */
+    warningRows?: Set<number>;
+    /** Warning messages per row index */
+    warningMessages?: Map<number, string[]>;
+    /** Whether to show only warning rows */
+    showWarningsOnly?: boolean;
+    onToggleWarningsOnly?: () => void;
+    warningCount?: number;
 }
 
 export function DataTable<TData extends Record<string, any>>({
@@ -30,6 +38,11 @@ export function DataTable<TData extends Record<string, any>>({
     data,
     onAddRow,
     addRowLabel = 'Add Row',
+    warningRows,
+    warningMessages,
+    showWarningsOnly = false,
+    onToggleWarningsOnly,
+    warningCount = 0,
 }: DataTableProps<TData>) {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(
@@ -83,8 +96,32 @@ export function DataTable<TData extends Record<string, any>>({
         }
     };
 
+    const filteredRows = table.getRowModel().rows.filter((_, idx) => {
+        if (!showWarningsOnly) return true;
+        return warningRows?.has(idx) ?? false;
+    });
+
     return (
         <div className='data-table-container'>
+            {warningCount > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                    <button
+                        onClick={onToggleWarningsOnly}
+                        style={{
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '12px',
+                            fontSize: '0.8rem',
+                            border: '1px solid',
+                            borderColor: showWarningsOnly ? '#dc3545' : 'var(--border)',
+                            backgroundColor: showWarningsOnly ? '#dc3545' : 'transparent',
+                            color: showWarningsOnly ? 'white' : 'var(--text-secondary)',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {showWarningsOnly ? `Showing ${warningCount} warnings` : `${warningCount} warnings`}
+                    </button>
+                </div>
+            )}
             <table className='data-table'>
                 <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
@@ -122,58 +159,67 @@ export function DataTable<TData extends Record<string, any>>({
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map((row, rowIndex) => (
-                        <tr key={row.id} className={rowIndex % 2 === 0 ? 'even' : 'odd'}>
-                            {row.getVisibleCells().map((cell) => {
-                                const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === cell.column.id;
-                                const isDeleteColumn = cell.column.id === 'delete';
-                                const meta = cell.column.columnDef.meta;
+                    {filteredRows.map((row) => {
+                        const rowIndex = row.index;
+                        const hasWarning = warningRows?.has(rowIndex) ?? false;
+                        const rowWarnings = warningMessages?.get(rowIndex);
+                        return (
+                            <tr
+                                key={row.id}
+                                className={`${rowIndex % 2 === 0 ? 'even' : 'odd'} ${hasWarning ? 'warning-row' : ''}`}
+                                title={hasWarning && rowWarnings ? rowWarnings.join('\n') : undefined}
+                            >
+                                {row.getVisibleCells().map((cell) => {
+                                    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === cell.column.id;
+                                    const isDeleteColumn = cell.column.id === 'delete';
+                                    const meta = cell.column.columnDef.meta;
 
-                                return (
-                                    <td
-                                        key={cell.id}
-                                        className={`
+                                    return (
+                                        <td
+                                            key={cell.id}
+                                            className={`
                       cell
                       ${isDeleteColumn ? 'delete-cell' : ''}
                       ${
-                                            meta?.align === 'right'
-                                                ? 'align-right'
-                                                : ''
-                                        }
-                      ${
-                                            meta?.align === 'center'
-                                                ? 'align-center'
-                                                : ''
-                                        }
-                    `}
-                                        onDoubleClick={() => {
-                                            if (!isDeleteColumn && meta?.editable !== false) {
-                                                handleCellDoubleClick(rowIndex, cell.column.id, cell.getValue());
+                                                meta?.align === 'right'
+                                                    ? 'align-right'
+                                                    : ''
                                             }
-                                        }}
-                                    >
-                                        {isEditing
-                                            ? (
-                                                <input
-                                                    autoFocus
-                                                    type='text'
-                                                    value={editValue}
-                                                    onChange={(e) => setEditValue(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        handleKeyDown(e, rowIndex, cell.column.id, meta?.onSave);
-                                                    }}
-                                                    onBlur={() => handleCancelEdit()}
-                                                    className='edit-input'
-                                                />
-                                            )
-                                            : (
-                                                flexRender(cell.column.columnDef.cell, cell.getContext())
-                                            )}
-                                    </td>
-                                );
-                            })}
-                        </tr>
-                    ))}
+                      ${
+                                                meta?.align === 'center'
+                                                    ? 'align-center'
+                                                    : ''
+                                            }
+                    `}
+                                            onDoubleClick={() => {
+                                                if (!isDeleteColumn && meta?.editable !== false) {
+                                                    handleCellDoubleClick(rowIndex, cell.column.id, cell.getValue());
+                                                }
+                                            }}
+                                        >
+                                            {isEditing
+                                                ? (
+                                                    <input
+                                                        autoFocus
+                                                        type='text'
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            handleKeyDown(e, rowIndex, cell.column.id, meta?.onSave);
+                                                        }}
+                                                        onBlur={() => handleCancelEdit()}
+                                                        className='edit-input'
+                                                    />
+                                                )
+                                                : (
+                                                    flexRender(cell.column.columnDef.cell, cell.getContext())
+                                                )}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
 
