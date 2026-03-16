@@ -167,31 +167,31 @@ export function Workspace() {
 
     // Holdings columns
     const holdingsColumns: ColumnDef<Holding>[] = [
-        createEditableColumn<Holding>('broker', 'Broker', {
+        createEditableColumn<Holding>('broker', t('col.broker'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], broker: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('country', 'Country', {
+        createEditableColumn<Holding>('country', t('col.country'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], country: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('symbol', 'Symbol', {
+        createEditableColumn<Holding>('symbol', t('col.symbol'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], symbol: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('dateAcquired', 'Date Acquired', {
+        createEditableColumn<Holding>('dateAcquired', t('col.dateAcquired'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], dateAcquired: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('quantity', 'Quantity', {
+        createEditableColumn<Holding>('quantity', t('col.quantity'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -199,13 +199,13 @@ export function Workspace() {
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('currency', 'Currency', {
+        createEditableColumn<Holding>('currency', t('col.currency'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], currency: value };
                 updateHolding(rowIndex, updated);
             },
         }),
-        createEditableColumn<Holding>('unitPrice', 'Unit Price', {
+        createEditableColumn<Holding>('unitPrice', t('col.unitPrice'), {
             align: 'right',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
@@ -215,21 +215,21 @@ export function Workspace() {
         }),
         {
             id: 'totalCcy',
-            header: 'Total (ccy)',
+            header: t('col.totalCcy'),
             accessorFn: (row: Holding) => (row.quantity * row.unitPrice).toFixed(2),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
         {
             id: 'fxRate',
-            header: 'FX Rate',
+            header: t('col.fxRate'),
             accessorFn: (row: Holding) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.dateAcquired),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
         {
             id: 'totalBase',
-            header: `Total (${baseCurrency})`,
+            header: `${t('col.totalBase')} (${baseCurrency})`,
             accessorFn: (row: Holding) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.unitPrice, row.currency, row.dateAcquired);
@@ -237,7 +237,7 @@ export function Workspace() {
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
-        createEditableColumn<Holding>('notes', 'Notes', {
+        createEditableColumn<Holding>('notes', t('col.notes'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], notes: value };
                 updateHolding(rowIndex, updated);
@@ -263,37 +263,37 @@ export function Workspace() {
 
     // Sales columns
     const salesColumns: ColumnDef<Sale>[] = [
-        createEditableColumn<Sale>('broker', 'Broker', {
+        createEditableColumn<Sale>('broker', t('col.broker'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], broker: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('country', 'Country', {
+        createEditableColumn<Sale>('country', t('col.country'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], country: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('symbol', 'Symbol', {
+        createEditableColumn<Sale>('symbol', t('col.symbol'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], symbol: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('dateAcquired', 'Date Acquired', {
+        createEditableColumn<Sale>('dateAcquired', t('col.dateAcquired'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], dateAcquired: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('dateSold', 'Date Sold', {
+        createEditableColumn<Sale>('dateSold', t('col.dateSold'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], dateSold: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('quantity', 'Qty', {
+        createEditableColumn<Sale>('quantity', t('col.qty'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -301,13 +301,13 @@ export function Workspace() {
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('currency', 'Currency', {
+        createEditableColumn<Sale>('currency', t('col.currency'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], currency: value };
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('buyPrice', 'Buy Price', {
+        createEditableColumn<Sale>('buyPrice', t('col.buyPrice'), {
             align: 'right',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
@@ -315,7 +315,7 @@ export function Workspace() {
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('sellPrice', 'Sell Price', {
+        createEditableColumn<Sale>('sellPrice', t('col.sellPrice'), {
             align: 'right',
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
@@ -323,7 +323,7 @@ export function Workspace() {
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('fxRateBuy', 'FX Rate Buy', {
+        createEditableColumn<Sale>('fxRateBuy', t('col.fxRateBuy'), {
             align: 'right',
             format: (v) => (v as number).toFixed(6),
             onSave: (rowIndex, value) => {
@@ -331,7 +331,7 @@ export function Workspace() {
                 updateSale(rowIndex, updated);
             },
         }),
-        createEditableColumn<Sale>('fxRateSell', 'FX Rate Sell', {
+        createEditableColumn<Sale>('fxRateSell', t('col.fxRateSell'), {
             align: 'right',
             format: (v) => (v as number).toFixed(6),
             onSave: (rowIndex, value) => {
@@ -341,7 +341,7 @@ export function Workspace() {
         }),
         {
             id: 'proceedsBase',
-            header: `Proceeds (${baseCurrency})`,
+            header: `${t('col.proceedsBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold);
@@ -351,7 +351,7 @@ export function Workspace() {
         },
         {
             id: 'costBase',
-            header: `Cost (${baseCurrency})`,
+            header: `${t('col.costBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired);
@@ -361,7 +361,7 @@ export function Workspace() {
         },
         {
             id: 'plBase',
-            header: `P/L (${baseCurrency})`,
+            header: `${t('col.plBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
@@ -383,7 +383,7 @@ export function Workspace() {
                         if (index >= 0) deleteSale(index);
                     }}
                 >
-                    Delete
+                    {t('button.delete')}
                 </button>
             ),
             meta: { editable: false },
@@ -392,31 +392,31 @@ export function Workspace() {
 
     // Dividends columns
     const dividendsColumns: ColumnDef<Dividend>[] = [
-        createEditableColumn<Dividend>('symbol', 'Symbol', {
+        createEditableColumn<Dividend>('symbol', t('col.symbol'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], symbol: value };
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('country', 'Country', {
+        createEditableColumn<Dividend>('country', t('col.country'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], country: value };
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('date', 'Date', {
+        createEditableColumn<Dividend>('date', t('col.date'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], date: value };
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('currency', 'Currency', {
+        createEditableColumn<Dividend>('currency', t('col.currency'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], currency: value };
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('grossAmount', 'Gross Amount', {
+        createEditableColumn<Dividend>('grossAmount', t('col.grossAmount'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -424,7 +424,7 @@ export function Workspace() {
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('withholdingTax', 'WHT', {
+        createEditableColumn<Dividend>('withholdingTax', t('col.wht'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -434,14 +434,14 @@ export function Workspace() {
         }),
         {
             id: 'fxRate',
-            header: 'FX Rate',
+            header: t('col.fxRate'),
             accessorFn: (row: Dividend) => getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
         {
             id: 'grossBase',
-            header: `Gross (${baseCurrency})`,
+            header: `${t('col.grossBase')} (${baseCurrency})`,
             accessorFn: (row: Dividend) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.grossAmount, row.currency, row.date);
@@ -451,7 +451,7 @@ export function Workspace() {
         },
         {
             id: 'whtBase',
-            header: `WHT (${baseCurrency})`,
+            header: `${t('col.whtBase')} (${baseCurrency})`,
             accessorFn: (row: Dividend) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.withholdingTax, row.currency, row.date);
@@ -461,12 +461,12 @@ export function Workspace() {
         },
         {
             id: 'tax5pct',
-            header: 'Tax (5%)',
+            header: t('col.tax5pct'),
             accessorFn: (row: Dividend) => row.grossAmount * 0.05,
             cell: (info) => (info.getValue() as number).toFixed(2),
             meta: { align: 'right' as const, editable: false },
         },
-        createEditableColumn<Dividend>('whtCredit', 'WHT Credit', {
+        createEditableColumn<Dividend>('whtCredit', t('col.whtCredit'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -474,7 +474,7 @@ export function Workspace() {
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('bgTaxDue', 'BG Tax Due', {
+        createEditableColumn<Dividend>('bgTaxDue', t('col.bgTaxDue'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -482,7 +482,7 @@ export function Workspace() {
                 updateDividend(rowIndex, updated);
             },
         }),
-        createEditableColumn<Dividend>('notes', 'Notes', {
+        createEditableColumn<Dividend>('notes', t('col.notes'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], notes: value };
                 updateDividend(rowIndex, updated);
@@ -499,7 +499,7 @@ export function Workspace() {
                         if (index >= 0) deleteDividend(index);
                     }}
                 >
-                    Delete
+                    {t('button.delete')}
                 </button>
             ),
             meta: { editable: false },
@@ -508,25 +508,25 @@ export function Workspace() {
 
     // IB Interest columns
     const ibInterestColumns: ColumnDef<IBInterestEntry>[] = [
-        createEditableColumn<IBInterestEntry>('date', 'Date', {
+        createEditableColumn<IBInterestEntry>('date', t('col.date'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], date: value };
                 updateIbInterest(rowIndex, updated);
             },
         }),
-        createEditableColumn<IBInterestEntry>('currency', 'Currency', {
+        createEditableColumn<IBInterestEntry>('currency', t('col.currency'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], currency: value };
                 updateIbInterest(rowIndex, updated);
             },
         }),
-        createEditableColumn<IBInterestEntry>('description', 'Description', {
+        createEditableColumn<IBInterestEntry>('description', t('col.description'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...ibInterest[rowIndex], description: value };
                 updateIbInterest(rowIndex, updated);
             },
         }),
-        createEditableColumn<IBInterestEntry>('amount', 'Amount', {
+        createEditableColumn<IBInterestEntry>('amount', t('col.amount'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -536,7 +536,7 @@ export function Workspace() {
         }),
         {
             id: 'fxRate',
-            header: 'FX Rate',
+            header: t('col.fxRate'),
             accessorFn: (row: IBInterestEntry) => {
                 return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
             },
@@ -545,7 +545,7 @@ export function Workspace() {
         },
         {
             id: 'amountBase',
-            header: `Amount (${baseCurrency})`,
+            header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: IBInterestEntry) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, row.currency, row.date);
@@ -564,7 +564,7 @@ export function Workspace() {
                         if (index >= 0) deleteIbInterest(index);
                     }}
                 >
-                    Delete
+                    {t('button.delete')}
                 </button>
             ),
             meta: { editable: false },
@@ -573,25 +573,25 @@ export function Workspace() {
 
     // Stock Yield columns
     const stockYieldColumns: ColumnDef<StockYieldEntry>[] = [
-        createEditableColumn<StockYieldEntry>('date', 'Date', {
+        createEditableColumn<StockYieldEntry>('date', t('col.date'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], date: value };
                 updateStockYield(rowIndex, updated);
             },
         }),
-        createEditableColumn<StockYieldEntry>('symbol', 'Symbol', {
+        createEditableColumn<StockYieldEntry>('symbol', t('col.symbol'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], symbol: value };
                 updateStockYield(rowIndex, updated);
             },
         }),
-        createEditableColumn<StockYieldEntry>('currency', 'Currency', {
+        createEditableColumn<StockYieldEntry>('currency', t('col.currency'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...stockYield[rowIndex], currency: value };
                 updateStockYield(rowIndex, updated);
             },
         }),
-        createEditableColumn<StockYieldEntry>('amount', 'Amount', {
+        createEditableColumn<StockYieldEntry>('amount', t('col.amount'), {
             align: 'right',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
@@ -601,7 +601,7 @@ export function Workspace() {
         }),
         {
             id: 'fxRate',
-            header: 'FX Rate',
+            header: t('col.fxRate'),
             accessorFn: (row: StockYieldEntry) => {
                 return getFxRateDisplay(fxRates, baseCurrency, row.currency, row.date);
             },
@@ -610,7 +610,7 @@ export function Workspace() {
         },
         {
             id: 'amountBase',
-            header: `Amount (${baseCurrency})`,
+            header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: StockYieldEntry) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, row.currency, row.date);
@@ -629,7 +629,7 @@ export function Workspace() {
                         if (index >= 0) deleteStockYield(index);
                     }}
                 >
-                    Delete
+                    {t('button.delete')}
                 </button>
             ),
             meta: { editable: false },
@@ -640,30 +640,30 @@ export function Workspace() {
     const getRevolutEntryColumns = (currency: string): ColumnDef<RevolutInterestEntry>[] => [
         {
             accessorKey: 'date',
-            header: 'Date',
+            header: t('col.date'),
             meta: { editable: true },
         },
         {
             accessorKey: 'description',
-            header: 'Description',
+            header: t('col.description'),
             meta: { editable: true },
         },
         {
             accessorKey: 'amount',
-            header: `Amount (${currency})`,
+            header: `${t('col.amountBase')} (${currency})`,
             meta: { align: 'right' as const, editable: true },
             cell: (info) => (info.getValue() as number).toFixed(4),
         },
         {
             id: 'fxRate',
-            header: 'FX Rate',
+            header: t('col.fxRate'),
             accessorFn: (row: RevolutInterestEntry) => getFxRateDisplay(fxRates, baseCurrency, currency, row.date),
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
         {
             id: 'amountBase',
-            header: `Amount (${baseCurrency})`,
+            header: `${t('col.amountBase')} (${baseCurrency})`,
             accessorFn: (row: RevolutInterestEntry) => {
                 const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
                 return toBaseCcy(row.amount, currency, row.date);
@@ -869,27 +869,27 @@ export function Workspace() {
                     }}
                 >
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Currency</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.currency')}</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currentCurrency}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Entries</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.entries')}</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{currentData.entries.length}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Interest ({currentCurrency})</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({currentCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netInterest.toFixed(2)}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Interest ({baseCurrency})</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({baseCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netBase}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>10% Tax ({currentCurrency})</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({currentCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>10% Tax ({baseCurrency})</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{taxBase}</div>
                     </div>
                 </div>
@@ -919,7 +919,7 @@ export function Workspace() {
         const ratesColumns: ColumnDef<{ date: string; rate: number }>[] = [
             {
                 accessorKey: 'date',
-                header: 'Date',
+                header: t('col.date'),
             },
             {
                 accessorKey: 'rate',
