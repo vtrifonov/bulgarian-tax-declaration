@@ -861,9 +861,12 @@ export function Workspace() {
             const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
             totalGrossBase += grossStr !== '—' ? parseFloat(grossStr) : 0;
             totalWhtBase += whtStr !== '—' ? parseFloat(whtStr) : 0;
-            totalTax5pct += dividend.grossAmount * 0.05;
-            totalWhtCredit += dividend.whtCredit;
-            totalBgTaxDue += dividend.bgTaxDue;
+            const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
+            totalTax5pct += grossBase * 0.05;
+            const whtCreditStr = toBaseCcy(dividend.whtCredit, dividend.currency, dividend.date);
+            totalWhtCredit += whtCreditStr !== '—' ? parseFloat(whtCreditStr) : 0;
+            const bgTaxDueStr = toBaseCcy(dividend.bgTaxDue, dividend.currency, dividend.date);
+            totalBgTaxDue += bgTaxDueStr !== '—' ? parseFloat(bgTaxDueStr) : 0;
             totalGrossOrig += dividend.grossAmount;
             totalWhtOrig += dividend.withholdingTax;
         });
