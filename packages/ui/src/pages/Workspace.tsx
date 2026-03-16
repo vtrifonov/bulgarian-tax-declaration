@@ -141,14 +141,20 @@ export function Workspace() {
         );
 
         // Always show: Holdings, Sales, Dividends (user can fill manually)
-        const tabs = [
+        const tabs: { id: string; labelKey: string; count: number; warningCount: number; tooltip?: string }[] = [
             { id: 'holdings', labelKey: 'tab.holdings', count: holdings.length, warningCount: warningsByTab['holdings'] || 0 },
             { id: 'sales', labelKey: 'tab.sales', count: sales.length, warningCount: warningsByTab['sales'] || 0 },
             { id: 'dividends', labelKey: 'tab.dividends', count: dividends.length, warningCount: warningsByTab['dividends'] || 0 },
         ];
         // Show only if data exists (populated from IB/Revolut import)
         if (stockYield.length > 0) {
-            tabs.push({ id: 'stockYield', labelKey: 'tab.stockYield', count: stockYield.length, warningCount: warningsByTab['stock yield'] || 0 });
+            tabs.push({
+                id: 'stockYield',
+                labelKey: 'tab.stockYield',
+                count: stockYield.length,
+                warningCount: warningsByTab['stock yield'] || 0,
+                tooltip: 'IB Stock Yield Enhancement Program — income from securities lending',
+            });
         }
         if (ibInterest.length > 0) {
             tabs.push({ id: 'ibInterest', labelKey: 'tab.ibInterest', count: ibInterest.length, warningCount: warningsByTab['ib interest'] || 0 });
@@ -1121,6 +1127,7 @@ export function Workspace() {
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
+                        title={tab.tooltip}
                         onClick={() => setActiveTab(tab.id as TabType)}
                         style={{
                             marginRight: '1rem',
