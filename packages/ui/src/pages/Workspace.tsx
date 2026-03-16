@@ -695,30 +695,89 @@ export function Workspace() {
         />
     );
 
-    const renderSalesContent = () => (
-        <DataTable
-            columns={salesColumns}
-            data={sales}
-            onAddRow={() => {
-                const newSale: Sale = {
-                    id: `sale-${Date.now()}`,
-                    broker: '',
-                    country: '',
-                    symbol: '',
-                    dateAcquired: new Date().toISOString().split('T')[0],
-                    dateSold: new Date().toISOString().split('T')[0],
-                    quantity: 0,
-                    currency: 'USD',
-                    buyPrice: 0,
-                    sellPrice: 0,
-                    fxRateBuy: 1,
-                    fxRateSell: 1,
-                };
-                addSale(newSale);
-            }}
-            addRowLabel={t('button.addSale')}
-        />
-    );
+    const renderSalesContent = () => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+
+        // Calculate summary totals
+        let totalProceeds = 0;
+        let totalCost = 0;
+        let totalProfit = 0;
+        let totalTax = 0;
+
+        sales.forEach(sale => {
+            const proceedsStr = toBaseCcy(sale.quantity * sale.sellPrice, sale.currency, sale.dateSold);
+            const costStr = toBaseCcy(sale.quantity * sale.buyPrice, sale.currency, sale.dateAcquired);
+
+            const proceeds = proceedsStr !== '—' ? parseFloat(proceedsStr) : 0;
+            const cost = costStr !== '—' ? parseFloat(costStr) : 0;
+            const profit = proceeds - cost;
+
+            totalProceeds += proceeds;
+            totalCost += cost;
+            totalProfit += profit;
+            totalTax += profit > 0 ? profit * 0.1 : 0;
+        });
+
+        return (
+            <div>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gap: '1rem',
+                        marginBottom: '1rem',
+                        padding: '1rem',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                    }}
+                >
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalProceeds')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalProceeds.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalCost')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalCost.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalPL')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalProfit.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pctCapGains')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.count')}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{sales.length}</div>
+                    </div>
+                    <div />
+                </div>
+                <DataTable
+                    columns={salesColumns}
+                    data={sales}
+                    onAddRow={() => {
+                        const newSale: Sale = {
+                            id: `sale-${Date.now()}`,
+                            broker: '',
+                            country: '',
+                            symbol: '',
+                            dateAcquired: new Date().toISOString().split('T')[0],
+                            dateSold: new Date().toISOString().split('T')[0],
+                            quantity: 0,
+                            currency: 'USD',
+                            buyPrice: 0,
+                            sellPrice: 0,
+                            fxRateBuy: 1,
+                            fxRateSell: 1,
+                        };
+                        addSale(newSale);
+                    }}
+                    addRowLabel={t('button.addSale')}
+                />
+            </div>
+        );
+    };
 
     const sortedDividends = [...dividends].sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date));
 
@@ -748,32 +807,90 @@ export function Workspace() {
         return { rows, messages };
     }, [warnings, sortedDividends, dividends]);
 
-    const renderDividendsContent = () => (
-        <DataTable
-            columns={dividendsColumns}
-            data={sortedDividends}
-            warningRows={dividendWarningRows.rows}
-            warningMessages={dividendWarningRows.messages}
-            warningCount={dividendWarningRows.rows.size}
-            showWarningsOnly={showDividendWarningsOnly}
-            onToggleWarningsOnly={() => setShowDividendWarningsOnly(!showDividendWarningsOnly)}
-            onAddRow={() => {
-                const newDividend: Dividend = {
-                    symbol: '',
-                    country: '',
-                    date: new Date().toISOString().split('T')[0],
-                    currency: 'USD',
-                    grossAmount: 0,
-                    withholdingTax: 0,
-                    bgTaxDue: 0,
-                    whtCredit: 0,
-                    notes: '',
-                };
-                addDividend(newDividend);
-            }}
-            addRowLabel={t('button.addDividend')}
-        />
-    );
+    const renderDividendsContent = () => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+
+        // Calculate summary totals
+        let totalGross = 0;
+        let totalWht = 0;
+        let totalTax = 0;
+        let totalWhtCredit = 0;
+
+        dividends.forEach(dividend => {
+            const grossStr = toBaseCcy(dividend.grossAmount, dividend.currency, dividend.date);
+            const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
+
+            const gross = grossStr !== '—' ? parseFloat(grossStr) : 0;
+            const wht = whtStr !== '—' ? parseFloat(whtStr) : 0;
+
+            totalGross += gross;
+            totalWht += wht;
+            totalTax += dividend.bgTaxDue;
+            totalWhtCredit += dividend.whtCredit;
+        });
+
+        return (
+            <div>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gap: '1rem',
+                        marginBottom: '1rem',
+                        padding: '1rem',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                    }}
+                >
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalGross')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalGross.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalWht')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWht.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax5pct')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalWhtCredit')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalWhtCredit.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.count')}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{dividends.length}</div>
+                    </div>
+                    <div />
+                </div>
+                <DataTable
+                    columns={dividendsColumns}
+                    data={sortedDividends}
+                    warningRows={dividendWarningRows.rows}
+                    warningMessages={dividendWarningRows.messages}
+                    warningCount={dividendWarningRows.rows.size}
+                    showWarningsOnly={showDividendWarningsOnly}
+                    onToggleWarningsOnly={() => setShowDividendWarningsOnly(!showDividendWarningsOnly)}
+                    onAddRow={() => {
+                        const newDividend: Dividend = {
+                            symbol: '',
+                            country: '',
+                            date: new Date().toISOString().split('T')[0],
+                            currency: 'USD',
+                            grossAmount: 0,
+                            withholdingTax: 0,
+                            bgTaxDue: 0,
+                            whtCredit: 0,
+                            notes: '',
+                        };
+                        addDividend(newDividend);
+                    }}
+                    addRowLabel={t('button.addDividend')}
+                />
+            </div>
+        );
+    };
 
     const renderStockYieldContent = () => (
         <DataTable
@@ -792,22 +909,65 @@ export function Workspace() {
         />
     );
 
-    const renderIbInterestContent = () => (
-        <DataTable
-            columns={ibInterestColumns}
-            data={ibInterest}
-            onAddRow={() => {
-                const newEntry: IBInterestEntry = {
-                    date: new Date().toISOString().split('T')[0],
-                    currency: 'USD',
-                    description: '',
-                    amount: 0,
-                };
-                addIbInterest(newEntry);
-            }}
-            addRowLabel={t('button.addInterest')}
-        />
-    );
+    const renderIbInterestContent = () => {
+        const toBaseCcy = createToBaseCcy(fxRates, baseCurrency);
+
+        // Calculate summary totals
+        let totalInterest = 0;
+        ibInterest.forEach(entry => {
+            const amountStr = toBaseCcy(entry.amount, entry.currency, entry.date);
+            const amount = amountStr !== '—' ? parseFloat(amountStr) : 0;
+            totalInterest += amount;
+        });
+
+        const totalTax = totalInterest * 0.1;
+
+        return (
+            <div>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gap: '1rem',
+                        marginBottom: '1rem',
+                        padding: '1rem',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                    }}
+                >
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalInterest')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalInterest.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.count')}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{ibInterest.length}</div>
+                    </div>
+                    <div />
+                    <div />
+                    <div />
+                </div>
+                <DataTable
+                    columns={ibInterestColumns}
+                    data={ibInterest}
+                    onAddRow={() => {
+                        const newEntry: IBInterestEntry = {
+                            date: new Date().toISOString().split('T')[0],
+                            currency: 'USD',
+                            description: '',
+                            amount: 0,
+                        };
+                        addIbInterest(newEntry);
+                    }}
+                    addRowLabel={t('button.addInterest')}
+                />
+            </div>
+        );
+    };
 
     const renderRevolutInterestContent = () => {
         const currencies = revolutInterest.map((r) => r.currency).sort();
