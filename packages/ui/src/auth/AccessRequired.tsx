@@ -78,7 +78,8 @@ export function AccessRequired() {
                 <div style={{ marginBottom: '1.5rem' }}>
                     <button
                         onClick={() => {
-                            window.location.href = mailtoHref;
+                            const w = window.open(mailtoHref, '_blank');
+                            if (w) setTimeout(() => w.close(), 500);
                         }}
                         style={{
                             display: 'inline-block',
