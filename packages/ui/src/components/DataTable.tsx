@@ -555,7 +555,7 @@ export function DataTable<TData extends Record<string, any>>({
                         <tr className='footer-row'>
                             <td />
                             {table.getAllColumns().map((col) => {
-                                const key = col.id || (col.columnDef as any).accessorKey;
+                                const key = col.id || (col.columnDef as { accessorKey?: string }).accessorKey || '';
                                 const value = footerRow[key];
                                 const meta = col.columnDef.meta;
                                 return (

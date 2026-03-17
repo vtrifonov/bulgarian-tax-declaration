@@ -4,6 +4,7 @@ import type {
 } from 'exceljs';
 
 import type { AppState } from '../../types/index.js';
+import { setFxRateCell } from '../fx-cell.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -43,7 +44,7 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
     for (let i = 0; i < state.holdings.length; i++) {
         const h = state.holdings[i];
 
-        if (!h.symbol && !h.currency) {
+        if (!h.symbol || !h.currency) {
             continue;
         }
 
@@ -64,7 +65,7 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
         // H: Total = Qty * Price
         row.getCell(8).value = { formula: `ROUND(E${r}*G${r},2)` };
         // I: FX rate
-        setFxRateCell(row.getCell(9), h.currency, r, state.baseCurrency);
+        setFxRateCell(row.getCell(9), h.currency, state.baseCurrency, 'D', 'F', r);
         // J: Total in base currency
         row.getCell(10).value = { formula: `ROUND(H${r}*I${r},2)` };
 
@@ -86,45 +87,4 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
     }
 
     return sheet;
-}
-
-function setFxRateCell(
-    cell: import('exceljs').Cell,
-    currency: string,
-    rowNum: number,
-    baseCurrency: string,
-): void {
-    if (currency === baseCurrency) {
-        cell.value = 1;
-
-        return;
-    }
-
-    if (baseCurrency === 'BGN') {
-        if (currency === 'EUR') {
-            cell.value = 1.95583;
-
-            return;
-        }
-
-        if (currency === 'BGN') {
-            cell.value = 1;
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(D${rowNum},INDIRECT(F${rowNum}&"!A:B"),2,FALSE),"")` };
-    } else {
-        if (currency === 'EUR') {
-            cell.value = 1;
-
-            return;
-        }
-
-        if (currency === 'BGN') {
-            cell.value = { formula: '1/1.95583' };
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(D${rowNum},INDIRECT(F${rowNum}&"!A:B"),2,FALSE),"")` };
-    }
 }

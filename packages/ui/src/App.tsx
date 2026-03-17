@@ -6,7 +6,10 @@ import {
     Routes,
     useLocation,
 } from 'react-router-dom';
-import { useAppStore } from './store/app-state';
+import {
+    type ImportedFile,
+    useAppStore,
+} from './store/app-state';
 import {
     loadAutoSave,
     useAutoSave,
@@ -19,6 +22,13 @@ import {
     generateExcel,
     setLanguage as setCoreLanguage,
     t,
+} from '@bg-tax/core';
+import type {
+    BrokerInterest,
+    Dividend,
+    Holding,
+    Sale,
+    StockYieldEntry,
 } from '@bg-tax/core';
 import {
     AuthProvider,
@@ -56,15 +66,15 @@ function Layout() {
                 setCoreLanguage(saved.language as 'en' | 'bg');
             }
             // Then restore data
-            if (saved.holdings) store.importHoldings(saved.holdings as any);
-            if (saved.sales) store.importSales(saved.sales as any);
-            if (saved.dividends) store.importDividends(saved.dividends as any);
-            if (saved.stockYield) store.importStockYield(saved.stockYield as any);
-            if (saved.brokerInterest) store.importBrokerInterest(saved.brokerInterest as any);
+            if (saved.holdings) store.importHoldings(saved.holdings as Holding[]);
+            if (saved.sales) store.importSales(saved.sales as Sale[]);
+            if (saved.dividends) store.importDividends(saved.dividends as Dividend[]);
+            if (saved.stockYield) store.importStockYield(saved.stockYield as StockYieldEntry[]);
+            if (saved.brokerInterest) store.importBrokerInterest(saved.brokerInterest as BrokerInterest[]);
             if (saved.importedFiles && Array.isArray(saved.importedFiles)) {
-                for (const f of saved.importedFiles as any[]) store.addImportedFile(f);
+                for (const f of saved.importedFiles as ImportedFile[]) store.addImportedFile(f);
             }
-            if (saved.fxRates) store.setFxRates(saved.fxRates as any);
+            if (saved.fxRates) store.setFxRates(saved.fxRates as Record<string, Record<string, number>>);
         }
     }, []);
 

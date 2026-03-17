@@ -41,22 +41,40 @@ export function useAutoSave() {
     }, []);
 }
 
+interface SavedInterestEntry {
+    currency: string;
+    date: string;
+    description: string;
+    amount: number;
+}
+
+interface SavedBrokerInterest {
+    broker: string;
+    currency: string;
+    entries: SavedInterestEntry[];
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+    return typeof v === 'object' && v !== null;
+}
+
 /** Migrate old autosave format to new unified brokerInterest model */
 function migrateState(saved: Record<string, unknown>): Record<string, unknown> {
     const migrated = { ...saved };
-    const brokerInterestList: Array<{ broker: string; currency: string; entries: Array<any> }> = [];
+    const brokerInterestList: SavedBrokerInterest[] = [];
 
     // Migrate ibInterest (array of InterestEntry with source field) → grouped by currency
     if (Array.isArray(saved.ibInterest)) {
-        const ibByCurrency = new Map<string, Array<any>>();
+        const ibByCurrency = new Map<string, SavedInterestEntry[]>();
 
         for (const entry of saved.ibInterest) {
-            const currency = (entry as any).currency || 'USD';
+            if (!isRecord(entry)) continue;
+            const currency = typeof entry.currency === 'string' ? entry.currency : 'USD';
 
             if (!ibByCurrency.has(currency)) {
                 ibByCurrency.set(currency, []);
             }
-            ibByCurrency.get(currency)!.push(entry);
+            ibByCurrency.get(currency)!.push(entry as unknown as SavedInterestEntry);
         }
 
         for (const [currency, entries] of ibByCurrency) {
@@ -67,13 +85,13 @@ function migrateState(saved: Record<string, unknown>): Record<string, unknown> {
     // Migrate revolutInterest (array of {currency, entries})
     if (Array.isArray(saved.revolutInterest)) {
         for (const item of saved.revolutInterest) {
-            const revolut = item as any;
+            if (!isRecord(item)) continue;
 
-            if (revolut.currency && Array.isArray(revolut.entries)) {
+            if (typeof item.currency === 'string' && Array.isArray(item.entries)) {
                 brokerInterestList.push({
                     broker: 'Revolut',
-                    currency: revolut.currency,
-                    entries: revolut.entries,
+                    currency: item.currency,
+                    entries: item.entries as SavedInterestEntry[],
                 });
             }
         }

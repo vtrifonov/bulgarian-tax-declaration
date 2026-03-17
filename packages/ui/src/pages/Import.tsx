@@ -350,7 +350,7 @@ export function Import() {
                 importStockYield(parsed.stockYield);
                 for (const i of parsed.interest) i.source = { type: 'IB', file: file.name };
                 // Group IB interest by currency
-                const ibByCurrency = new Map<string, Array<any>>();
+                const ibByCurrency = new Map<string, typeof parsed.interest>();
                 for (const entry of parsed.interest) {
                     const ccy = entry.currency || 'USD';
                     if (!ibByCurrency.has(ccy)) {

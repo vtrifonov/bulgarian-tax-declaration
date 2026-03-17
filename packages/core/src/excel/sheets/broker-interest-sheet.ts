@@ -4,6 +4,7 @@ import type {
     AppState,
     BrokerInterest,
 } from '../../types/index.js';
+import { setFxRateCell } from '../fx-cell.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -49,7 +50,7 @@ function addInterestSheet(workbook: Workbook, bi: BrokerInterest, state: AppStat
             null, // E: Amount in base
         ]);
 
-        setFxRateCell(row.getCell(4), bi.currency, r, state);
+        setFxRateCell(row.getCell(4), bi.currency, state.baseCurrency, 'A', bi.currency, r);
         row.getCell(5).value = { formula: `ROUND(C${r}*D${r},2)` };
 
         row.getCell(1).numFmt = DATE_FORMAT;
@@ -76,33 +77,4 @@ function addInterestSheet(workbook: Workbook, bi: BrokerInterest, state: AppStat
     sheet.getColumn(3).width = 12;
     sheet.getColumn(4).width = 12;
     sheet.getColumn(5).width = 14;
-}
-
-function setFxRateCell(
-    cell: import('exceljs').Cell,
-    currency: string,
-    rowNum: number,
-    state: AppState,
-): void {
-    if (currency === state.baseCurrency) {
-        cell.value = 1;
-
-        return;
-    }
-
-    if (state.baseCurrency === 'BGN') {
-        if (currency === 'EUR') {
-            cell.value = 1.95583;
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT("${currency}!A:B"),2,FALSE),"")` };
-    } else {
-        if (currency === 'EUR') {
-            cell.value = 1;
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT("${currency}!A:B"),2,FALSE),"")` };
-    }
 }

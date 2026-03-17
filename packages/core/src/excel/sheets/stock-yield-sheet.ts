@@ -4,6 +4,7 @@ import type {
 } from 'exceljs';
 
 import type { AppState } from '../../types/index.js';
+import { setFxRateCell } from '../fx-cell.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -30,7 +31,7 @@ export function addStockYieldSheet(workbook: Workbook, state: AppState): Workshe
     for (let i = 0; i < state.stockYield.length; i++) {
         const sy = state.stockYield[i];
 
-        if (!sy.symbol && !sy.currency) {
+        if (!sy.symbol || !sy.currency) {
             continue;
         }
 
@@ -44,7 +45,7 @@ export function addStockYieldSheet(workbook: Workbook, state: AppState): Workshe
         ]);
 
         // E: FX rate
-        setFxRateCell(row.getCell(5), sy.currency, r, state.baseCurrency);
+        setFxRateCell(row.getCell(5), sy.currency, state.baseCurrency, 'A', 'C', r);
         // F: Amount in base currency
         row.getCell(6).value = { formula: `ROUND(D${r}*E${r},2)` };
 
@@ -64,45 +65,4 @@ export function addStockYieldSheet(workbook: Workbook, state: AppState): Workshe
     }
 
     return sheet;
-}
-
-function setFxRateCell(
-    cell: import('exceljs').Cell,
-    currency: string,
-    rowNum: number,
-    baseCurrency: string,
-): void {
-    if (currency === baseCurrency) {
-        cell.value = 1;
-
-        return;
-    }
-
-    if (baseCurrency === 'BGN') {
-        if (currency === 'EUR') {
-            cell.value = 1.95583;
-
-            return;
-        }
-
-        if (currency === 'BGN') {
-            cell.value = 1;
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT(C${rowNum}&"!A:B"),2,FALSE),"")` };
-    } else {
-        if (currency === 'EUR') {
-            cell.value = 1;
-
-            return;
-        }
-
-        if (currency === 'BGN') {
-            cell.value = { formula: '1/1.95583' };
-
-            return;
-        }
-        cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT(C${rowNum}&"!A:B"),2,FALSE),"")` };
-    }
 }

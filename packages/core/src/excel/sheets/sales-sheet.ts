@@ -46,7 +46,7 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
     for (let i = 0; i < state.sales.length; i++) {
         const s = state.sales[i];
 
-        if (!s.symbol && !s.currency) {
+        if (!s.symbol || !s.currency) {
             continue;
         }
 

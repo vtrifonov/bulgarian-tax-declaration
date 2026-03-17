@@ -65,43 +65,21 @@ export function mapToDeclaration(
     taxResults: TaxResults,
     formConfig: FormConfig,
 ): DeclarationSection[] {
-    const sections: DeclarationSection[] = [];
+    const sectionKeys: (keyof Pick<FormConfig, 'appendix5' | 'appendix8table1' | 'appendix8table6'>)[] = [
+        'appendix5',
+        'appendix8table1',
+        'appendix8table6',
+    ];
 
-    // Add appendix5
-    if (formConfig.appendix5) {
-        sections.push({
-            title: formConfig.appendix5.title,
-            fields: formConfig.appendix5.fields.map(field => ({
+    return sectionKeys
+        .map((key) => formConfig[key])
+        .filter((section): section is FormConfigSection => !!section)
+        .map((section) => ({
+            title: section.title,
+            fields: section.fields.map((field) => ({
                 ref: field.ref,
                 label: field.label,
                 value: getValueBySource(field.source, taxResults),
             })),
-        });
-    }
-
-    // Add appendix8table1
-    if (formConfig.appendix8table1) {
-        sections.push({
-            title: formConfig.appendix8table1.title,
-            fields: formConfig.appendix8table1.fields.map(field => ({
-                ref: field.ref,
-                label: field.label,
-                value: getValueBySource(field.source, taxResults),
-            })),
-        });
-    }
-
-    // Add appendix8table6
-    if (formConfig.appendix8table6) {
-        sections.push({
-            title: formConfig.appendix8table6.title,
-            fields: formConfig.appendix8table6.fields.map(field => ({
-                ref: field.ref,
-                label: field.label,
-                value: getValueBySource(field.source, taxResults),
-            })),
-        });
-    }
-
-    return sections;
+        }));
 }
