@@ -6,8 +6,8 @@ import {
 import { FifoEngine } from '../../src/fifo/engine.js';
 import type {
     Holding,
-    IBTrade,
     Sale,
+    Trade,
 } from '../../src/types/index.js';
 
 describe('FifoEngine', () => {
@@ -16,7 +16,7 @@ describe('FifoEngine', () => {
             { id: '1', broker: 'IB', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2023-01-15', quantity: 20, currency: 'USD', unitPrice: 150.00 },
             { id: '2', broker: 'IB', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2024-06-10', quantity: 30, currency: 'USD', unitPrice: 200.00 },
         ];
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'AAPL', dateTime: '2025-09-15, 10:00:00', quantity: -25, price: 250.00, proceeds: 6250, commission: -1 },
         ];
 
@@ -39,7 +39,7 @@ describe('FifoEngine', () => {
         const holdings: Holding[] = [
             { id: '1', broker: 'IB', country: 'САЩ', symbol: 'MSFT', dateAcquired: '2024-01-01', quantity: 100, currency: 'USD', unitPrice: 300.00 },
         ];
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'MSFT', dateTime: '2025-06-01, 10:00:00', quantity: -30, price: 400.00, proceeds: 12000, commission: -1 },
         ];
 
@@ -53,7 +53,7 @@ describe('FifoEngine', () => {
 
     it('adds buys as new holdings', () => {
         const engine = new FifoEngine([]);
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'EUR', symbol: 'CSPX', dateTime: '2025-01-21, 10:26:07', quantity: 1, price: 614.28, proceeds: -614.28, commission: -1.25 },
         ];
 
@@ -67,7 +67,7 @@ describe('FifoEngine', () => {
 
     it('sorts trades by datetime before processing (buy before sell on same day)', () => {
         const engine = new FifoEngine([]);
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             // Sell listed first in CSV, but buy happened earlier
             { currency: 'USD', symbol: 'TEST', dateTime: '2025-03-15, 14:00:00', quantity: -5, price: 110.00, proceeds: 550, commission: -1 },
             { currency: 'USD', symbol: 'TEST', dateTime: '2025-03-15, 09:00:00', quantity: 10, price: 100.00, proceeds: -1000, commission: -1 },
@@ -82,7 +82,7 @@ describe('FifoEngine', () => {
 
     it('generates warning AND sale record for sell without sufficient holdings', () => {
         const engine = new FifoEngine([]);
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'GHOST', dateTime: '2025-06-01, 10:00:00', quantity: -10, price: 50.00, proceeds: 500, commission: -1 },
         ];
 
@@ -105,7 +105,7 @@ describe('FifoEngine', () => {
             { id: '2', broker: 'IB', country: 'САЩ', symbol: 'STOCK', dateAcquired: '2024-06-01', quantity: 15, currency: 'USD', unitPrice: 120.00 },
             { id: '3', broker: 'IB', country: 'САЩ', symbol: 'STOCK', dateAcquired: '2024-12-01', quantity: 20, currency: 'USD', unitPrice: 150.00 },
         ];
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'STOCK', dateTime: '2025-03-01, 10:00:00', quantity: -25, price: 160.00, proceeds: 4000, commission: -1 },
             { currency: 'USD', symbol: 'STOCK', dateTime: '2025-06-01, 14:00:00', quantity: -10, price: 170.00, proceeds: 1700, commission: -1 },
         ];
@@ -133,7 +133,7 @@ describe('FifoEngine', () => {
             { id: '1', broker: 'IB', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2023-01-15', quantity: 20, currency: 'USD', unitPrice: 150.00 },
             { id: '2', broker: 'IB', country: 'САЩ', symbol: 'MSFT', dateAcquired: '2024-01-01', quantity: 30, currency: 'USD', unitPrice: 300.00 },
         ];
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'AAPL', dateTime: '2025-09-15, 10:00:00', quantity: -20, price: 250.00, proceeds: 5000, commission: -1 },
         ];
 
@@ -157,7 +157,7 @@ describe('FifoEngine', () => {
             { id: '2', broker: 'IB', country: 'САЩ', symbol: 'MSFT', dateAcquired: '2024-01-01', quantity: 30, currency: 'USD', unitPrice: 300.00 },
             { id: '3', broker: 'IB', country: 'САЩ', symbol: 'GOOGL', dateAcquired: '2024-06-01', quantity: 15, currency: 'USD', unitPrice: 2000.00 },
         ];
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'MSFT', dateTime: '2025-06-01, 10:00:00', quantity: -15, price: 400.00, proceeds: 6000, commission: -1 },
         ];
 
@@ -184,7 +184,7 @@ describe('FifoEngine', () => {
 
     it('handles multiple symbols interleaved in trades', () => {
         const engine = new FifoEngine([]);
-        const trades: IBTrade[] = [
+        const trades: Trade[] = [
             { currency: 'USD', symbol: 'AAPL', dateTime: '2025-01-01, 10:00:00', quantity: 5, price: 100.00, proceeds: -500, commission: -1 },
             { currency: 'USD', symbol: 'MSFT', dateTime: '2025-01-02, 10:00:00', quantity: 3, price: 200.00, proceeds: -600, commission: -1 },
             { currency: 'USD', symbol: 'AAPL', dateTime: '2025-01-03, 10:00:00', quantity: -2, price: 120.00, proceeds: 240, commission: -1 },

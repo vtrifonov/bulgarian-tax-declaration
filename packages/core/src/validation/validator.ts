@@ -5,11 +5,13 @@ import type {
 
 export function validate(state: AppState): ValidationWarning[] {
     const warnings: ValidationWarning[] = [];
+
     warnings.push(...checkUnmatchedWht(state));
     warnings.push(...checkMissingFx(state));
     warnings.push(...checkYearMismatch(state));
     warnings.push(...checkIncompleteRows(state));
     warnings.push(...checkDuplicateHoldings(state));
+
     return warnings;
 }
 
@@ -27,12 +29,17 @@ function checkUnmatchedWht(state: AppState): ValidationWarning[] {
 }
 
 function checkMissingFx(state: AppState): ValidationWarning[] {
-    if (state.baseCurrency === 'EUR') return [];
+    if (state.baseCurrency === 'EUR') {
+        return [];
+    }
     const warnings: ValidationWarning[] = [];
+
     for (let i = 0; i < (state.dividends ?? []).length; i++) {
         const d = state.dividends[i];
+
         if (d.currency !== state.baseCurrency && d.currency !== 'EUR') {
             const rate = state.fxRates?.[d.currency]?.[d.date];
+
             if (rate === undefined) {
                 warnings.push({
                     type: 'missing-fx',
@@ -44,6 +51,7 @@ function checkMissingFx(state: AppState): ValidationWarning[] {
             }
         }
     }
+
     return warnings;
 }
 
@@ -54,10 +62,23 @@ function checkIncompleteRows(state: AppState): ValidationWarning[] {
     for (let i = 0; i < (state.holdings ?? []).length; i++) {
         const h = state.holdings[i];
         const missing: string[] = [];
-        if (!h.symbol) missing.push('symbol');
-        if (!h.dateAcquired) missing.push('date');
-        if (!h.currency) missing.push('currency');
-        if (h.quantity === 0 && h.unitPrice === 0) missing.push('quantity/price');
+
+        if (!h.symbol) {
+            missing.push('symbol');
+        }
+
+        if (!h.dateAcquired) {
+            missing.push('date');
+        }
+
+        if (!h.currency) {
+            missing.push('currency');
+        }
+
+        if (h.quantity === 0 && h.unitPrice === 0) {
+            missing.push('quantity/price');
+        }
+
         if (missing.length > 0) {
             warnings.push({
                 type: 'incomplete-row',
@@ -72,11 +93,27 @@ function checkIncompleteRows(state: AppState): ValidationWarning[] {
     for (let i = 0; i < (state.sales ?? []).length; i++) {
         const s = state.sales[i];
         const missing: string[] = [];
-        if (!s.symbol) missing.push('symbol');
-        if (!s.dateAcquired) missing.push('date acquired');
-        if (!s.dateSold) missing.push('date sold');
-        if (!s.currency) missing.push('currency');
-        if (s.quantity === 0) missing.push('quantity');
+
+        if (!s.symbol) {
+            missing.push('symbol');
+        }
+
+        if (!s.dateAcquired) {
+            missing.push('date acquired');
+        }
+
+        if (!s.dateSold) {
+            missing.push('date sold');
+        }
+
+        if (!s.currency) {
+            missing.push('currency');
+        }
+
+        if (s.quantity === 0) {
+            missing.push('quantity');
+        }
+
         if (missing.length > 0) {
             warnings.push({
                 type: 'incomplete-row',
@@ -91,10 +128,23 @@ function checkIncompleteRows(state: AppState): ValidationWarning[] {
     for (let i = 0; i < (state.dividends ?? []).length; i++) {
         const d = state.dividends[i];
         const missing: string[] = [];
-        if (!d.symbol) missing.push('symbol');
-        if (!d.date) missing.push('date');
-        if (!d.currency) missing.push('currency');
-        if (d.grossAmount === 0 && d.withholdingTax === 0) missing.push('amounts');
+
+        if (!d.symbol) {
+            missing.push('symbol');
+        }
+
+        if (!d.date) {
+            missing.push('date');
+        }
+
+        if (!d.currency) {
+            missing.push('currency');
+        }
+
+        if (d.grossAmount === 0 && d.withholdingTax === 0) {
+            missing.push('amounts');
+        }
+
         if (missing.length > 0) {
             warnings.push({
                 type: 'incomplete-row',
@@ -105,20 +155,32 @@ function checkIncompleteRows(state: AppState): ValidationWarning[] {
         }
     }
 
-    // IB Interest: need date, currency, amount != 0
-    for (let i = 0; i < (state.ibInterest ?? []).length; i++) {
-        const e = state.ibInterest[i];
-        const missing: string[] = [];
-        if (!e.date) missing.push('date');
-        if (!e.currency) missing.push('currency');
-        if (e.amount === 0) missing.push('amount');
-        if (missing.length > 0) {
-            warnings.push({
-                type: 'incomplete-row',
-                message: `Incomplete IB interest row ${i + 1}: missing ${missing.join(', ')}`,
-                tab: 'IB Interest',
-                rowIndex: i,
-            });
+    // Broker Interest: need date, currency, amount != 0
+    for (const bi of (state.brokerInterest ?? [])) {
+        for (let i = 0; i < bi.entries.length; i++) {
+            const e = bi.entries[i];
+            const missing: string[] = [];
+
+            if (!e.date) {
+                missing.push('date');
+            }
+
+            if (!e.currency) {
+                missing.push('currency');
+            }
+
+            if (e.amount === 0) {
+                missing.push('amount');
+            }
+
+            if (missing.length > 0) {
+                warnings.push({
+                    type: 'incomplete-row',
+                    message: `Incomplete ${bi.broker} interest row ${i + 1}: missing ${missing.join(', ')}`,
+                    tab: `${bi.broker} Interest`,
+                    rowIndex: i,
+                });
+            }
         }
     }
 
@@ -126,10 +188,23 @@ function checkIncompleteRows(state: AppState): ValidationWarning[] {
     for (let i = 0; i < (state.stockYield ?? []).length; i++) {
         const sy = state.stockYield[i];
         const missing: string[] = [];
-        if (!sy.date) missing.push('date');
-        if (!sy.symbol) missing.push('symbol');
-        if (!sy.currency) missing.push('currency');
-        if (sy.amount === 0) missing.push('amount');
+
+        if (!sy.date) {
+            missing.push('date');
+        }
+
+        if (!sy.symbol) {
+            missing.push('symbol');
+        }
+
+        if (!sy.currency) {
+            missing.push('currency');
+        }
+
+        if (sy.amount === 0) {
+            missing.push('amount');
+        }
+
         if (missing.length > 0) {
             warnings.push({
                 type: 'incomplete-row',
@@ -149,24 +224,40 @@ function checkDuplicateHoldings(state: AppState): ValidationWarning[] {
     const flagged = new Set<number>();
 
     for (let i = 0; i < holdings.length; i++) {
-        if (!holdings[i].symbol) continue;
+        if (!holdings[i].symbol) {
+            continue;
+        }
+
         for (let j = i + 1; j < holdings.length; j++) {
             const a = holdings[i];
             const b = holdings[j];
-            if (a.symbol !== b.symbol || a.currency !== b.currency) continue;
+
+            if (a.symbol !== b.symbol || a.currency !== b.currency) {
+                continue;
+            }
             // Different sources required
             const srcA = a.source?.type ?? 'unknown';
             const srcB = b.source?.type ?? 'unknown';
-            if (srcA === srcB) continue;
+
+            if (srcA === srcB) {
+                continue;
+            }
+
             // Same quantity required
-            if (a.quantity !== b.quantity) continue;
+            if (a.quantity !== b.quantity) {
+                continue;
+            }
             // Flag if: same date, OR one side is missing date/price (from IB transfer)
             const sameDate = a.dateAcquired && b.dateAcquired && a.dateAcquired === b.dateAcquired;
             const aMissingInfo = !a.dateAcquired || a.unitPrice === 0;
             const bMissingInfo = !b.dateAcquired || b.unitPrice === 0;
-            if (!sameDate && !aMissingInfo && !bMissingInfo) continue;
+
+            if (!sameDate && !aMissingInfo && !bMissingInfo) {
+                continue;
+            }
 
             const reason = sameDate ? 'same date' : 'missing date/price';
+
             if (!flagged.has(i)) {
                 flagged.add(i);
                 warnings.push({
@@ -176,6 +267,7 @@ function checkDuplicateHoldings(state: AppState): ValidationWarning[] {
                     rowIndex: i,
                 });
             }
+
             if (!flagged.has(j)) {
                 flagged.add(j);
                 warnings.push({
@@ -193,6 +285,7 @@ function checkDuplicateHoldings(state: AppState): ValidationWarning[] {
 
 function checkYearMismatch(state: AppState): ValidationWarning[] {
     const year = String(state.taxYear);
+
     return (state.dividends ?? [])
         .map((d, idx) => ({ d, idx }))
         .filter(({ d }) => !d.date.startsWith(year))

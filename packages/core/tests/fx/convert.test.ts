@@ -43,8 +43,12 @@ describe('toBaseCurrency', () => {
             expect(result).toBeCloseTo(80 * BGN_EUR_RATE / 8.22, 4);
         });
 
-        it('returns NaN when FX rate is missing', () => {
-            expect(toBaseCurrency(100, 'USD', '2099-01-01', 'BGN', fxRates)).toBeNaN();
+        it('falls back to nearest previous date for missing date', () => {
+            expect(toBaseCurrency(100, 'USD', '2099-01-01', 'BGN', fxRates)).not.toBeNaN();
+        });
+
+        it('returns NaN when date is before all available rates', () => {
+            expect(toBaseCurrency(100, 'USD', '2020-01-01', 'BGN', fxRates)).toBeNaN();
         });
 
         it('returns NaN for unknown currency', () => {
@@ -81,8 +85,8 @@ describe('toBaseCurrency', () => {
             expect(result).toBeCloseTo(100 / 0.84, 4);
         });
 
-        it('returns NaN when FX rate missing', () => {
-            expect(toBaseCurrency(100, 'USD', '2099-01-01', 'EUR', fxRates)).toBeNaN();
+        it('returns NaN for unknown currency (no rates at all)', () => {
+            expect(toBaseCurrency(100, 'CHF', '2025-06-15', 'EUR', fxRates)).toBeNaN();
         });
     });
 
@@ -103,8 +107,8 @@ describe('toBaseCurrencyStr', () => {
         expect(result).toBe((50 * BGN_EUR_RATE).toFixed(2));
     });
 
-    it('returns — for missing FX rate', () => {
-        expect(toBaseCurrencyStr(100, 'USD', '2099-01-01', 'BGN', fxRates)).toBe('—');
+    it('returns — for unknown currency (no rates)', () => {
+        expect(toBaseCurrencyStr(100, 'CHF', '2025-06-15', 'BGN', fxRates)).toBe('—');
     });
 
     it('returns — for unknown currency', () => {
@@ -135,8 +139,12 @@ describe('getFxRate', () => {
             expect(parseFloat(result)).toBeCloseTo(BGN_EUR_RATE / 1.05, 5);
         });
 
-        it('returns — for missing rate', () => {
-            expect(getFxRate('USD', '2099-01-01', 'BGN', fxRates)).toBe('—');
+        it('returns — for unknown currency (no rates)', () => {
+            expect(getFxRate('CHF', '2025-06-15', 'BGN', fxRates)).toBe('—');
+        });
+
+        it('falls back to nearest previous date for missing date', () => {
+            expect(getFxRate('USD', '2025-06-16', 'BGN', fxRates)).not.toBe('—');
         });
 
         it('returns — for unknown currency', () => {

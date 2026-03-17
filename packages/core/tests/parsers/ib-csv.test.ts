@@ -14,7 +14,7 @@ describe('parseIBCsv', () => {
 
     it('parses trades', () => {
         expect(result.trades).toHaveLength(3); // 1 EUR buy + 1 USD buy + 1 USD sell
-        const buy = result.trades.find(t => t.symbol === 'CSPX');
+        const buy = result.trades.find(t => t.symbol === 'SXR8'); // CSPX normalized to SXR8 via alias
         expect(buy).toBeDefined();
         expect(buy!.quantity).toBe(1);
         expect(buy!.price).toBe(614.28);
@@ -57,6 +57,34 @@ describe('parseIBCsv', () => {
     it('parses stock yield entries', () => {
         expect(result.stockYield.length).toBeGreaterThan(0);
         expect(result.stockYield[0].symbol).toBe('ISPAd');
+    });
+
+    it('parses open positions', () => {
+        expect(result.openPositions).toHaveLength(2);
+        const sxr8 = result.openPositions.find(p => p.symbol === 'SXR8');
+        expect(sxr8).toBeDefined();
+        expect(sxr8!.currency).toBe('EUR');
+        expect(sxr8!.quantity).toBe(1);
+        expect(sxr8!.costPrice).toBe(614.28);
+        const aapl = result.openPositions.find(p => p.symbol === 'AAPL');
+        expect(aapl).toBeDefined();
+        expect(aapl!.currency).toBe('USD');
+        expect(aapl!.quantity).toBe(10);
+    });
+
+    it('skips Total rows in open positions', () => {
+        expect(result.openPositions.every(p => p.symbol !== '')).toBe(true);
+    });
+
+    it('builds symbol aliases from Financial Instrument Information', () => {
+        expect(result.symbolAliases['CSPX']).toBe('SXR8');
+    });
+
+    it('normalizes trade symbols using aliases', () => {
+        // CSPX trade should be normalized to SXR8
+        const sxr8Trade = result.trades.find(t => t.symbol === 'SXR8');
+        expect(sxr8Trade).toBeDefined();
+        expect(result.trades.find(t => t.symbol === 'CSPX')).toBeUndefined();
     });
 
     it('extracts symbol from dividend description', () => {
@@ -142,5 +170,53 @@ Trades,Total,,Forex,USD,,,,,,-1050.00,-5.00,-1050.00,0,0,`;
         // Should only parse Stocks trades, not Forex
         expect(result.trades).toHaveLength(1);
         expect(result.trades[0].symbol).toBe('AAPL');
+    });
+
+    it('skips Open Position with quantity=0', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code
+Open Positions,Data,Summary,Stocks,USD,CLOSED,0,1,100.00,0,0,0,0,`;
+        const result = parseIBCsv(csv);
+        expect(result.openPositions).toHaveLength(0);
+    });
+
+    it('skips Open Position with negative quantity', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Open Positions,Data,Summary,Stocks,USD,SHORT,-10,1,100.00,-1000.00,95.00,-950.00,50.00,`;
+        const result = parseIBCsv(csv);
+        expect(result.openPositions).toHaveLength(0);
+    });
+
+    it('accepts Open Position with costPrice=0', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Open Positions,Data,Summary,Stocks,USD,FREE,5,1,0,0,10.00,50.00,50.00,`;
+        const result = parseIBCsv(csv);
+        expect(result.openPositions).toHaveLength(1);
+        expect(result.openPositions[0].costPrice).toBe(0);
+    });
+
+    it('handles interest row with truncated fields', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Interest,Header,Currency,Date,Description,Amount
+Interest,Data,USD,2025-01-06`;
+        const result = parseIBCsv(csv);
+        expect(result.interest).toHaveLength(0); // skipped due to NaN amount
+    });
+
+    it('returns empty symbolAliases when no Financial Instrument Information', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Trades,Data,Order,Stocks,USD,AAPL,"2025-01-15, 10:00:00",10,150.00,150.00,-1500.00,-1.00`;
+        const result = parseIBCsv(csv);
+        expect(Object.keys(result.symbolAliases)).toHaveLength(0);
+    });
+
+    it('alias resolution: sold symbol not in Open Positions gets no alias', () => {
+        const csv = `Statement,Header,Field Name,Field Value
+Trades,Data,Order,Stocks,EUR,CSPX,"2025-01-21, 10:26:07",1,614.28,614.38,-614.28,-1.25
+Financial Instrument Information,Data,Stocks,"CSPX, SXR8",ISHARES CORE S&P 500,75776072,IE00B5BMR087,SXR8,IBIS2,1,ETF,`;
+        // No Open Positions for SXR8 → alias uses primarySymbol (field[7]=SXR8)
+        const result = parseIBCsv(csv);
+        expect(result.symbolAliases['CSPX']).toBe('SXR8');
+        expect(result.trades[0].symbol).toBe('SXR8');
     });
 });

@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
-import type { Dividend } from '../types/index.js';
+
 import { calcDividendRowTax } from '../fx/convert.js';
+import type { Dividend } from '../types/index.js';
 
 /**
  * Generate an Excel file matching the NRA Приложение 8, Част III format
@@ -33,6 +34,7 @@ export async function generateNraAppendix8Part3(
     ];
 
     const headerRow = sheet.addRow(headers);
+
     headerRow.eachCell((cell) => {
         cell.font = { bold: true, size: 10 };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
@@ -42,6 +44,7 @@ export async function generateNraAppendix8Part3(
 
     // Column number row
     const numRow = sheet.addRow(Array.from({ length: 12 }, (_, i) => String(i + 1)));
+
     numRow.eachCell((cell) => {
         cell.font = { italic: true, size: 9 };
         cell.alignment = { horizontal: 'center' };
@@ -54,6 +57,7 @@ export async function generateNraAppendix8Part3(
         .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date));
 
     let rowNum = 1;
+
     for (const d of sorted) {
         const { grossBase, whtBase, tax5pct, bgTaxDue } = calcDividendRowTax(
             d.grossAmount,
@@ -82,6 +86,7 @@ export async function generateNraAppendix8Part3(
 
         row.eachCell((cell, colNumber) => {
             cell.border = thinBorder();
+
             if (colNumber >= 6) {
                 cell.numFmt = '#,##0.00';
                 cell.alignment = { horizontal: 'right' };
@@ -104,11 +109,13 @@ export async function generateNraAppendix8Part3(
             'BGN',
             fxRates,
         );
+
         acc.gross += grossBase;
         acc.wht += whtBase;
         acc.tax5 += tax5pct;
         acc.credit += Math.min(whtBase, tax5pct);
         acc.due += bgTaxDue;
+
         return acc;
     }, { gross: 0, wht: 0, tax5: 0, credit: 0, due: 0 });
 
@@ -126,9 +133,11 @@ export async function generateNraAppendix8Part3(
         round2(totals.credit),
         round2(totals.due),
     ]);
+
     totalRow.eachCell((cell, colNumber) => {
         cell.font = { bold: true, size: 10 };
         cell.border = thinBorder();
+
         if (colNumber >= 6) {
             cell.numFmt = '#,##0.00';
             cell.alignment = { horizontal: 'right' };
@@ -138,11 +147,13 @@ export async function generateNraAppendix8Part3(
 
     // Column widths
     const widths = [6, 22, 14, 10, 10, 14, 14, 14, 14, 14, 14, 14];
+
     widths.forEach((w, i) => {
         sheet.getColumn(i + 1).width = w;
     });
 
     const buf = await workbook.xlsx.writeBuffer();
+
     return new Uint8Array(buf instanceof ArrayBuffer ? buf : (buf as Uint8Array).buffer);
 }
 

@@ -2,13 +2,13 @@
 
 **[Open the app](https://vtrifonov.github.io/bulgarian-tax-declaration/)** — hosted version, runs entirely in your browser.
 
-> **Privacy:** All data stays on your machine. Nothing is sent to any server — everything is stored in your browser's local storage. No analytics, no tracking.
+> **Privacy:** Your tax data is stored only locally. Nothing is sent to any server.
 >
 > **Access:** The app requires a Google login. To get access, contact **Vasil Trifonov** ([v.trifonov@gmail.com](mailto:v.trifonov@gmail.com)).
 
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
-Parses Interactive Brokers and Revolut savings statements, calculates Bulgarian taxes using FIFO lot matching, and exports a formatted Excel declaration.
+Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency), and Revolut investments (trades). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration.
 
 ## Prerequisites
 
@@ -37,7 +37,8 @@ bulgarian-tax-declaration/
 ├── packages/
 │   ├── core/          # Pure TypeScript library (no UI deps)
 │   │   ├── src/
-│   │   │   ├── parsers/       # IB CSV, Revolut CSV, WHT matcher, Excel import
+│   │   │   ├── providers/      # BrokerProvider registry (IB, Revolut, etc.)
+│   │   │   ├── parsers/       # CSV/Excel parsers, WHT matcher
 │   │   │   ├── fx/            # ECB API client, FX cache, gap-fill
 │   │   │   ├── fifo/          # FIFO lot matching engine
 │   │   │   ├── tax/           # Bulgarian tax rules + calculator
@@ -45,7 +46,7 @@ bulgarian-tax-declaration/
 │   │   │   ├── declaration/   # NRA form field mapping (2025, 2026)
 │   │   │   ├── excel/         # Full xlsx generation (exceljs)
 │   │   │   ├── i18n/          # BG/EN string tables
-│   │   │   ├── country-map.ts # Symbol → country mapping
+│   │   │   ├── country-map.ts # Symbol → country + OpenFIGI fallback
 │   │   │   └── types/         # Shared interfaces
 │   │   └── tests/
 │   └── ui/            # Tauri v2 + React desktop app
@@ -85,6 +86,9 @@ pnpm dev
 | `pnpm install` | Install all dependencies |
 | `pnpm test` | Run tests in all packages |
 | `pnpm test:core` | Run core library tests only |
+| `pnpm test:coverage` | Run tests with coverage report |
+| `pnpm format` | Format code with dprint |
+| `pnpm spell` | Spellcheck with cspell |
 | `pnpm build` | Build all packages |
 | `pnpm dev` | Start Tauri desktop app |
 
@@ -185,9 +189,18 @@ WHT credit formula: `tax_due = max(0, bg_rate × gross - wht_paid)` — excess f
 
 ## Data Sources
 
-- **Interactive Brokers**: CSV activity statement — trades, dividends, WHT, stock yield
-- **Revolut Savings**: CSV per currency/vault — interest paid, service fees
+- **Interactive Brokers**: CSV activity statement — trades, dividends, WHT, stock yield, interest
+- **Revolut Savings**: Statement per currency fund — interest paid, service fees
+- **Revolut Investments**: Account statement — trades (buys/sells)
 - **FX Rates**: Auto-fetched from ECB API (cached locally)
+
+## Contributing
+
+We welcome contributions, especially new broker providers! See [AGENTS.md](./AGENTS.md) for:
+- Code principles and style guide
+- Step-by-step guide for adding a new broker provider
+- Testing requirements and Excel round-trip contract
+- Before-push checklist
 
 ## Tech Stack
 

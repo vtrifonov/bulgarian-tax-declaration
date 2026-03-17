@@ -2,6 +2,8 @@ import type {
     Workbook,
     Worksheet,
 } from 'exceljs';
+
+import type { AppState } from '../../types/index.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -10,7 +12,6 @@ import {
     FX_RATE_FORMAT,
     HEADER_STYLE,
 } from '../styles.js';
-import type { AppState } from '../../types/index.js';
 
 export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
     const sheet = workbook.addWorksheet('Продажби');
@@ -34,15 +35,20 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
         `Печалба/Загуба (${ccy})`,
     ];
     const headerRow = sheet.addRow(headers);
+
     headerRow.eachCell((cell) => {
         cell.style = { ...HEADER_STYLE, font: FONT };
     });
 
     // Data rows (skip incomplete rows)
     let r = 2;
+
     for (let i = 0; i < state.sales.length; i++) {
         const s = state.sales[i];
-        if (!s.symbol && !s.currency) continue;
+
+        if (!s.symbol || !s.currency) {
+            continue;
+        }
 
         const row = sheet.addRow([
             s.broker,
@@ -84,6 +90,7 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
 
     // Column widths
     const widths = [12, 14, 10, 14, 14, 8, 10, 12, 12, 12, 12, 12, 12, 12];
+
     for (let i = 0; i < headers.length; i++) {
         sheet.getColumn(i + 1).width = widths[i];
     }

@@ -86,31 +86,20 @@ describe('Excel Generator', () => {
                     amount: 10.5,
                 },
             ],
-            ibInterest: [],
-            revolutInterest: [
+            brokerInterest: [
                 {
+                    broker: 'Revolut',
                     currency: 'EUR',
                     entries: [
-                        {
-                            date: '2025-03-01',
-                            description: 'Interest PAID',
-                            amount: 5.0,
-                        },
-                        {
-                            date: '2025-03-15',
-                            description: 'Service Fee Charged',
-                            amount: -1.0,
-                        },
+                        { currency: 'EUR', date: '2025-03-01', description: 'Interest PAID', amount: 5.0 },
+                        { currency: 'EUR', date: '2025-03-15', description: 'Service Fee Charged', amount: -1.0 },
                     ],
                 },
                 {
+                    broker: 'Revolut',
                     currency: 'USD',
                     entries: [
-                        {
-                            date: '2025-02-28',
-                            description: 'Interest PAID',
-                            amount: 3.5,
-                        },
+                        { currency: 'USD', date: '2025-02-28', description: 'Interest PAID', amount: 3.5 },
                     ],
                 },
             ],
@@ -124,7 +113,6 @@ describe('Excel Generator', () => {
                     '2024-06-10': 1.95583,
                 },
             },
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -143,9 +131,8 @@ describe('Excel Generator', () => {
         expect(sheetNames).toContain('Продажби');
         expect(sheetNames).toContain('Дивиденти');
         expect(sheetNames).toContain('IB Stock Yield');
-        expect(sheetNames).toContain('Revolut Лихва');
-        expect(sheetNames).toContain('Revolut EUR');
-        expect(sheetNames).toContain('Revolut USD');
+        expect(sheetNames).toContain('Revolut Лихви EUR');
+        expect(sheetNames).toContain('Revolut Лихви USD');
 
         // Verify Holdings sheet structure
         const holdingsSheet = workbook.getWorksheet('Притежания');
@@ -204,14 +191,14 @@ describe('Excel Generator', () => {
 
         // EUR/BGN fixed rate — no EUR FX sheet
 
-        // Verify Revolut sheets
-        const revolutSummary = workbook.getWorksheet('Revolut Лихва');
-        expect(revolutSummary).toBeDefined();
-        expect(revolutSummary!.rowCount).toBeGreaterThan(1);
+        // Verify broker interest sheets
+        const revEurSheet = workbook.getWorksheet('Revolut Лихви EUR');
+        expect(revEurSheet).toBeDefined();
+        expect(revEurSheet!.rowCount).toBeGreaterThan(1);
 
-        const revHeader = revolutSummary!.getRow(1);
-        expect(revHeader.getCell(1).value).toBe('Валута');
-        expect(revHeader.getCell(2).value).toBe('Записи');
+        const revHeader = revEurSheet!.getRow(1);
+        expect(revHeader.getCell(1).value).toBe('Дата');
+        expect(revHeader.getCell(2).value).toBe('Описание');
     });
 
     it('generates Excel with EUR base currency', async () => {
@@ -235,14 +222,12 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: {
                 USD: {
                     '2024-01-15': 0.92,
                 },
             },
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -274,10 +259,8 @@ describe('Excel Generator', () => {
                 { symbol: 'AAPL', country: 'САЩ', date: '2025-01-10', currency: 'USD', grossAmount: 25, withholdingTax: 2, bgTaxDue: 1.5, whtCredit: 2, notes: '' },
             ],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: { USD: { '2025-01-10': 1.9, '2025-02-10': 1.95 } },
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -329,10 +312,8 @@ describe('Excel Generator', () => {
             ],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: {},
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -386,8 +367,7 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: {
                 USD: {
                     '2025-01-15': 1.82,
@@ -395,7 +375,6 @@ describe('Excel Generator', () => {
                     '2025-03-10': 1.95,
                 },
             },
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -428,7 +407,7 @@ describe('Excel Generator', () => {
         expect(rates).toContain(1.95);
     });
 
-    it('revolut detail sheets exist per currency', async () => {
+    it('broker interest sheets exist per broker+currency', async () => {
         const state: AppState = {
             taxYear: 2025,
             baseCurrency: 'BGN',
@@ -437,23 +416,23 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [
+            brokerInterest: [
                 {
+                    broker: 'Revolut',
                     currency: 'EUR',
                     entries: [
-                        { date: '2025-01-01', description: 'Interest PAID', amount: 5.0 },
+                        { currency: 'EUR', date: '2025-03-01', description: 'Interest PAID', amount: 5.0 },
                     ],
                 },
                 {
+                    broker: 'Revolut',
                     currency: 'GBP',
                     entries: [
-                        { date: '2025-02-01', description: 'Interest PAID', amount: 3.0 },
+                        { currency: 'GBP', date: '2025-06-30', description: 'Interest PAID', amount: 2.0 },
                     ],
                 },
             ],
             fxRates: {},
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -461,21 +440,17 @@ describe('Excel Generator', () => {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(buffer);
 
-        // Check summary sheet exists
-        const summarySheet = workbook.getWorksheet('Revolut Лихва');
-        expect(summarySheet).toBeDefined();
-
-        // Check detail sheets exist
-        const eurSheet = workbook.getWorksheet('Revolut EUR');
-        const gbpSheet = workbook.getWorksheet('Revolut GBP');
+        // Check sheets named "{Broker} Лихви {CCY}"
+        const eurSheet = workbook.getWorksheet('Revolut Лихви EUR');
+        const gbpSheet = workbook.getWorksheet('Revolut Лихви GBP');
         expect(eurSheet).toBeDefined();
         expect(gbpSheet).toBeDefined();
 
         // Check detail sheet headers
-        const eurDetailHeaders = eurSheet!.getRow(1);
-        expect(eurDetailHeaders.getCell(1).value).toBe('Дата');
-        expect(eurDetailHeaders.getCell(2).value).toBe('Описание');
-        expect(eurDetailHeaders.getCell(3).value).toBe('Размер');
+        const eurHeaders = eurSheet!.getRow(1);
+        expect(eurHeaders.getCell(1).value).toBe('Дата');
+        expect(eurHeaders.getCell(2).value).toBe('Описание');
+        expect(eurHeaders.getCell(3).value).toBe('Сума');
     });
 
     it('holdings sheet formulas exist (VLOOKUP or ROUND)', async () => {
@@ -499,10 +474,8 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: { USD: { '2024-01-15': 1.82 } },
-            ibInterest: [],
             manualEntries: [],
         };
 
@@ -539,10 +512,8 @@ describe('Excel Generator', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: {},
-            ibInterest: [],
             manualEntries: [],
         };
 

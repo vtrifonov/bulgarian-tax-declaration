@@ -1,7 +1,7 @@
 import type {
     Holding,
-    IBTrade,
     Sale,
+    Trade,
     ValidationWarning,
 } from '../types/index.js';
 const randomUUID = () => crypto.randomUUID();
@@ -17,11 +17,14 @@ export class FifoEngine {
 
     constructor(existingHoldings: Holding[]) {
         this.lots = new Map();
+
         for (const h of existingHoldings) {
             const list = this.lots.get(h.symbol) ?? [];
+
             list.push({ ...h });
             this.lots.set(h.symbol, list);
         }
+
         // Sort each symbol's lots by dateAcquired
         for (const [, list] of this.lots) {
             list.sort((a, b) => a.dateAcquired.localeCompare(b.dateAcquired));
@@ -29,7 +32,7 @@ export class FifoEngine {
     }
 
     processTrades(
-        trades: IBTrade[],
+        trades: Trade[],
         broker: string,
         countryMap: Record<string, string>,
     ): FifoResult {
@@ -44,6 +47,7 @@ export class FifoEngine {
                 this.addLot(trade, broker, countryMap);
             } else if (trade.quantity < 0) {
                 const result = this.sellLots(trade, broker, countryMap);
+
                 sales.push(...result.sales);
                 warnings.push(...result.warnings);
             }
@@ -51,6 +55,7 @@ export class FifoEngine {
 
         // Flatten remaining lots into holdings array
         const holdings: Holding[] = [];
+
         for (const [, list] of this.lots) {
             holdings.push(...list.filter(h => h.quantity > 0));
         }
@@ -58,7 +63,7 @@ export class FifoEngine {
         return { holdings, sales, warnings };
     }
 
-    private addLot(trade: IBTrade, broker: string, countryMap: Record<string, string>): void {
+    private addLot(trade: Trade, broker: string, countryMap: Record<string, string>): void {
         const date = trade.dateTime.split(',')[0].trim();
         const lot: Holding = {
             id: randomUUID(),
@@ -71,12 +76,13 @@ export class FifoEngine {
             unitPrice: trade.price,
         };
         const list = this.lots.get(trade.symbol) ?? [];
+
         list.push(lot);
         this.lots.set(trade.symbol, list);
     }
 
     private sellLots(
-        trade: IBTrade,
+        trade: Trade,
         broker: string,
         countryMap: Record<string, string>,
     ): { sales: Sale[]; warnings: ValidationWarning[] } {

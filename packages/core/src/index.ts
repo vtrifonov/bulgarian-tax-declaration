@@ -1,4 +1,4 @@
-export * from './types/index.js';
+export type * from './types/index.js';
 export { gapFillRates } from './fx/gap-fill.js';
 export {
     fetchEcbRates,
@@ -24,7 +24,18 @@ export {
 } from './parsers/excel-import.js';
 export { importFullExcel } from './parsers/excel-full-import.js';
 export type { FullExcelImport } from './parsers/excel-full-import.js';
-export { resolveCountry } from './country-map.js';
+export {
+    resolveCountries,
+    resolveCountry,
+    resolveCountrySync,
+} from './country-map.js';
+export { providers } from './providers/registry.js';
+export type {
+    BrokerProvider,
+    BrokerProviderResult,
+    ExportInstruction,
+    FileHandler,
+} from './providers/types.js';
 export {
     getLanguage,
     setLanguage,

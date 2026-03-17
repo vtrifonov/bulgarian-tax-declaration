@@ -1,4 +1,9 @@
-import { cpSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import {
+    cpSync,
+    existsSync,
+    mkdirSync,
+    readdirSync,
+} from 'fs';
 import { join } from 'path';
 
 const tauriTarget = join('packages', 'ui', 'src-tauri', 'target', 'release');
@@ -12,7 +17,11 @@ let found = 0;
 
 function copyArtifacts(dir) {
     let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+        entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return;
+    }
     for (const entry of entries) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) {

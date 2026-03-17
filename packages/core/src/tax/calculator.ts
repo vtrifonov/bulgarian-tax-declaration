@@ -4,8 +4,8 @@ import {
     calcInterestTax,
 } from './rules.js';
 import type {
+    BrokerInterest,
     Dividend,
-    RevolutInterest,
     Sale,
     StockYieldEntry,
 } from '../types/index.js';
@@ -87,8 +87,10 @@ export class TaxCalculator {
                 } else if (div.currency !== 'EUR') {
                     // Convert other currencies using ECB rates
                     const rate = fxRates[div.currency]?.[div.date];
+
                     if (rate !== undefined) {
                         const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
+
                         grossInBaseCcy = div.grossAmount * fxRate;
                         whtInBaseCcy = Math.abs(div.withholdingTax) * fxRate;
                     }
@@ -127,8 +129,10 @@ export class TaxCalculator {
                 } else if (entry.currency !== 'EUR') {
                     // Convert other currencies using ECB rates
                     const rate = fxRates[entry.currency]?.[entry.date];
+
                     if (rate !== undefined) {
                         const fxRate = this.baseCurrency === 'BGN' ? BGN_TO_EUR / rate : 1 / rate;
+
                         amountInBaseCcy = entry.amount * fxRate;
                     }
                 }
@@ -145,14 +149,15 @@ export class TaxCalculator {
         };
     }
 
-    calcRevolutInterest(revolut: RevolutInterest[]): RevolutInterestResult[] {
+    calcRevolutInterest(revolut: BrokerInterest[]): RevolutInterestResult[] {
         const results: RevolutInterestResult[] = [];
 
         for (const rev of revolut) {
-            const netInterestInCurrency = rev.entries.reduce((sum, e) => sum + e.amount, 0);
+            const netInterestInCurrency = rev.entries.reduce((sum: number, e) => sum + e.amount, 0);
 
             // Convert to base currency (assuming 1:1 for EUR in BGN context)
             let netInterestBaseCcy = netInterestInCurrency;
+
             if (rev.currency === 'EUR' && this.baseCurrency === 'BGN') {
                 netInterestBaseCcy = netInterestInCurrency * BGN_TO_EUR;
             }

@@ -2,6 +2,7 @@ import type {
     Workbook,
     Worksheet,
 } from 'exceljs';
+
 import {
     CCY_FORMAT,
     DATE_FORMAT,
@@ -19,14 +20,17 @@ export function addFxSheet(
 
     // Headers
     const headerRow = sheet.addRow(['Дата', 'Курс']);
+
     headerRow.eachCell((cell) => {
         cell.style = { ...HEADER_STYLE, font: FONT };
     });
 
     // Data rows: sorted by date
     const dates = Object.keys(rates).sort();
+
     for (const date of dates) {
         const row = sheet.addRow([date, rates[date]]);
+
         row.getCell(1).numFmt = DATE_FORMAT;
         row.getCell(2).numFmt = CCY_FORMAT;
         row.font = FONT;

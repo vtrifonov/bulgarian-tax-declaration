@@ -31,3 +31,12 @@ Stock Yield Enhancement Program Securities Lent Interest Details,Header,Currency
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-01-02,ISPAd,2025-01-02,-42,1300.95,1.62,0.81,0.03,Po
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-01-03,ISPAd,2025-01-03,-42,1300.95,1.62,0.81,0.03,Po
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,Total,,,,,,,,0.06,
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code
+Open Positions,Data,Summary,Stocks,EUR,SXR8,1,1,614.28,614.28,628.53,628.53,14.25,
+Open Positions,Data,Summary,Stocks,USD,AAPL,10,1,150.50,1505.00,178.25,1782.50,277.50,
+Open Positions,Total,,Stocks,EUR,,,,,614.28,,628.53,14.25,
+Open Positions,Total,,Stocks,USD,,,,,1505.00,,1782.50,277.50,
+Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+Financial Instrument Information,Data,Stocks,"CSPX, SXR8",ISHARES CORE S&P 500,75776072,IE00B5BMR087,SXR8,IBIS2,1,ETF,
+Financial Instrument Information,Data,Stocks,AAPL,APPLE INC,265598,US0378331005,AAPL,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,MSFT,MICROSOFT CORP,272093,US5949181045,MSFT,NASDAQ,1,COMMON,

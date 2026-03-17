@@ -6,9 +6,10 @@ import {
 } from 'vitest';
 import { useAppStore } from './app-state';
 import type {
+    BrokerInterest,
     Dividend,
     Holding,
-    IBInterestEntry,
+    InterestEntry,
     Sale,
     StockYieldEntry,
 } from '@bg-tax/core';
@@ -23,8 +24,7 @@ describe('useAppStore', () => {
             sales: [],
             dividends: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             fxRates: {},
         });
     });
@@ -510,72 +510,118 @@ describe('useAppStore', () => {
         });
     });
 
-    describe('addIbInterest/updateIbInterest/deleteIbInterest', () => {
-        it('adds an IB interest entry', () => {
-            const interest: IBInterestEntry = {
+    describe('addBrokerInterest/updateBrokerInterest/deleteBrokerInterest', () => {
+        it('adds a broker interest entry', () => {
+            const brokerInt: BrokerInterest = {
+                broker: 'IB',
                 currency: 'USD',
-                date: '2024-01-15',
-                description: 'Monthly interest',
-                amount: 25.5,
+                entries: [
+                    {
+                        currency: 'USD',
+                        date: '2024-01-15',
+                        description: 'Monthly interest',
+                        amount: 25.5,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            useAppStore.getState().addIbInterest(interest);
+            useAppStore.getState().addBrokerInterest(brokerInt);
             const state = useAppStore.getState();
-            expect(state.ibInterest).toHaveLength(1);
-            expect(state.ibInterest[0].currency).toBe('USD');
-            expect(state.ibInterest[0].amount).toBe(25.5);
+            expect(state.brokerInterest).toHaveLength(1);
+            expect(state.brokerInterest[0].broker).toBe('IB');
+            expect(state.brokerInterest[0].entries).toHaveLength(1);
+            expect(state.brokerInterest[0].entries[0].amount).toBe(25.5);
         });
 
-        it('adds multiple IB interest entries', () => {
-            const i1: IBInterestEntry = {
+        it('adds multiple broker interest entries', () => {
+            const bi1: BrokerInterest = {
+                broker: 'IB',
                 currency: 'USD',
-                date: '2024-01-15',
-                description: 'Monthly interest',
-                amount: 25.5,
+                entries: [
+                    {
+                        currency: 'USD',
+                        date: '2024-01-15',
+                        description: 'Monthly interest',
+                        amount: 25.5,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            const i2: IBInterestEntry = {
+            const bi2: BrokerInterest = {
+                broker: 'Revolut',
                 currency: 'EUR',
-                date: '2024-02-15',
-                description: 'Monthly interest',
-                amount: 15.0,
+                entries: [
+                    {
+                        currency: 'EUR',
+                        date: '2024-02-15',
+                        description: 'Monthly interest',
+                        amount: 15.0,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            useAppStore.getState().addIbInterest(i1);
-            useAppStore.getState().addIbInterest(i2);
-            expect(useAppStore.getState().ibInterest).toHaveLength(2);
+            useAppStore.getState().addBrokerInterest(bi1);
+            useAppStore.getState().addBrokerInterest(bi2);
+            expect(useAppStore.getState().brokerInterest).toHaveLength(2);
         });
 
-        it('updates an IB interest entry at specific index', () => {
-            const interest: IBInterestEntry = {
+        it('updates a broker interest at specific index', () => {
+            const brokerInt: BrokerInterest = {
+                broker: 'IB',
                 currency: 'USD',
-                date: '2024-01-15',
-                description: 'Monthly interest',
-                amount: 25.5,
+                entries: [
+                    {
+                        currency: 'USD',
+                        date: '2024-01-15',
+                        description: 'Monthly interest',
+                        amount: 25.5,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            useAppStore.getState().addIbInterest(interest);
+            useAppStore.getState().addBrokerInterest(brokerInt);
 
-            const updated: IBInterestEntry = { ...interest, amount: 30.0 };
-            useAppStore.getState().updateIbInterest(0, updated);
-            expect(useAppStore.getState().ibInterest[0].amount).toBe(30.0);
+            const updated: BrokerInterest = {
+                ...brokerInt,
+                entries: [{ ...brokerInt.entries[0], amount: 30.0 }],
+            };
+            useAppStore.getState().updateBrokerInterest(0, updated);
+            expect(useAppStore.getState().brokerInterest[0].entries[0].amount).toBe(30.0);
         });
 
-        it('deletes an IB interest entry at specific index', () => {
-            const i1: IBInterestEntry = {
+        it('deletes a broker interest at specific index', () => {
+            const bi1: BrokerInterest = {
+                broker: 'IB',
                 currency: 'USD',
-                date: '2024-01-15',
-                description: 'Monthly interest',
-                amount: 25.5,
+                entries: [
+                    {
+                        currency: 'USD',
+                        date: '2024-01-15',
+                        description: 'Monthly interest',
+                        amount: 25.5,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            const i2: IBInterestEntry = {
+            const bi2: BrokerInterest = {
+                broker: 'Revolut',
                 currency: 'EUR',
-                date: '2024-02-15',
-                description: 'Monthly interest',
-                amount: 15.0,
+                entries: [
+                    {
+                        currency: 'EUR',
+                        date: '2024-02-15',
+                        description: 'Monthly interest',
+                        amount: 15.0,
+                        source: { type: 'Manual' },
+                    },
+                ],
             };
-            useAppStore.getState().addIbInterest(i1);
-            useAppStore.getState().addIbInterest(i2);
-            useAppStore.getState().deleteIbInterest(0);
+            useAppStore.getState().addBrokerInterest(bi1);
+            useAppStore.getState().addBrokerInterest(bi2);
+            useAppStore.getState().deleteBrokerInterest(0);
             const state = useAppStore.getState();
-            expect(state.ibInterest).toHaveLength(1);
-            expect(state.ibInterest[0].currency).toBe('EUR');
+            expect(state.brokerInterest).toHaveLength(1);
+            expect(state.brokerInterest[0].broker).toBe('Revolut');
         });
     });
 
@@ -713,7 +759,7 @@ describe('useAppStore', () => {
             expect(state.sales).toEqual([]);
             expect(state.dividends).toEqual([]);
             expect(state.stockYield).toEqual([]);
-            expect(state.ibInterest).toEqual([]);
+            expect(state.brokerInterest).toEqual([]);
         });
     });
 });

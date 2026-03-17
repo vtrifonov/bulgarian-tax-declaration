@@ -1,12 +1,18 @@
 import { create } from 'zustand';
 import type {
+    BrokerInterest,
     Dividend,
     Holding,
-    IBInterestEntry,
-    RevolutInterest,
     Sale,
     StockYieldEntry,
 } from '@bg-tax/core';
+
+export interface ImportedFile {
+    name: string;
+    type: 'ib' | 'revolut' | 'revolut-investments';
+    status: 'success' | 'error';
+    message: string;
+}
 
 export interface AppState {
     // Settings
@@ -19,9 +25,9 @@ export interface AppState {
     sales: Sale[];
     dividends: Dividend[];
     stockYield: StockYieldEntry[];
-    ibInterest: IBInterestEntry[];
-    revolutInterest: RevolutInterest[];
+    brokerInterest: BrokerInterest[];
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
+    importedFiles: ImportedFile[];
 
     // Actions
     setTaxYear: (year: number) => void;
@@ -52,20 +58,18 @@ export interface AppState {
     deleteStockYield: (index: number) => void;
     importStockYield: (items: StockYieldEntry[]) => void;
 
-    // IB Interest
-    addIbInterest: (interest: IBInterestEntry) => void;
-    updateIbInterest: (index: number, interest: IBInterestEntry) => void;
-    deleteIbInterest: (index: number) => void;
-    importIbInterest: (interests: IBInterestEntry[]) => void;
-
-    // Revolut Interest
-    addRevolutInterest: (interest: RevolutInterest) => void;
-    updateRevolutInterest: (index: number, interest: RevolutInterest) => void;
-    deleteRevolutInterest: (index: number) => void;
-    importRevolutInterest: (interests: RevolutInterest[]) => void;
+    // Broker Interest
+    addBrokerInterest: (interest: BrokerInterest) => void;
+    updateBrokerInterest: (index: number, interest: BrokerInterest) => void;
+    deleteBrokerInterest: (index: number) => void;
+    importBrokerInterest: (interests: BrokerInterest[]) => void;
 
     // FX Rates
     setFxRates: (rates: Record<string, Record<string, number>>) => void;
+
+    // Imported files log
+    addImportedFile: (file: ImportedFile) => void;
+    clearImportedFiles: () => void;
 
     // Reset
     reset: () => void;
@@ -75,13 +79,13 @@ const initialState = {
     taxYear: new Date().getFullYear() - 1,
     baseCurrency: (new Date().getFullYear() - 1) <= 2025 ? ('BGN' as const) : ('EUR' as const),
     language: 'bg' as const,
-    holdings: [],
-    sales: [],
-    dividends: [],
-    stockYield: [],
-    ibInterest: [],
-    revolutInterest: [],
+    holdings: [] as Holding[],
+    sales: [] as Sale[],
+    dividends: [] as Dividend[],
+    stockYield: [] as StockYieldEntry[],
+    brokerInterest: [] as BrokerInterest[],
     fxRates: {} as Record<string, Record<string, number>>,
+    importedFiles: [] as ImportedFile[],
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -143,37 +147,21 @@ export const useAppStore = create<AppState>((set) => ({
         })),
     importStockYield: (items: StockYieldEntry[]) => set({ stockYield: items }),
 
-    addIbInterest: (interest: IBInterestEntry) =>
+    addBrokerInterest: (interest: BrokerInterest) =>
         set((state) => ({
-            ibInterest: [...state.ibInterest, interest],
+            brokerInterest: [...state.brokerInterest, interest],
         })),
-    updateIbInterest: (index: number, interest: IBInterestEntry) =>
+    updateBrokerInterest: (index: number, interest: BrokerInterest) =>
         set((state) => {
-            const ibInterest = [...state.ibInterest];
-            ibInterest[index] = interest;
-            return { ibInterest };
+            const brokerInterest = [...state.brokerInterest];
+            brokerInterest[index] = interest;
+            return { brokerInterest };
         }),
-    deleteIbInterest: (index: number) =>
+    deleteBrokerInterest: (index: number) =>
         set((state) => ({
-            ibInterest: state.ibInterest.filter((_, i) => i !== index),
+            brokerInterest: state.brokerInterest.filter((_, i) => i !== index),
         })),
-    importIbInterest: (interests: IBInterestEntry[]) => set({ ibInterest: interests }),
-
-    addRevolutInterest: (interest: RevolutInterest) =>
-        set((state) => ({
-            revolutInterest: [...state.revolutInterest, interest],
-        })),
-    updateRevolutInterest: (index: number, interest: RevolutInterest) =>
-        set((state) => {
-            const revolutInterest = [...state.revolutInterest];
-            revolutInterest[index] = interest;
-            return { revolutInterest };
-        }),
-    deleteRevolutInterest: (index: number) =>
-        set((state) => ({
-            revolutInterest: state.revolutInterest.filter((_, i) => i !== index),
-        })),
-    importRevolutInterest: (interests: RevolutInterest[]) => set({ revolutInterest: interests }),
+    importBrokerInterest: (interests: BrokerInterest[]) => set({ brokerInterest: interests }),
 
     setFxRates: (rates: Record<string, Record<string, number>>) =>
         set((state) => {
@@ -183,6 +171,9 @@ export const useAppStore = create<AppState>((set) => ({
             }
             return { fxRates: merged };
         }),
+
+    addImportedFile: (file: ImportedFile) => set((state) => ({ importedFiles: [...state.importedFiles, file] })),
+    clearImportedFiles: () => set({ importedFiles: [] }),
 
     reset: () => set(initialState),
 }));

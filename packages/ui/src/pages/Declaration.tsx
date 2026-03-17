@@ -19,8 +19,7 @@ export function Declaration() {
         sales,
         dividends,
         stockYield,
-        ibInterest,
-        revolutInterest,
+        brokerInterest,
         fxRates,
         baseCurrency,
         taxYear,
@@ -32,24 +31,25 @@ export function Declaration() {
     const capitalGainsResult = calculator.calcCapitalGains(sales);
     const dividendsTaxResult = calculator.calcDividendsTax(dividends, fxRates);
 
-    // Combine interest from stock yield and Revolut
-
     // Calculate stock yield tax
     const stockYieldResult = calculator.calcStockYieldTax(stockYield, fxRates);
 
-    // Calculate Revolut interest tax
-    let revolutTotalGross = 0;
-    let revolutTotalTax = 0;
-    for (const revol of revolutInterest) {
-        const results = calculator.calcRevolutInterest([revol]);
-        if (results.length > 0) {
-            revolutTotalGross += results[0].netInterestBaseCcy;
-            revolutTotalTax += results[0].taxDue;
+    // Calculate broker interest tax (all brokers)
+    let brokerInterestTotalGross = 0;
+    let brokerInterestTotalTax = 0;
+    for (const bi of brokerInterest) {
+        if (bi.entries.length > 0) {
+            const entrySum = bi.entries.reduce((sum, e) => sum + e.amount, 0);
+            const entryBase = toBaseCurrency(entrySum, bi.currency, `${taxYear}-06-30`, 'BGN', fxRates);
+            if (!isNaN(entryBase)) {
+                brokerInterestTotalGross += entryBase;
+                brokerInterestTotalTax += entryBase * 0.1;
+            }
         }
     }
 
-    const totalInterestGross = stockYieldResult.totalGross + revolutTotalGross;
-    const totalInterestTax = stockYieldResult.totalTax + revolutTotalTax;
+    const totalInterestGross = stockYieldResult.totalGross + brokerInterestTotalGross;
+    const totalInterestTax = stockYieldResult.totalTax + brokerInterestTotalTax;
 
     // Calculate total tax due
     const totalTaxDue = capitalGainsResult.taxDue
@@ -209,8 +209,7 @@ export function Declaration() {
                 sales,
                 dividends,
                 stockYield,
-                ibInterest,
-                revolutInterest,
+                brokerInterest,
                 fxRates,
                 manualEntries: [],
             };

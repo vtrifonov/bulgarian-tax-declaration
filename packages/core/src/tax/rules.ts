@@ -19,6 +19,7 @@ export function calcDividendTax(grossInBaseCcy: number, whtInBaseCcy: number): D
     const bgTaxFull = grossInBaseCcy * DIVIDEND_RATE;
     const whtCredit = Math.min(whtInBaseCcy, bgTaxFull);
     const bgTaxDue = Math.max(0, bgTaxFull - whtInBaseCcy);
+
     return { bgTaxDue, whtCredit };
 }
 

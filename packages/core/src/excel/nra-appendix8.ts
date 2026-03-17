@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
-import type { Holding } from '../types/index.js';
+
 import { toBaseCurrency } from '../fx/convert.js';
+import type { Holding } from '../types/index.js';
 
 /**
  * Generate an Excel file matching the NRA Приложение 8, Част I format
@@ -26,6 +27,7 @@ export async function generateNraAppendix8(
     ];
 
     const headerRow = sheet.addRow(headers);
+
     headerRow.eachCell((cell) => {
         cell.font = { bold: true, size: 11 };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
@@ -39,6 +41,7 @@ export async function generateNraAppendix8(
 
     // Column number row (1, 2, 3, 4, 5, 6)
     const numRow = sheet.addRow(['1', '2', '3', '4', '5', '6']);
+
     numRow.eachCell((cell) => {
         cell.font = { italic: true, size: 9 };
         cell.alignment = { horizontal: 'center' };
@@ -103,5 +106,6 @@ export async function generateNraAppendix8(
     sheet.getColumn(6).width = 16;
 
     const buf = await workbook.xlsx.writeBuffer();
+
     return new Uint8Array(buf instanceof ArrayBuffer ? buf : (buf as Uint8Array).buffer);
 }

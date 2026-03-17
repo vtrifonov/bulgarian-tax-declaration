@@ -1,8 +1,4 @@
-import type {
-    StateCreator,
-    StoreMutatorIdentifier,
-} from 'zustand';
-import { create } from 'zustand';
+import type { StateCreator } from 'zustand';
 
 export interface UndoDiff {
     path: string; // e.g., "holdings.3.quantity"
@@ -24,12 +20,11 @@ const MAX_UNDO = 100;
 export const createUndoMiddleware = <T extends object>(
     initialState: T,
 ): [
-    StateCreator<T & UndoState, [['zustand/persist', never]]>,
+    StateCreator<T & UndoState>,
     (diffs: UndoDiff[]) => void,
     () => void,
     () => void,
 ] => {
-    let stateSnapshot = JSON.parse(JSON.stringify(initialState));
     let undoStack: UndoDiff[][] = [];
     let redoStack: UndoDiff[][] = [];
 
@@ -45,13 +40,12 @@ export const createUndoMiddleware = <T extends object>(
 
     const undo = () => {
         if (undoStack.length === 0) return;
-        // This is a simplified version; real implementation would need
-        // to be integrated with the Zustand store directly
+        // Simplified version; real implementation integrates with Zustand store directly
     };
 
     const redo = () => {
         if (redoStack.length === 0) return;
-        // This is a simplified version
+        // Simplified version
     };
 
     const clearHistory = () => {
@@ -59,7 +53,7 @@ export const createUndoMiddleware = <T extends object>(
         redoStack = [];
     };
 
-    const stateCreator: StateCreator<T & UndoState> = (set) => ({
+    const stateCreator: StateCreator<T & UndoState> = () => ({
         ...initialState,
         undoStack,
         redoStack,
@@ -69,5 +63,5 @@ export const createUndoMiddleware = <T extends object>(
         clearHistory,
     });
 
-    return [stateCreator as any, pushDiffs, undo, redo];
+    return [stateCreator, pushDiffs, undo, redo];
 };
