@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -17,8 +19,34 @@ jobs:
       - run: pnpm install
       - run: pnpm --filter @bg-tax/core test:coverage
 
+  coverage-report:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm --filter @bg-tax/core test:coverage
+        continue-on-error: true
+      - name: Coverage summary comment
+        uses: davelosert/vitest-coverage-report-action@2500dafcee7dd64f85ab689c0b83798a8359770e # v2
+        if: hashFiles('packages/core/coverage/coverage-summary.json') != ''
+        with:
+          working-directory: packages/core
+          json-summary-path: coverage/coverage-summary.json
+
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
