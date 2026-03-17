@@ -33,47 +33,28 @@ export async function generateExcel(state: AppState): Promise<Uint8Array> {
 }
 
 function detectCurrencies(state: AppState): string[] {
-    const cccies = new Set<string>();
+    const ccies = new Set<string>();
 
-    // From holdings
-    for (const h of state.holdings) {
-        if (h.currency !== state.baseCurrency) {
-            cccies.add(h.currency);
+    // Collect currencies from all data arrays
+    const itemArrays: { currency: string }[][] = [
+        state.holdings,
+        state.sales,
+        state.dividends,
+        state.stockYield,
+        state.brokerInterest,
+    ];
+
+    for (const arr of itemArrays) {
+        for (const item of arr) {
+            if (item.currency && item.currency !== state.baseCurrency) {
+                ccies.add(item.currency);
+            }
         }
     }
 
-    // From sales
-    for (const s of state.sales) {
-        if (s.currency !== state.baseCurrency) {
-            cccies.add(s.currency);
-        }
-    }
-
-    // From dividends
-    for (const d of state.dividends) {
-        if (d.currency !== state.baseCurrency) {
-            cccies.add(d.currency);
-        }
-    }
-
-    // From stock yield
-    for (const sy of state.stockYield) {
-        if (sy.currency !== state.baseCurrency) {
-            cccies.add(sy.currency);
-        }
-    }
-
-    // From broker interest
-    for (const bi of state.brokerInterest) {
-        if (bi.currency !== state.baseCurrency) {
-            cccies.add(bi.currency);
-        }
-    }
-
-    cccies.delete(''); // Exclude empty currencies from incomplete rows
     // EUR/BGN is a fixed rate — no FX sheet needed
-    cccies.delete('EUR');
-    cccies.delete('BGN');
+    ccies.delete('EUR');
+    ccies.delete('BGN');
 
-    return Array.from(cccies).sort();
+    return Array.from(ccies).sort();
 }
