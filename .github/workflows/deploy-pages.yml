@@ -25,7 +25,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install
-      - run: pnpm --filter @bg-tax/core test
+      - run: pnpm --filter @bg-tax/core test:coverage
 
   build:
     runs-on: ubuntu-latest
