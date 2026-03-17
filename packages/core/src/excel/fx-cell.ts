@@ -52,7 +52,9 @@ export function setFxRateCell(
     }
 
     // Dynamic VLOOKUP into the currency's FX sheet
-    const ccyRef = ccyCol.match(/^[A-Z]+$/)
+    // Column refs are 1-2 letters (A-XFD); currency codes are 3 letters (USD, EUR)
+    const isColumnRef = ccyCol.length <= 2 && /^[A-Z]+$/.test(ccyCol);
+    const ccyRef = isColumnRef
         ? `${ccyCol}${rowNum}` // column reference like D2
         : `"${ccyCol}"`; // literal currency string like "USD"
 
