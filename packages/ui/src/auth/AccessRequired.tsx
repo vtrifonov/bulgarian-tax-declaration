@@ -76,8 +76,10 @@ export function AccessRequired() {
                 </p>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <a
-                        href={mailtoHref}
+                    <button
+                        onClick={() => {
+                            window.location.href = mailtoHref;
+                        }}
                         style={{
                             display: 'inline-block',
                             padding: '0.75rem 1.5rem',
@@ -88,11 +90,10 @@ export function AccessRequired() {
                             borderRadius: '6px',
                             cursor: 'pointer',
                             fontWeight: 500,
-                            textDecoration: 'none',
                         }}
                     >
                         {t('auth.accessRequired.requestButton')}
-                    </a>
+                    </button>
                 </div>
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '1.5rem' }}>
