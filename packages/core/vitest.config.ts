@@ -9,7 +9,7 @@ export default defineConfig({
             include: ['src/**/*.ts'],
             exclude: ['src/types/**'],
             reporter: ['text', 'json-summary'],
-            thresholds: process.env.SKIP_COVERAGE_CHECK
+            thresholds: process.env.SKIP_COVERAGE_CHECK === '1'
                 ? undefined
                 : {
                     statements: 70,
