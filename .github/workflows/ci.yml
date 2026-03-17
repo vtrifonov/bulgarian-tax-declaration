@@ -24,7 +24,7 @@ jobs:
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           working-directory: packages/core
-          json-summary-path: packages/core/coverage/coverage-summary.json
+          json-summary-path: coverage/coverage-summary.json
 
   build:
     runs-on: ubuntu-latest
