@@ -31,6 +31,15 @@ export function AccessRequired() {
         navigator.clipboard.writeText(text).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
+        }).catch(() => {
+            // Fallback: select the email text so user can copy manually
+            const el = document.querySelector<HTMLElement>('[data-email]');
+            if (el) {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                window.getSelection()?.removeAllRanges();
+                window.getSelection()?.addRange(range);
+            }
         });
     };
 
@@ -115,6 +124,7 @@ export function AccessRequired() {
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
                             <code
+                                data-email
                                 style={{
                                     fontSize: '0.95rem',
                                     color: 'var(--accent)',

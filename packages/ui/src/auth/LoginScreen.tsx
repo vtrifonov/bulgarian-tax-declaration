@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { signInWithPopup } from 'firebase/auth';
+import { t } from '@bg-tax/core';
 import {
     auth,
     googleProvider,
@@ -14,7 +15,7 @@ export function LoginScreen() {
             await signInWithPopup(auth, googleProvider);
         } catch (err) {
             console.error('Login failed:', err);
-            setLoginError(err instanceof Error ? err.message : 'Login failed');
+            setLoginError(err instanceof Error ? err.message : t('auth.loginFailed'));
         }
     };
 
@@ -40,10 +41,10 @@ export function LoginScreen() {
                 }}
             >
                 <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
-                    Данъчна декларация
+                    {t('auth.title')}
                 </h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
-                    Помощник за годишна данъчна декларация
+                    {t('auth.subtitle')}
                 </p>
 
                 {loginError && (
@@ -95,7 +96,7 @@ export function LoginScreen() {
                             d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'
                         />
                     </svg>
-                    Вход с Google
+                    {t('auth.signInGoogle')}
                 </button>
             </div>
         </div>

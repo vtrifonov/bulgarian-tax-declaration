@@ -62,6 +62,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
         );
     }
 
+    if (allowed === null) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
+                {t('auth.loading')}
+            </div>
+        );
+    }
+
     if (!allowed) {
         return <AccessRequired />;
     }

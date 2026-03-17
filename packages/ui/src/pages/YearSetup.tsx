@@ -216,7 +216,7 @@ export function YearSetup() {
                                     download='holdings-template.csv'
                                     style={{ fontSize: '0.85rem', color: 'var(--accent)' }}
                                 >
-                                    Изтегли шаблон (CSV)
+                                    {t('button.downloadTemplate')}
                                 </a>
                             )}
                         </div>
@@ -268,7 +268,7 @@ export function YearSetup() {
 
                 <button
                     onClick={() => {
-                        if (confirm('This will clear all imported data. Are you sure?')) {
+                        if (confirm(t('confirm.resetAll'))) {
                             reset();
                             localStorage.removeItem('bg-tax-autosave');
                             setImportStatus(null);

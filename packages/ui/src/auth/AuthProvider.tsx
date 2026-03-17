@@ -11,6 +11,7 @@ import {
     doc,
     getDoc,
 } from 'firebase/firestore';
+import { t } from '@bg-tax/core';
 import {
     auth,
     db,
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             setError(null);
             if (!firebaseUser.email) {
-                setError('No email associated with this account.');
+                setError(t('auth.error.noEmail'));
                 setAllowed(null);
                 return;
             }
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAllowed(docSnap.exists());
         } catch (err) {
             console.error('Access check failed:', err);
-            setError('Could not verify access. Check your connection.');
+            setError(t('auth.error.connectionFailed'));
             setAllowed(null);
         }
     };
@@ -66,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             setUser(firebaseUser);
             if (firebaseUser) {
+                setLoading(true);
+                setAllowed(null);
                 await checkAccess(firebaseUser);
             } else {
                 setAllowed(null);
@@ -85,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const retryAccess = () => {
         if (user) {
             setLoading(true);
+            setAllowed(null);
             checkAccess(user).then(() => setLoading(false));
         }
     };
