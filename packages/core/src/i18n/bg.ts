@@ -163,4 +163,14 @@ export const bg = {
     'summary.tax5pct': 'Данък (5%)',
     'summary.totalWhtCredit': 'Данъчен кредит',
     'summary.totalInterest': 'Общо лихви',
+
+    // Auth — access request
+    'auth.accessRequired.title': 'Необходим достъп',
+    'auth.accessRequired.description': 'Приложението е само с покана. Натиснете бутона по-долу, за да изпратите имейл до администратора.',
+    'auth.accessRequired.requestButton': 'Поискай достъп',
+    'auth.accessRequired.contactPrefix': 'Или се свържете с',
+    'auth.accessRequired.contactSuffix': 'на',
+    'auth.connectionError.title': 'Грешка при свързване',
+    'auth.connectionError.retry': 'Опитай отново',
+    'auth.loading': 'Зареждане...',
 };

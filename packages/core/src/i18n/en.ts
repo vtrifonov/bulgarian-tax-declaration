@@ -163,4 +163,14 @@ export const en = {
     'summary.tax5pct': 'Tax (5%)',
     'summary.totalWhtCredit': 'WHT Credit',
     'summary.totalInterest': 'Total Interest',
+
+    // Auth — access request
+    'auth.accessRequired.title': 'Access Required',
+    'auth.accessRequired.description': 'This app is invite-only. Click the button below to send an email to the app owner.',
+    'auth.accessRequired.requestButton': 'Request Access',
+    'auth.accessRequired.contactPrefix': 'Or contact',
+    'auth.accessRequired.contactSuffix': 'at',
+    'auth.connectionError.title': 'Connection Error',
+    'auth.connectionError.retry': 'Retry',
+    'auth.loading': 'Loading...',
 };
