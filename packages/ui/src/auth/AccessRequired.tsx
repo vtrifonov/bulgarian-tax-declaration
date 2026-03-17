@@ -78,8 +78,11 @@ export function AccessRequired() {
                 <div style={{ marginBottom: '1.5rem' }}>
                     <button
                         onClick={() => {
-                            const w = window.open(mailtoHref, '_blank');
-                            if (w) setTimeout(() => w.close(), 500);
+                            const iframe = document.createElement('iframe');
+                            iframe.style.display = 'none';
+                            iframe.src = mailtoHref;
+                            document.body.appendChild(iframe);
+                            setTimeout(() => iframe.remove(), 1000);
                         }}
                         style={{
                             display: 'inline-block',
