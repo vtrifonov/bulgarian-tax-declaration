@@ -17,15 +17,19 @@ export async function fetchEcbRates(
     startDate: string,
     endDate: string,
 ): Promise<Record<string, number>> {
-    if (!/^[A-Z]{3}$/.test(currency)) throw new Error(`Invalid currency code: ${currency}`);
+    if (!/^[A-Z]{3}$/.test(currency)) {
+        throw new Error(`Invalid currency code: ${currency}`);
+    }
     const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}`;
 
     const resp = await fetch(url);
+
     if (!resp.ok) {
         throw new Error(`ECB API error ${resp.status}`);
     }
 
     const xml = await resp.text();
+
     return parseEcbXml(xml);
 }
 
@@ -36,11 +40,14 @@ export function parseEcbXml(xml: string): Record<string, number> {
     // Match ObsDimension and ObsValue which may be on separate lines
     // Pattern: <generic:ObsDimension value="DATE"/>  ...  <generic:ObsValue value="RATE"/>
     const obsBlocks = xml.split('<generic:Obs>');
+
     for (const block of obsBlocks) {
         const dateMatch = block.match(/<generic:ObsDimension\s+value="([^"]+)"/);
         const rateMatch = block.match(/<generic:ObsValue\s+value="([^"]+)"/);
+
         if (dateMatch && rateMatch) {
             const rate = parseFloat(rateMatch[1]);
+
             if (!isNaN(rate)) {
                 rates[dateMatch[1]] = rate;
             }
@@ -69,10 +76,12 @@ export async function fetchYearRates(
         quarters.map(([start, end]) => fetchEcbRates(currency, start, end)),
     );
     const all: Record<string, number> = {};
+
     for (const result of results) {
         if (result.status === 'fulfilled') {
             Object.assign(all, result.value);
         }
     }
+
     return all;
 }

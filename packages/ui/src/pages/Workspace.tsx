@@ -13,17 +13,16 @@ import {
 import { useAppStore } from '../store/app-state';
 import { DataTable } from '../components/DataTable';
 import type {
+    BrokerInterest,
     Dividend,
     Holding,
-    IBInterestEntry,
-    RevolutInterest,
-    RevolutInterestEntry,
+    InterestEntry,
     Sale,
     StockYieldEntry,
     ValidationWarning,
 } from '@bg-tax/core';
 
-type TabType = 'holdings' | 'sales' | 'dividends' | 'ibInterest' | 'revolutInterest' | 'fxRates';
+type TabType = 'holdings' | 'sales' | 'dividends' | 'brokerInterest' | 'fxRates';
 
 /** Show up to 8 decimals, trimming trailing zeros */
 function formatQuantity(n: number): string {
@@ -94,8 +93,8 @@ function useConversionHelpers(fxRates: Record<string, Record<string, number>>, b
 
 export function Workspace() {
     const [activeTab, setActiveTab] = useState<TabType>('holdings');
+    const [activeInterestSubTab, setActiveInterestSubTab] = useState<number>(0);
     const [fxTab, setFxTab] = useState<string | null>(null);
-    const [revolutTab, setRevolutTab] = useState<string | null>(null);
     const [showWarnings, setShowWarnings] = useState(false);
     const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
     const [warningFilter, setWarningFilter] = useState<string>('all');
@@ -106,8 +105,7 @@ export function Workspace() {
         sales,
         dividends,
         stockYield,
-        ibInterest,
-        revolutInterest,
+        brokerInterest,
         fxRates,
         baseCurrency,
         taxYear,
@@ -124,12 +122,9 @@ export function Workspace() {
         updateStockYield,
         deleteStockYield,
         addStockYield,
-        updateIbInterest,
-        deleteIbInterest,
-        addIbInterest,
-        updateRevolutInterest,
-        deleteRevolutInterest,
-        addRevolutInterest,
+        updateBrokerInterest,
+        deleteBrokerInterest,
+        addBrokerInterest,
     } = useAppStore();
 
     const { toBaseCcy, fxRate: fxRateDisplay } = useConversionHelpers(fxRates, baseCurrency);
@@ -144,13 +139,12 @@ export function Workspace() {
             sales,
             dividends,
             stockYield,
-            ibInterest,
-            revolutInterest,
+            brokerInterest,
             fxRates,
             manualEntries: [],
         };
         return validate(appState);
-    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, ibInterest, revolutInterest, fxRates]);
+    }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, brokerInterest, fxRates]);
 
     const getTabs = () => {
         // Count warnings per tab
@@ -170,17 +164,15 @@ export function Workspace() {
             { id: 'dividends', labelKey: 'tab.dividends', count: dividends.length, warningCount: warningsByTab['dividends'] || 0 },
         ];
         // Show only if data exists (populated from IB/Revolut import)
-        if (ibInterest.length > 0) {
+        if (brokerInterest.length > 0) {
+            const totalEntries = brokerInterest.reduce((sum, bi) => sum + bi.entries.length, 0);
             tabs.push({
-                id: 'ibInterest',
-                labelKey: 'tab.ibInterest',
-                count: ibInterest.length,
-                warningCount: warningsByTab['ib interest'] || 0,
-                tooltip: 'IB interest income — securities lending (SYEP), cash deposits, debit interest',
+                id: 'brokerInterest',
+                labelKey: 'tab.brokerInterest',
+                count: totalEntries,
+                warningCount: warningsByTab['broker interest'] || 0,
+                tooltip: 'Broker interest income from IB, Revolut, and other sources',
             });
-        }
-        if (revolutInterest.length > 0) {
-            tabs.push({ id: 'revolutInterest', labelKey: 'tab.revolutInterest', count: revolutInterest.length, warningCount: warningsByTab['revolut interest'] || 0 });
         }
         if (Object.keys(fxRates).length > 0) {
             tabs.push({ id: 'fxRates', labelKey: 'tab.fxRates', count: Object.keys(fxRates).length, warningCount: warningsByTab['fx rates'] || 0 });
@@ -501,6 +493,13 @@ export function Workspace() {
     // Dividends columns
     const dividendsColumns: ColumnDef<Dividend>[] = [
         createRowNumColumn<Dividend>(),
+        {
+            id: 'broker',
+            header: t('col.broker'),
+            accessorFn: (row: Dividend) => row.source?.type ?? '',
+            meta: { editable: false },
+            size: 70,
+        },
         createEditableColumn<Dividend>('symbol', t('col.symbol'), {
             inputType: 'select',
             selectOptions: symbolOptions,
@@ -623,43 +622,87 @@ export function Workspace() {
         },
     ];
 
-    // IB Interest columns
-    const ibInterestColumns: ColumnDef<IBInterestEntry>[] = [
-        createRowNumColumn<IBInterestEntry>(),
-        createEditableColumn<IBInterestEntry>('date', t('col.date'), {
+    // Broker Interest columns
+    const brokerInterestColumns: ColumnDef<InterestEntry>[] = [
+        createRowNumColumn<InterestEntry>(),
+        createEditableColumn<InterestEntry>('date', t('col.date'), {
             inputType: 'date',
             onSave: (rowIndex, value) => {
-                const updated = { ...ibInterest[rowIndex], date: value };
-                updateIbInterest(rowIndex, updated);
+                // Find the broker and position within that broker's entries
+                let currentIdx = 0;
+                for (const bi of brokerInterest) {
+                    if (currentIdx + bi.entries.length > rowIndex) {
+                        const entryIdx = rowIndex - currentIdx;
+                        const updated = { ...bi };
+                        updated.entries = [...updated.entries];
+                        updated.entries[entryIdx] = { ...updated.entries[entryIdx], date: value };
+                        updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+                        return;
+                    }
+                    currentIdx += bi.entries.length;
+                }
             },
         }),
-        createEditableColumn<IBInterestEntry>('currency', t('col.currency'), {
+        createEditableColumn<InterestEntry>('currency', t('col.currency'), {
             inputType: 'select',
             selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
-                const updated = { ...ibInterest[rowIndex], currency: value };
-                updateIbInterest(rowIndex, updated);
+                // Find the broker and position within that broker's entries
+                let currentIdx = 0;
+                for (const bi of brokerInterest) {
+                    if (currentIdx + bi.entries.length > rowIndex) {
+                        const entryIdx = rowIndex - currentIdx;
+                        const updated = { ...bi };
+                        updated.entries = [...updated.entries];
+                        updated.entries[entryIdx] = { ...updated.entries[entryIdx], currency: value };
+                        updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+                        return;
+                    }
+                    currentIdx += bi.entries.length;
+                }
             },
         }),
-        createEditableColumn<IBInterestEntry>('description', t('col.description'), {
+        createEditableColumn<InterestEntry>('description', t('col.description'), {
             onSave: (rowIndex, value) => {
-                const updated = { ...ibInterest[rowIndex], description: value };
-                updateIbInterest(rowIndex, updated);
+                // Find the broker and position within that broker's entries
+                let currentIdx = 0;
+                for (const bi of brokerInterest) {
+                    if (currentIdx + bi.entries.length > rowIndex) {
+                        const entryIdx = rowIndex - currentIdx;
+                        const updated = { ...bi };
+                        updated.entries = [...updated.entries];
+                        updated.entries[entryIdx] = { ...updated.entries[entryIdx], description: value };
+                        updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+                        return;
+                    }
+                    currentIdx += bi.entries.length;
+                }
             },
         }),
-        createEditableColumn<IBInterestEntry>('amount', t('col.amount'), {
+        createEditableColumn<InterestEntry>('amount', t('col.amount'), {
             align: 'right',
             inputType: 'number',
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
-                const updated = { ...ibInterest[rowIndex], amount: parseFloat(value) || 0 };
-                updateIbInterest(rowIndex, updated);
+                // Find the broker and position within that broker's entries
+                let currentIdx = 0;
+                for (const bi of brokerInterest) {
+                    if (currentIdx + bi.entries.length > rowIndex) {
+                        const entryIdx = rowIndex - currentIdx;
+                        const updated = { ...bi };
+                        updated.entries = [...updated.entries];
+                        updated.entries[entryIdx] = { ...updated.entries[entryIdx], amount: parseFloat(value) || 0 };
+                        updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+                        return;
+                    }
+                    currentIdx += bi.entries.length;
+                }
             },
         }),
         {
             id: 'fxRate',
             header: t('col.fxRate'),
-            accessorFn: (row: IBInterestEntry) => {
+            accessorFn: (row: InterestEntry) => {
                 return fxRateDisplay(row.currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -668,7 +711,7 @@ export function Workspace() {
         {
             id: 'amountBase',
             header: `${t('col.amountBase')} (${baseCurrency})`,
-            accessorFn: (row: IBInterestEntry) => {
+            accessorFn: (row: InterestEntry) => {
                 return toBaseCcy(row.amount, row.currency, row.date);
             },
             cell: (info) => info.getValue(),
@@ -677,7 +720,7 @@ export function Workspace() {
         {
             id: 'source',
             header: t('col.source'),
-            accessorFn: (row: IBInterestEntry) => row.source?.type ?? '',
+            accessorFn: (row: InterestEntry) => row.source?.type ?? '',
             cell: (info) => {
                 const row = info.row.original;
                 return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
@@ -750,42 +793,6 @@ export function Workspace() {
             header: '',
             cell: () => null,
             meta: { editable: false },
-        },
-    ];
-
-    // Revolut Interest Entry columns
-    const getRevolutEntryColumns = (currency: string): ColumnDef<RevolutInterestEntry>[] => [
-        {
-            accessorKey: 'date',
-            header: t('col.date'),
-            meta: { editable: true },
-        },
-        {
-            accessorKey: 'description',
-            header: t('col.description'),
-            meta: { editable: true },
-        },
-        {
-            accessorKey: 'amount',
-            header: `${t('col.amountBase')} (${currency})`,
-            meta: { align: 'right' as const, editable: true },
-            cell: (info) => (info.getValue() as number).toFixed(4),
-        },
-        {
-            id: 'fxRate',
-            header: t('col.fxRate'),
-            accessorFn: (row: RevolutInterestEntry) => fxRateDisplay(currency, row.date),
-            cell: (info) => info.getValue(),
-            meta: { align: 'right' as const, editable: false },
-        },
-        {
-            id: 'amountBase',
-            header: `${t('col.amountBase')} (${baseCurrency})`,
-            accessorFn: (row: RevolutInterestEntry) => {
-                return toBaseCcy(row.amount, currency, row.date);
-            },
-            cell: (info) => info.getValue(),
-            meta: { align: 'right' as const, editable: false },
         },
     ];
 
@@ -1005,7 +1012,7 @@ export function Workspace() {
 
     const holdingsWarnings = useMemo(() => buildWarningData('Holdings'), [warnings]);
     const salesWarnings = useMemo(() => buildWarningData('Sales'), [warnings]);
-    const ibInterestWarnings = useMemo(() => buildWarningData('IB Interest'), [warnings]);
+    const brokerInterestWarnings = useMemo(() => buildWarningData('Broker Interest'), [warnings]);
     const stockYieldWarnings = useMemo(() => buildWarningData('Stock Yield'), [warnings]);
 
     const [showHoldingsWarningsOnly, setShowHoldingsWarningsOnly] = useState(false);
@@ -1205,31 +1212,59 @@ export function Workspace() {
         />
     );
 
-    const renderIbInterestContent = () => {
-        // Calculate summary totals
-        let totalInterest = 0;
-        let totalInterestBase = 0;
-        ibInterest.forEach(entry => {
-            totalInterest += entry.amount;
+    const renderBrokerInterestContent = () => {
+        if (brokerInterest.length === 0) {
+            return <div style={{ padding: '1rem', color: 'var(--text-secondary)' }}>No data</div>;
+        }
+
+        // Clamp sub-tab index
+        const subTabIdx = Math.min(activeInterestSubTab, brokerInterest.length - 1);
+        const activeBi = brokerInterest[subTabIdx];
+
+        // Calculate totals for active sub-tab
+        const netInterest = activeBi.entries.reduce((sum: number, e) => sum + e.amount, 0);
+        let netInterestBase = 0;
+        activeBi.entries.forEach(entry => {
             const amountStr = toBaseCcy(entry.amount, entry.currency, entry.date);
             const amount = amountStr !== '—' ? parseFloat(amountStr) : 0;
-            totalInterestBase += amount;
+            netInterestBase += amount;
         });
-
-        const totalTax = totalInterestBase * 0.1;
+        const tax = netInterestBase * 0.1;
 
         const footerRow: Record<string, string> = {
             date: t('summary.total'),
-            amount: totalInterest.toFixed(2),
-            amountBase: totalInterestBase.toFixed(2),
+            amount: netInterest.toFixed(2),
+            amountBase: netInterestBase.toFixed(2),
         };
 
         return (
             <div>
+                {/* Sub-tabs: one per broker+currency */}
+                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {brokerInterest.map((bi, idx) => (
+                        <button
+                            key={`${bi.broker}-${bi.currency}`}
+                            onClick={() => setActiveInterestSubTab(idx)}
+                            style={{
+                                padding: '0.4rem 0.8rem',
+                                fontSize: '0.85rem',
+                                border: `1px solid ${idx === subTabIdx ? 'var(--accent)' : 'var(--border)'}`,
+                                borderRadius: '4px',
+                                backgroundColor: idx === subTabIdx ? 'var(--accent)' : 'transparent',
+                                color: idx === subTabIdx ? 'white' : 'var(--text)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {bi.broker} {bi.currency} ({bi.entries.length})
+                        </button>
+                    ))}
+                </div>
+
+                {/* Summary for active sub-tab */}
                 <div
                     style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
                         gap: '1rem',
                         marginBottom: '1rem',
                         padding: '1rem',
@@ -1238,242 +1273,69 @@ export function Workspace() {
                     }}
                 >
                     <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({activeBi.currency})</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netInterest.toFixed(2)}</div>
+                    </div>
+                    <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.totalInterest')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalInterestBase.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netInterestBase.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{totalTax.toFixed(2)}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
                     </div>
                     <div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.count')}</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{ibInterest.length}</div>
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{activeBi.entries.length}</div>
                     </div>
-                    <div />
-                    <div />
-                    <div />
                 </div>
+
                 <DataTable
-                    columns={ibInterestColumns}
-                    data={ibInterest}
+                    columns={brokerInterestColumns}
+                    data={activeBi.entries}
                     footerRow={footerRow}
-                    warningRows={ibInterestWarnings.rows}
-                    warningMessages={ibInterestWarnings.messages}
-                    warningCount={ibInterestWarnings.rows.size}
+                    warningRows={brokerInterestWarnings.rows}
+                    warningMessages={brokerInterestWarnings.messages}
+                    warningCount={brokerInterestWarnings.rows.size}
                     editRowOnMount={editNewRow}
                     onSaveRow={(rowIndex, values) => {
-                        const original = ibInterest[rowIndex];
-                        if (!original) return;
-                        updateIbInterest(rowIndex, {
-                            ...original,
-                            date: values.date ?? original.date,
-                            currency: values.currency ?? original.currency,
-                            description: values.description ?? original.description,
-                            amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : original.amount,
-                        });
+                        const updated = { ...activeBi };
+                        updated.entries = [...updated.entries];
+                        updated.entries[rowIndex] = {
+                            ...updated.entries[rowIndex],
+                            date: values.date ?? updated.entries[rowIndex].date,
+                            currency: values.currency ?? updated.entries[rowIndex].currency,
+                            description: values.description ?? updated.entries[rowIndex].description,
+                            amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : updated.entries[rowIndex].amount,
+                        };
+                        updateBrokerInterest(subTabIdx, updated);
                         setEditNewRow(undefined);
                     }}
-                    onDeleteRow={(idx) => deleteIbInterest(idx)}
+                    onDeleteRow={(idx) => {
+                        const updated = { ...activeBi };
+                        updated.entries = updated.entries.filter((_, i) => i !== idx);
+                        if (updated.entries.length === 0) {
+                            deleteBrokerInterest(subTabIdx);
+                            setActiveInterestSubTab(Math.max(0, Math.min(subTabIdx - 1, brokerInterest.length - 2)));
+                        } else {
+                            updateBrokerInterest(subTabIdx, updated);
+                        }
+                    }}
                     onAddRow={() => {
-                        const newEntry: IBInterestEntry = {
+                        const newEntry: InterestEntry = {
                             date: '',
-                            currency: 'USD',
+                            currency: activeBi.currency,
                             description: '',
                             amount: 0,
                             source: { type: 'Manual' },
                         };
-                        addIbInterest(newEntry);
-                        setEditNewRow({ index: ibInterest.length, nonce: Date.now() });
+                        const updated = { ...activeBi };
+                        updated.entries = [...updated.entries, newEntry];
+                        updateBrokerInterest(subTabIdx, updated);
+                        setEditNewRow({ index: activeBi.entries.length, nonce: Date.now() });
                     }}
                     addRowLabel={t('button.addInterest')}
                 />
-            </div>
-        );
-    };
-
-    const renderRevolutInterestContent = () => {
-        const currencies = revolutInterest.map((r) => r.currency).sort();
-
-        if (currencies.length === 0) {
-            return <div style={{ padding: '1rem', color: 'var(--text-secondary)' }}>No data</div>;
-        }
-
-        if (!revolutTab) {
-            setRevolutTab('total');
-        }
-
-        const currentTab = revolutTab || 'total';
-        const midDate = `${useAppStore.getState().taxYear}-06-30`;
-
-        // Compute per-currency summaries for total tab
-        const currencySummaries = currencies.map(ccy => {
-            const data = revolutInterest.find(r => r.currency === ccy)!;
-            const net = data.entries.reduce((sum, e) => sum + e.amount, 0);
-            const netBaseStr = toBaseCcy(net, ccy, midDate);
-            const netBaseNum = netBaseStr !== '—' ? parseFloat(netBaseStr) : 0;
-            return { currency: ccy, entries: data.entries.length, net, netBase: netBaseNum, netBaseStr };
-        });
-        const totalEntries = currencySummaries.reduce((s, c) => s + c.entries, 0);
-        const totalNetBase = currencySummaries.reduce((s, c) => s + c.netBase, 0);
-        const totalTaxBase = totalNetBase * 0.1;
-
-        const renderSummaryCard = (label: string, ccyLabel: string, net: number, netBase: string, tax: number, taxBase: string, entries: number) => (
-            <div
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(6, 1fr)',
-                    gap: '1rem',
-                    marginBottom: '1rem',
-                    padding: '1rem',
-                    backgroundColor: 'var(--bg-secondary)',
-                    borderRadius: '4px',
-                }}
-            >
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.currency')}</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{label}</div>
-                </div>
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.entries')}</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{entries}</div>
-                </div>
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({ccyLabel})</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{net.toFixed(2)}</div>
-                </div>
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.netInterest')} ({baseCurrency})</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{netBase}</div>
-                </div>
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({ccyLabel})</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{tax.toFixed(2)}</div>
-                </div>
-                <div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('summary.tax10pct')} ({baseCurrency})</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{taxBase}</div>
-                </div>
-            </div>
-        );
-
-        const currentData = revolutInterest.find((r) => r.currency === currentTab);
-
-        return (
-            <div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <button
-                        onClick={() => setRevolutTab('total')}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            backgroundColor: currentTab === 'total' ? 'var(--accent)' : 'var(--bg-secondary)',
-                            color: currentTab === 'total' ? 'white' : 'var(--text)',
-                            border: 'none',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            fontWeight: 600,
-                        }}
-                    >
-                        {t('summary.total') || 'Total'}
-                    </button>
-                    {currencies.map((curr) => (
-                        <button
-                            key={curr}
-                            onClick={() => setRevolutTab(curr)}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                backgroundColor: currentTab === curr ? 'var(--accent)' : 'var(--bg-secondary)',
-                                color: currentTab === curr ? 'white' : 'var(--text)',
-                                border: 'none',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                            }}
-                        >
-                            {curr}
-                        </button>
-                    ))}
-                </div>
-
-                {currentTab === 'total'
-                    ? (
-                        <div>
-                            {currencySummaries.map(s =>
-                                renderSummaryCard(
-                                    s.currency,
-                                    s.currency,
-                                    s.net,
-                                    s.netBaseStr,
-                                    s.net * 0.1,
-                                    (s.netBase * 0.1).toFixed(2),
-                                    s.entries,
-                                )
-                            )}
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(6, 1fr)',
-                                    gap: '1rem',
-                                    padding: '1rem',
-                                    backgroundColor: 'var(--accent)',
-                                    color: 'white',
-                                    borderRadius: '4px',
-                                    fontWeight: 600,
-                                }}
-                            >
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.total') || 'Total'}</div>
-                                    <div style={{ fontSize: '1.1rem' }}>{currencies.join(' + ')}</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.entries')}</div>
-                                    <div style={{ fontSize: '1.1rem' }}>{totalEntries}</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>&nbsp;</div>
-                                    <div>&nbsp;</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.netInterest')} ({baseCurrency})</div>
-                                    <div style={{ fontSize: '1.1rem' }}>{totalNetBase.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>&nbsp;</div>
-                                    <div>&nbsp;</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{t('summary.tax10pct')} ({baseCurrency})</div>
-                                    <div style={{ fontSize: '1.1rem' }}>{totalTaxBase.toFixed(2)}</div>
-                                </div>
-                            </div>
-                        </div>
-                    )
-                    : currentData
-                    ? (
-                        <div>
-                            {renderSummaryCard(
-                                currentTab,
-                                currentTab,
-                                currentData.entries.reduce((s, e) => s + e.amount, 0),
-                                toBaseCcy(currentData.entries.reduce((s, e) => s + e.amount, 0), currentTab, midDate),
-                                currentData.entries.reduce((s, e) => s + e.amount, 0) * 0.1,
-                                (() => {
-                                    const nb = toBaseCcy(currentData.entries.reduce((s, e) => s + e.amount, 0), currentTab, midDate);
-                                    return nb !== '—' ? (parseFloat(nb) * 0.1).toFixed(2) : '—';
-                                })(),
-                                currentData.entries.length,
-                            )}
-                            {(() => {
-                                const totalAmount = currentData.entries.reduce((s, e) => s + e.amount, 0);
-                                const totalAmountBase = toBaseCcy(totalAmount, currentTab, midDate);
-                                const footerRow: Record<string, string> = {
-                                    date: t('summary.total'),
-                                    amount: totalAmount.toFixed(2),
-                                    amountBase: totalAmountBase,
-                                };
-                                return <DataTable columns={getRevolutEntryColumns(currentTab)} data={currentData.entries} footerRow={footerRow} />;
-                            })()}
-                        </div>
-                    )
-                    : null}
             </div>
         );
     };
@@ -1542,10 +1404,8 @@ export function Workspace() {
                 return renderSalesContent();
             case 'dividends':
                 return renderDividendsContent();
-            case 'ibInterest':
-                return renderIbInterestContent();
-            case 'revolutInterest':
-                return renderRevolutInterestContent();
+            case 'brokerInterest':
+                return renderBrokerInterestContent();
             case 'fxRates':
                 return renderFxRatesContent();
             default:

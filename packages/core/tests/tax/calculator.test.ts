@@ -5,8 +5,8 @@ import {
 } from 'vitest';
 import { TaxCalculator } from '../../src/tax/calculator.js';
 import type {
+    BrokerInterest,
     Dividend,
-    RevolutInterest,
     Sale,
     StockYieldEntry,
 } from '../../src/types/index.js';
@@ -40,11 +40,12 @@ describe('TaxCalculator', () => {
     });
 
     it('calculates Revolut interest tax', () => {
-        const revolut: RevolutInterest[] = [{
+        const revolut: BrokerInterest[] = [{
+            broker: 'Revolut',
             currency: 'EUR',
             entries: [
-                { date: '2025-01-01', description: 'Interest PAID', amount: 100 },
-                { date: '2025-01-01', description: 'Service Fee Charged', amount: -10 },
+                { currency: 'EUR', date: '2025-01-01', description: 'Interest PAID', amount: 100 },
+                { currency: 'EUR', date: '2025-01-01', description: 'Service Fee Charged', amount: -10 },
             ],
         }];
         const calc = new TaxCalculator('BGN');
@@ -332,11 +333,12 @@ describe('TaxCalculator (EUR base)', () => {
 
     it('calculates Revolut interest with EUR base', () => {
         const calc = new TaxCalculator('EUR');
-        const revolut: RevolutInterest[] = [{
+        const revolut: BrokerInterest[] = [{
+            broker: 'Revolut',
             currency: 'EUR',
             entries: [
-                { date: '2025-06-15', description: 'Interest PAID', amount: 5.00 },
-                { date: '2025-06-16', description: 'Service Fee', amount: -0.50 },
+                { currency: 'EUR', date: '2025-06-15', description: 'Interest PAID', amount: 5.00 },
+                { currency: 'EUR', date: '2025-06-16', description: 'Service Fee', amount: -0.50 },
             ],
         }];
         const results = calc.calcRevolutInterest(revolut);

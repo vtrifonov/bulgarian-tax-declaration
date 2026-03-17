@@ -1,5 +1,5 @@
-import type { Holding } from '../types/index.js';
 import { resolveCountry } from '../country-map.js';
+import type { Holding } from '../types/index.js';
 
 interface RevolutTrade {
     date: string;
@@ -21,18 +21,26 @@ interface RevolutTrade {
  */
 export function parseRevolutInvestmentsCsv(csv: string): { trades: RevolutTrade[]; holdings: Holding[] } {
     const lines = csv.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) return { trades: [], holdings: [] };
+
+    if (lines.length < 2) {
+        return { trades: [], holdings: [] };
+    }
 
     const trades: RevolutTrade[] = [];
 
     for (let i = 1; i < lines.length; i++) {
         const fields = parseCSVLine(lines[i]);
-        if (fields.length < 8) continue;
+
+        if (fields.length < 8) {
+            continue;
+        }
 
         const [dateStr, ticker, type, quantityStr, priceStr, totalStr, currency, fxRateStr] = fields;
 
         // Skip non-trade rows (top-ups, promotions without ticker)
-        if (!ticker || !type.includes('BUY') && !type.includes('SELL')) continue;
+        if (!ticker || !type.includes('BUY') && !type.includes('SELL')) {
+            continue;
+        }
 
         const quantity = parseFloat(quantityStr) || 0;
         const pricePerShare = parseCurrencyAmount(priceStr);
@@ -47,13 +55,19 @@ export function parseRevolutInvestmentsCsv(csv: string): { trades: RevolutTrade[
     const holdingMap = new Map<string, { totalQty: number; totalCost: number; currency: string; firstDate: string }>();
 
     for (const t of trades) {
-        if (!t.type.includes('BUY')) continue;
+        if (!t.type.includes('BUY')) {
+            continue;
+        }
 
         const existing = holdingMap.get(t.ticker);
+
         if (existing) {
             existing.totalQty += t.quantity;
             existing.totalCost += t.totalAmount;
-            if (t.date < existing.firstDate) existing.firstDate = t.date;
+
+            if (t.date < existing.firstDate) {
+                existing.firstDate = t.date;
+            }
         } else {
             holdingMap.set(t.ticker, {
                 totalQty: t.quantity,
@@ -66,19 +80,27 @@ export function parseRevolutInvestmentsCsv(csv: string): { trades: RevolutTrade[
 
     // Subtract SELL quantities — reduce cost proportionally (avg cost per share)
     for (const t of trades) {
-        if (!t.type.includes('SELL')) continue;
+        if (!t.type.includes('SELL')) {
+            continue;
+        }
         const existing = holdingMap.get(t.ticker);
+
         if (existing && existing.totalQty > 0) {
             const avgCost = existing.totalCost / existing.totalQty;
+
             existing.totalQty -= t.quantity;
             existing.totalCost = existing.totalQty > 0 ? existing.totalQty * avgCost : 0;
         }
     }
 
     const holdings: Holding[] = [];
+
     for (const [ticker, data] of holdingMap) {
-        if (data.totalQty <= 0) continue;
+        if (data.totalQty <= 0) {
+            continue;
+        }
         const avgPrice = data.totalQty > 0 ? data.totalCost / data.totalQty : 0;
+
         holdings.push({
             id: `revolut-${ticker}-${Date.now()}`,
             broker: 'Revolut',
@@ -97,6 +119,7 @@ export function parseRevolutInvestmentsCsv(csv: string): { trades: RevolutTrade[
 /** Parse "USD 6" or "USD 321.02" → 6 or 321.02 */
 function parseCurrencyAmount(str: string): number {
     const match = str.match(/[\d.]+/);
+
     return match ? parseFloat(match[0]) : 0;
 }
 
@@ -108,6 +131,7 @@ function parseCSVLine(line: string): string[] {
 
     for (let i = 0; i < line.length; i++) {
         const ch = line[i];
+
         if (ch === '"') {
             inQuotes = !inQuotes;
         } else if (ch === ',' && !inQuotes) {
@@ -118,5 +142,6 @@ function parseCSVLine(line: string): string[] {
         }
     }
     fields.push(current.trim());
+
     return fields;
 }

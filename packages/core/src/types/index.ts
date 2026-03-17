@@ -1,5 +1,5 @@
 export interface DataSource {
-    type: 'Initial import' | 'IB' | 'Revolut' | 'Manual';
+    type: string;
     file?: string;
 }
 
@@ -53,15 +53,10 @@ export interface StockYieldEntry {
     source?: DataSource;
 }
 
-export interface RevolutInterestEntry {
-    date: string;
-    description: string;
-    amount: number;
-}
-
-export interface RevolutInterest {
+export interface BrokerInterest {
+    broker: string;
     currency: string;
-    entries: RevolutInterestEntry[];
+    entries: InterestEntry[];
 }
 
 export interface ManualEntry {
@@ -81,8 +76,7 @@ export interface AppState {
     sales: Sale[];
     dividends: Dividend[];
     stockYield: StockYieldEntry[];
-    ibInterest: IBInterestEntry[];
-    revolutInterest: RevolutInterest[];
+    brokerInterest: BrokerInterest[];
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
     manualEntries: ManualEntry[];
 }
@@ -96,8 +90,8 @@ export interface ValidationWarning {
     rowIndex?: number;
 }
 
-/** IB cash interest entry (SYEP interest, debit interest, etc.) */
-export interface IBInterestEntry {
+/** Broker interest entry (IB SYEP/debit interest, Revolut savings interest, etc.) */
+export interface InterestEntry {
     currency: string;
     date: string;
     description: string;
@@ -106,15 +100,25 @@ export interface IBInterestEntry {
 }
 
 /** IB CSV raw parsed data before FIFO processing */
+export interface IBOpenPosition {
+    symbol: string;
+    currency: string;
+    quantity: number;
+    costPrice: number;
+}
+
 export interface IBParsedData {
-    trades: IBTrade[];
+    trades: Trade[];
     dividends: IBDividend[];
     withholdingTax: IBWithholdingTax[];
     stockYield: StockYieldEntry[];
-    interest: IBInterestEntry[];
+    interest: InterestEntry[];
+    openPositions: IBOpenPosition[];
+    /** Maps every symbol alias to the primary symbol used in Open Positions */
+    symbolAliases: Record<string, string>;
 }
 
-export interface IBTrade {
+export interface Trade {
     currency: string;
     symbol: string;
     dateTime: string; // YYYY-MM-DD, HH:MM:SS

@@ -2,6 +2,8 @@ import type {
     Workbook,
     Worksheet,
 } from 'exceljs';
+
+import type { AppState } from '../../types/index.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -10,7 +12,6 @@ import {
     FX_RATE_FORMAT,
     HEADER_STYLE,
 } from '../styles.js';
-import type { AppState } from '../../types/index.js';
 
 export function addDividendsSheet(workbook: Workbook, state: AppState): Worksheet {
     const sheet = workbook.addWorksheet('Дивиденти');
@@ -32,21 +33,29 @@ export function addDividendsSheet(workbook: Workbook, state: AppState): Workshee
         'Бележки',
     ];
     const headerRow = sheet.addRow(headers);
+
     headerRow.eachCell((cell) => {
         cell.style = { ...HEADER_STYLE, font: FONT };
     });
 
     // Sort dividends by symbol then date
     const sorted = [...state.dividends].sort((a, b) => {
-        if (a.symbol !== b.symbol) return a.symbol.localeCompare(b.symbol);
+        if (a.symbol !== b.symbol) {
+            return a.symbol.localeCompare(b.symbol);
+        }
+
         return a.date.localeCompare(b.date);
     });
 
     // Data rows (skip incomplete rows)
     let r = 2;
+
     for (let i = 0; i < sorted.length; i++) {
         const d = sorted[i];
-        if (!d.symbol && !d.currency) continue;
+
+        if (!d.symbol && !d.currency) {
+            continue;
+        }
 
         const row = sheet.addRow([
             d.symbol,
@@ -88,6 +97,7 @@ export function addDividendsSheet(workbook: Workbook, state: AppState): Workshee
 
     // Column widths
     const widths = [10, 14, 12, 10, 14, 12, 12, 14, 12, 12, 14, 20];
+
     for (let i = 0; i < headers.length; i++) {
         sheet.getColumn(i + 1).width = widths[i];
     }
@@ -103,25 +113,33 @@ function setFxRateCell(
 ): void {
     if (currency === baseCurrency) {
         cell.value = 1;
+
         return;
     }
+
     if (baseCurrency === 'BGN') {
         if (currency === 'EUR') {
             cell.value = 1.95583;
+
             return;
         }
+
         if (currency === 'BGN') {
             cell.value = 1;
+
             return;
         }
         cell.value = { formula: `IFERROR(VLOOKUP(C${rowNum},INDIRECT(D${rowNum}&"!A:B"),2,FALSE),"")` };
     } else {
         if (currency === 'EUR') {
             cell.value = 1;
+
             return;
         }
+
         if (currency === 'BGN') {
             cell.value = { formula: '1/1.95583' };
+
             return;
         }
         cell.value = { formula: `IFERROR(VLOOKUP(C${rowNum},INDIRECT(D${rowNum}&"!A:B"),2,FALSE),"")` };

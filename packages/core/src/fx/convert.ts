@@ -3,6 +3,39 @@ export const BGN_EUR_RATE = 1.95583;
 
 export type BaseCurrency = 'BGN' | 'EUR';
 
+/** Find the nearest previous date that has an FX rate (for weekends/holidays).
+ *  When date is empty, returns the latest available rate. */
+function findNearestPreviousRate(rates: Record<string, number> | undefined, date: string): number | undefined {
+    if (!rates) return undefined;
+
+    const sortedDates = Object.keys(rates).sort();
+    if (sortedDates.length === 0) return undefined;
+
+    // Empty date → use latest available rate
+    if (!date) return rates[sortedDates[sortedDates.length - 1]];
+
+    // Find the last date <= target date
+    let best: string | undefined;
+    for (const d of sortedDates) {
+        if (d <= date) {
+            best = d;
+        } else {
+            break;
+        }
+    }
+
+    return best ? rates[best] : undefined;
+}
+
+/** Helper to get FX rate from cache, falling back to nearest previous date */
+function getEcbRate(
+    currency: string,
+    date: string,
+    fxRates: Record<string, Record<string, number>>,
+): number | undefined {
+    return fxRates[currency]?.[date] ?? findNearestPreviousRate(fxRates[currency], date);
+}
+
 /**
  * Convert an amount from one currency to the base currency.
  * Returns the converted amount, or NaN if FX rate is missing.
@@ -14,12 +47,28 @@ export function toBaseCurrency(
     baseCurrency: BaseCurrency,
     fxRates: Record<string, Record<string, number>>,
 ): number {
-    if (currency === baseCurrency) return amount;
-    if (currency === 'EUR' && baseCurrency === 'BGN') return amount * BGN_EUR_RATE;
-    if (currency === 'BGN' && baseCurrency === 'EUR') return amount / BGN_EUR_RATE;
-    const ecbRate = fxRates[currency]?.[date];
-    if (!ecbRate) return NaN;
-    if (baseCurrency === 'EUR') return amount / ecbRate;
+    if (currency === baseCurrency) {
+        return amount;
+    }
+
+    if (currency === 'EUR' && baseCurrency === 'BGN') {
+        return amount * BGN_EUR_RATE;
+    }
+
+    if (currency === 'BGN' && baseCurrency === 'EUR') {
+        return amount / BGN_EUR_RATE;
+    }
+
+    const ecbRate = getEcbRate(currency, date, fxRates);
+
+    if (!ecbRate) {
+        return NaN;
+    }
+
+    if (baseCurrency === 'EUR') {
+        return amount / ecbRate;
+    }
+
     return amount * BGN_EUR_RATE / ecbRate;
 }
 
@@ -34,6 +83,7 @@ export function toBaseCurrencyStr(
     fxRates: Record<string, Record<string, number>>,
 ): string {
     const result = toBaseCurrency(amount, currency, date, baseCurrency, fxRates);
+
     return isNaN(result) ? '—' : result.toFixed(2);
 }
 
@@ -46,12 +96,28 @@ export function getFxRate(
     baseCurrency: BaseCurrency,
     fxRates: Record<string, Record<string, number>>,
 ): string {
-    if (currency === baseCurrency) return '1';
-    if (currency === 'EUR' && baseCurrency === 'BGN') return '1.95583';
-    if (currency === 'BGN' && baseCurrency === 'EUR') return (1 / BGN_EUR_RATE).toFixed(6);
-    const ecbRate = fxRates[currency]?.[date];
-    if (!ecbRate) return '—';
-    if (baseCurrency === 'EUR') return (1 / ecbRate).toFixed(6);
+    if (currency === baseCurrency) {
+        return '1';
+    }
+
+    if (currency === 'EUR' && baseCurrency === 'BGN') {
+        return '1.95583';
+    }
+
+    if (currency === 'BGN' && baseCurrency === 'EUR') {
+        return (1 / BGN_EUR_RATE).toFixed(6);
+    }
+
+    const ecbRate = getEcbRate(currency, date, fxRates);
+
+    if (!ecbRate) {
+        return '—';
+    }
+
+    if (baseCurrency === 'EUR') {
+        return (1 / ecbRate).toFixed(6);
+    }
+
     return (BGN_EUR_RATE / ecbRate).toFixed(6);
 }
 
@@ -72,5 +138,6 @@ export function calcDividendRowTax(
     const wBase = isNaN(whtBase) ? 0 : whtBase;
     const tax5pct = gBase * 0.05;
     const bgTaxDue = Math.max(0, tax5pct - wBase);
+
     return { grossBase: gBase, whtBase: wBase, tax5pct, bgTaxDue };
 }

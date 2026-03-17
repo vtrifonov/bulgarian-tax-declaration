@@ -15,37 +15,165 @@ import {
     parseIBCsv,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
-    resolveCountry,
+    providers,
+    resolveCountries,
     t,
 } from '@bg-tax/core';
 import type {
+    BrokerInterest,
+    Holding,
     IBParsedData,
-    RevolutInterest,
+    Trade,
 } from '@bg-tax/core';
 
-type FileType = 'ib' | 'revolut' | 'revolut-investments';
+import type { ImportedFile } from '../store/app-state';
 
-interface ImportedFile {
-    name: string;
-    type: FileType;
-    status: 'success' | 'error';
-    message: string;
+function detectFileType(content: string, filename: string): ImportedFile['type'] | null {
+    // IB Activity statement
+    if (content.startsWith('Statement,Header,Field Name') || content.includes('Trades,Header,DataDiscriminator')) {
+        return 'ib';
+    }
+
+    // Revolut Savings interest statement
+    if (filename.startsWith('savings-statement') || content.includes('Interest PAID')) {
+        return 'revolut';
+    }
+
+    // Revolut Investments yearly statement
+    if (content.startsWith('Date,Ticker,Type')) {
+        return 'revolut-investments';
+    }
+
+    return null;
 }
 
-function detectFileType(content: string, filename: string): FileType | null {
-    if (content.startsWith('Statement,Header,Field Name')) return 'ib';
-    if (filename.startsWith('savings-statement') || content.includes('Interest PAID')) return 'revolut';
-    // Check for IB CSV by looking for known sections
-    if (content.includes('Trades,Header,DataDiscriminator')) return 'ib';
-    // Revolut Investments yearly statement: Date,Ticker,Type,...
-    if (content.startsWith('Date,Ticker,Type')) return 'revolut-investments';
-    return null;
+/**
+ * Split Open Positions into pre-existing lots + this year's individual buy lots.
+ * For each symbol: if trades show buys this year, subtract them from the open position
+ * to get the pre-existing portion. Each buy this year becomes its own holding with date.
+ */
+function splitOpenPositions(
+    openPositions: IBParsedData['openPositions'],
+    trades: Trade[],
+    opts: {
+        broker: string;
+        countryMap: Record<string, string>;
+        source: { type: string; file: string };
+        taxYear: number;
+        symbolAliases: Record<string, string>;
+        skipPreExisting?: boolean;
+    },
+): Holding[] {
+    const holdings: Holding[] = [];
+    const yearPrefix = String(opts.taxYear);
+
+    // Helper to resolve symbol through alias map
+    const resolveSymbol = (sym: string) => opts.symbolAliases[sym] ?? sym;
+
+    // Group this year's trades (buys and sells) by resolved symbol
+    const buysBySymbol = new Map<string, Trade[]>();
+    const sellQtyBySymbol = new Map<string, number>();
+
+    for (const t of trades) {
+        if (!t.dateTime.startsWith(yearPrefix)) continue;
+
+        const sym = resolveSymbol(t.symbol);
+
+        if (t.quantity > 0) {
+            const buys = buysBySymbol.get(sym) ?? [];
+            buys.push(t);
+            buysBySymbol.set(sym, buys);
+        } else {
+            const current = sellQtyBySymbol.get(sym) ?? 0;
+            sellQtyBySymbol.set(sym, current + Math.abs(t.quantity));
+        }
+    }
+
+    for (const pos of openPositions) {
+        const buys = buysBySymbol.get(pos.symbol) ?? [];
+        const sellQty = sellQtyBySymbol.get(pos.symbol) ?? 0;
+
+        // Total bought this year (gross, before accounting for sells)
+        const totalBoughtThisYear = buys.reduce((sum, t) => sum + t.quantity, 0);
+        // Net buys remaining after sells (FIFO: sells consume oldest first, which are pre-existing)
+        // But from Open Positions perspective: we know the final quantity.
+        // Sells consume pre-existing lots first (FIFO), then this year's buys
+        const preExistingBeforeSells = pos.quantity + sellQty - totalBoughtThisYear;
+        const sellsFromPreExisting = Math.min(sellQty, Math.max(0, preExistingBeforeSells));
+        const sellsFromThisYear = sellQty - sellsFromPreExisting;
+        const survivedThisYearQty = totalBoughtThisYear - sellsFromThisYear;
+        const preExistingQty = pos.quantity - survivedThisYearQty;
+
+        // Pre-existing lot (bought before this year) — skip if prior-year holdings already imported
+        if (preExistingQty > 0 && !opts.skipPreExisting) {
+            // Back-calculate cost: IB's costPrice is weighted average of ALL remaining shares.
+            // Subtract only the cost of SURVIVING this-year buys to get pre-existing cost.
+            const sortedBuysForCost = [...buys].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+            let remainingSellsForCost = sellsFromThisYear;
+            let survivedThisYearCost = 0;
+            for (const buy of sortedBuysForCost) {
+                if (remainingSellsForCost >= buy.quantity) {
+                    remainingSellsForCost -= buy.quantity;
+                    continue;
+                }
+                const survived = buy.quantity - remainingSellsForCost;
+                remainingSellsForCost = 0;
+                survivedThisYearCost += survived * buy.price;
+            }
+            const preExistingTotalCost = pos.costPrice * pos.quantity - survivedThisYearCost;
+            const preExistingUnitPrice = preExistingTotalCost / preExistingQty;
+
+            holdings.push({
+                id: crypto.randomUUID(),
+                broker: opts.broker,
+                country: opts.countryMap[pos.symbol] ?? '',
+                symbol: pos.symbol,
+                dateAcquired: '',
+                quantity: preExistingQty,
+                currency: pos.currency,
+                unitPrice: Math.max(0, preExistingUnitPrice),
+                source: opts.source,
+            });
+        }
+
+        // This year's individual buy lots (only those that survived sells)
+        if (survivedThisYearQty > 0 && buys.length > 0) {
+            // FIFO: sells consume earliest buys first — so surviving buys are the latest ones
+            const sortedBuys = [...buys].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+            let remainingSellQty = sellsFromThisYear;
+
+            for (const buy of sortedBuys) {
+                if (remainingSellQty >= buy.quantity) {
+                    remainingSellQty -= buy.quantity;
+                    continue; // fully consumed by sell
+                }
+                const survivedQty = buy.quantity - remainingSellQty;
+                remainingSellQty = 0;
+
+                holdings.push({
+                    id: crypto.randomUUID(),
+                    broker: opts.broker,
+                    country: opts.countryMap[buy.symbol] ?? '',
+                    symbol: buy.symbol,
+                    dateAcquired: buy.dateTime.split(',')[0], // "YYYY-MM-DD, HH:MM:SS" → "YYYY-MM-DD"
+                    quantity: survivedQty,
+                    currency: pos.currency,
+                    unitPrice: buy.price,
+                    source: opts.source,
+                });
+            }
+        }
+
+        // Note: the preExistingQty block above already handles the case
+        // where buys.length === 0 && sellQty === 0 (entire position is pre-existing)
+    }
+
+    return holdings;
 }
 
 export function Import() {
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [importedFiles, setImportedFiles] = useState<ImportedFile[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
     const [fetchingFx, setFetchingFx] = useState(false);
 
@@ -54,50 +182,72 @@ export function Import() {
         importSales,
         importDividends,
         importStockYield,
-        importIbInterest,
-        importRevolutInterest,
+        importBrokerInterest,
         setFxRates,
         taxYear,
         baseCurrency,
         holdings,
+        sales,
+        dividends,
+        stockYield,
+        brokerInterest,
+        importedFiles,
+        addImportedFile,
     } = useAppStore();
 
     // Auto-fetch FX rates when new currencies are detected — includes prior-year dates
     useEffect(() => {
         const state = useAppStore.getState();
         const currencies = new Set<string>();
-        const years = new Set<number>();
-        years.add(taxYear);
+        const years = new Set([taxYear]);
 
-        // Collect all currencies and years from data
+        // Helper to extract year from date string (YYYY-MM-DD)
+        function addYear(dateStr: string | undefined): void {
+            if (dateStr) {
+                const yr = parseInt(dateStr.substring(0, 4));
+                if (!isNaN(yr)) years.add(yr);
+            }
+        }
+
+        // Collect all currencies and years from holdings, sales, dividends, etc.
         for (const h of state.holdings) {
             if (h.currency) currencies.add(h.currency);
-            const yr = h.dateAcquired ? parseInt(h.dateAcquired.substring(0, 4)) : NaN;
-            if (!isNaN(yr)) years.add(yr);
+            addYear(h.dateAcquired);
         }
+
         for (const s of state.sales) {
             if (s.currency) currencies.add(s.currency);
-            const buyYear = s.dateAcquired ? parseInt(s.dateAcquired.substring(0, 4)) : NaN;
-            const sellYear = s.dateSold ? parseInt(s.dateSold.substring(0, 4)) : NaN;
-            if (!isNaN(buyYear)) years.add(buyYear);
-            if (!isNaN(sellYear)) years.add(sellYear);
+            addYear(s.dateAcquired);
+            addYear(s.dateSold);
         }
+
         for (const d of state.dividends) {
             if (d.currency) currencies.add(d.currency);
-            if (d.date) years.add(parseInt(d.date.substring(0, 4)));
+            addYear(d.date);
         }
-        for (const s of state.stockYield) if (s.currency) currencies.add(s.currency);
-        for (const i of state.ibInterest) {
-            if (i.currency) currencies.add(i.currency);
-            if (i.date) years.add(parseInt(i.date.substring(0, 4)));
+
+        for (const s of state.stockYield) {
+            if (s.currency) currencies.add(s.currency);
         }
-        for (const r of state.revolutInterest) if (r.currency) currencies.add(r.currency);
+
+        for (const bi of state.brokerInterest) {
+            if (bi.currency) currencies.add(bi.currency);
+            for (const entry of bi.entries) {
+                addYear(entry.date);
+            }
+        }
+
+        // Also fetch prior year for holiday/weekend fallback (e.g. Jan 1 needs Dec 31 rate)
+        const yearsList = [...years];
+        for (const yr of yearsList) {
+            if (yr > 2020) years.add(yr - 1);
+        }
 
         const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
         if (needed.length === 0) return;
 
         // Check if we need to fetch any missing year+currency combo
-        const yearsArr = [...years].filter(y => y >= 2020).sort();
+        const yearsArr = [...years].filter(y => y >= 1999 && y <= taxYear + 1).sort();
         let hasMissing = false;
         for (const ccy of needed) {
             for (const yr of yearsArr) {
@@ -117,30 +267,38 @@ export function Import() {
         Promise.allSettled(
             yearsArr.map(yr => fxService.fetchRates(needed, yr)),
         ).then(results => {
-            const merged: Record<string, Record<string, number>> = {};
-            for (const result of results) {
-                if (result.status === 'fulfilled') {
-                    for (const [ccy, dateRates] of Object.entries(result.value)) {
-                        merged[ccy] = { ...merged[ccy], ...dateRates };
+            try {
+                const merged: Record<string, Record<string, number>> = {};
+                for (const result of results) {
+                    if (result.status === 'fulfilled') {
+                        for (const [ccy, dateRates] of Object.entries(result.value)) {
+                            merged[ccy] = { ...merged[ccy], ...dateRates };
+                        }
                     }
                 }
+                if (Object.keys(merged).length > 0) setFxRates(merged);
+            } catch (err) {
+                console.error('FX rate merge failed:', err);
+            } finally {
+                setFetchingFx(false);
             }
-            if (Object.keys(merged).length > 0) setFxRates(merged);
+        }).catch(err => {
+            console.error('FX fetch failed:', err);
             setFetchingFx(false);
         });
-    }, [importedFiles.length]); // Re-run after each file import
+    }, [importedFiles.length, baseCurrency, taxYear]); // Re-run after file import or settings change
 
     const processFile = useCallback(async (file: File) => {
         const content = await file.text();
         const fileType = detectFileType(content, file.name);
 
         if (!fileType) {
-            setImportedFiles(prev => [...prev, {
+            addImportedFile({
                 name: file.name,
                 type: 'ib',
                 status: 'error',
                 message: 'Unrecognized file format. Expected IB activity statement, Revolut savings CSV, or Revolut investments CSV.',
-            }]);
+            });
             return;
         }
 
@@ -152,7 +310,7 @@ export function Import() {
                 const duplicateHoldings: Set<string> = new Set();
                 for (const trade of parsed.trades) {
                     const tradeDate = trade.dateTime.split(' ')[0]; // Extract YYYY-MM-DD from "YYYY-MM-DD HH:MM:SS"
-                    for (const existingHolding of holdings) {
+                    for (const existingHolding of useAppStore.getState().holdings) {
                         if (
                             existingHolding.broker === 'IB'
                             && existingHolding.symbol === trade.symbol
@@ -168,9 +326,20 @@ export function Import() {
                 const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
                 const allDividends = [...matched, ...unmatched];
 
-                // Resolve countries and calculate BG tax for dividends
+                // Collect all symbols and resolve countries (async — uses OpenFIGI fallback for unknowns)
+                const allSymbols: { symbol: string; currency: string }[] = [];
+                for (const t of parsed.trades) allSymbols.push({ symbol: t.symbol, currency: t.currency });
+                for (const d of allDividends) allSymbols.push({ symbol: d.symbol, currency: d.currency });
+                for (const p of parsed.openPositions) allSymbols.push({ symbol: p.symbol, currency: p.currency });
+                // Also resolve countries for existing holdings (from prior-year import)
+                for (const h of useAppStore.getState().holdings) {
+                    if (!h.country && h.symbol) allSymbols.push({ symbol: h.symbol, currency: h.currency });
+                }
+                const countryMap = await resolveCountries(allSymbols);
+
+                // Calculate BG tax for dividends
                 for (const d of allDividends) {
-                    d.country = resolveCountry(d.symbol);
+                    d.country = countryMap[d.symbol] ?? '';
                     const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
                     d.bgTaxDue = bgTaxDue;
                     d.whtCredit = whtCredit;
@@ -180,53 +349,102 @@ export function Import() {
                 for (const s of parsed.stockYield) s.source = { type: 'IB', file: file.name };
                 importStockYield(parsed.stockYield);
                 for (const i of parsed.interest) i.source = { type: 'IB', file: file.name };
-                importIbInterest(parsed.interest);
-
-                // Build country map for FIFO engine
-                const countryMap: Record<string, string> = {};
-                for (const t of parsed.trades) {
-                    countryMap[t.symbol] = resolveCountry(t.symbol);
+                // Group IB interest by currency
+                const ibByCurrency = new Map<string, Array<any>>();
+                for (const entry of parsed.interest) {
+                    const ccy = entry.currency || 'USD';
+                    if (!ibByCurrency.has(ccy)) {
+                        ibByCurrency.set(ccy, []);
+                    }
+                    ibByCurrency.get(ccy)!.push(entry);
+                }
+                const ibInterestList = Array.from(ibByCurrency).map(([currency, entries]) => ({
+                    broker: 'IB' as const,
+                    currency,
+                    entries,
+                }));
+                if (ibInterestList.length > 0) {
+                    const existingInterest = useAppStore.getState().brokerInterest.filter(bi => bi.broker !== 'IB');
+                    importBrokerInterest([...existingInterest, ...ibInterestList]);
                 }
 
                 // FIFO: process all trades (buys + sells) against existing holdings
-                const fifo = new FifoEngine([...holdings]);
-                const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
+                const fifo = new FifoEngine([...useAppStore.getState().holdings]);
+                const { holdings: fifoHoldings, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
 
-                for (const h of newHoldings) if (!h.source) h.source = { type: 'IB', file: file.name };
                 for (const s of newSales) if (!s.source) s.source = { type: 'IB', file: file.name };
-                importHoldings(newHoldings);
                 importSales(newSales);
+
+                // Use Open Positions as authoritative year-end holdings (if available)
+                // If prior-year holdings exist, only add this year's buy lots (skip pre-existing)
+                const hasPriorHoldings = useAppStore.getState().holdings.some(h => h.source?.type !== 'IB');
+                let finalHoldings: Holding[];
+                if (parsed.openPositions.length > 0) {
+                    finalHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
+                        broker: 'IB',
+                        countryMap,
+                        source: { type: 'IB', file: file.name },
+                        taxYear,
+                        symbolAliases: parsed.symbolAliases,
+                        skipPreExisting: hasPriorHoldings,
+                    });
+                } else {
+                    finalHoldings = fifoHoldings;
+                    for (const h of finalHoldings) if (!h.source) h.source = { type: 'IB', file: file.name };
+                }
+                // Merge: keep non-IB holdings (with symbol + country normalization), replace IB holdings
+                const existingNonIb = useAppStore.getState().holdings.filter(h => h.source?.type !== 'IB');
+                for (const h of existingNonIb) {
+                    // Normalize "CSPX/SXR8" style symbols from prior-year imports
+                    if (h.symbol.includes('/')) {
+                        const parts = h.symbol.split('/');
+                        for (const part of parts) {
+                            const resolved = parsed.symbolAliases[part.trim()];
+                            if (resolved) {
+                                h.symbol = resolved;
+                                break;
+                            }
+                            if (parsed.openPositions.some(p => p.symbol === part.trim())) {
+                                h.symbol = part.trim();
+                                break;
+                            }
+                        }
+                    }
+                    // Fill missing country from resolved map
+                    if (!h.country) h.country = countryMap[h.symbol] ?? '';
+                }
+                importHoldings([...existingNonIb, ...finalHoldings]);
 
                 const buys = parsed.trades.filter(t => t.quantity > 0).length;
                 const sells = parsed.trades.filter(t => t.quantity < 0).length;
                 const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
                 const dupMsg = duplicateHoldings.size > 0 ? ` [WARNING: ${duplicateHoldings.size} potential duplicate holdings detected]` : '';
+                const holdingsSource = parsed.openPositions.length > 0 ? 'Open Positions' : 'FIFO';
 
-                setImportedFiles(prev => [...prev, {
+                addImportedFile({
                     name: file.name,
                     type: 'ib',
                     status: 'success',
                     message:
-                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings, ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}${dupMsg}`,
-                }]);
+                        `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${finalHoldings.length} holdings (${holdingsSource}), ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}${dupMsg}`,
+                });
             } else if (fileType === 'revolut-investments') {
                 const { trades, holdings: parsedHoldings } = parseRevolutInvestmentsCsv(content);
 
                 if (parsedHoldings.length === 0 && trades.length === 0) {
-                    setImportedFiles(prev => [...prev, {
+                    addImportedFile({
                         name: file.name,
                         type: 'revolut-investments',
                         status: 'error',
                         message: 'No trades found in this file.',
-                    }]);
+                    });
                     return;
                 }
 
-                // Build country map and run FIFO for Revolut trades
-                const countryMap: Record<string, string> = {};
-                for (const t of trades) {
-                    countryMap[t.ticker] = resolveCountry(t.ticker);
-                }
+                // Resolve countries (async — uses OpenFIGI fallback for unknowns)
+                const countryMap = await resolveCountries(
+                    trades.map(t => ({ symbol: t.ticker, currency: t.currency })),
+                );
 
                 // Convert trades to the format FifoEngine expects
                 const fifoTrades = trades.map(t => ({
@@ -239,7 +457,7 @@ export function Import() {
                     currency: t.currency,
                 }));
 
-                const fifo = new FifoEngine([...holdings]);
+                const fifo = new FifoEngine([...useAppStore.getState().holdings]);
                 const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
 
                 for (const h of newHoldings) if (!h.source) h.source = { type: 'Revolut', file: file.name };
@@ -251,61 +469,69 @@ export function Import() {
                 const sells = trades.filter(t => t.type.includes('SELL')).length;
                 const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
 
-                setImportedFiles(prev => [...prev, {
+                addImportedFile({
                     name: file.name,
                     type: 'revolut-investments',
                     status: 'success',
                     message: `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings${warnMsg}`,
-                }]);
+                });
             } else {
-                const revolut: RevolutInterest = parseRevolutCsv(content);
-                const existing = useAppStore.getState().revolutInterest;
+                const revolut: BrokerInterest = parseRevolutCsv(content);
+                const existing = useAppStore.getState().brokerInterest;
 
                 // Check for duplicate Revolut currency
-                const isDuplicate = existing.some(r => r.currency === revolut.currency);
+                const isDuplicate = existing.some(bi => bi.broker === 'Revolut' && bi.currency === revolut.currency);
 
                 if (isDuplicate) {
-                    setImportedFiles(prev => [...prev, {
+                    addImportedFile({
                         name: file.name,
                         type: 'revolut',
                         status: 'error',
                         message: `This file appears to already be imported (${revolut.currency} already exists). Skipping to prevent duplicates.`,
-                    }]);
+                    });
                     return;
                 }
 
-                importRevolutInterest([...existing, revolut]);
+                for (const e of revolut.entries) {
+                    e.source = { type: 'Revolut', file: file.name };
+                }
+                const brokerInterestEntry = {
+                    broker: 'Revolut' as const,
+                    currency: revolut.currency,
+                    entries: revolut.entries,
+                };
+                importBrokerInterest([...existing, brokerInterestEntry]);
 
                 const netInterest = revolut.entries.reduce((sum, e) => sum + e.amount, 0);
 
-                setImportedFiles(prev => [...prev, {
+                addImportedFile({
                     name: file.name,
                     type: 'revolut',
                     status: 'success',
                     message: `${revolut.currency}: ${revolut.entries.length} entries, net ${netInterest.toFixed(2)} ${revolut.currency}`,
-                }]);
+                });
             }
         } catch (err) {
-            setImportedFiles(prev => [...prev, {
+            addImportedFile({
                 name: file.name,
                 type: fileType,
                 status: 'error',
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
-            }]);
+            });
         }
-    }, [holdings, importHoldings, importSales, importDividends, importStockYield, importIbInterest, importRevolutInterest]);
+    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
             if (file.name.endsWith('.csv')) {
                 processFile(file);
             } else {
-                setImportedFiles(prev => [...prev, {
+                addImportedFile({
                     name: file.name,
                     type: 'ib',
                     status: 'error',
                     message: 'Only .csv files are supported',
-                }]);
+                });
             }
         });
     }, [processFile]);
@@ -442,6 +668,45 @@ export function Import() {
                         </div>
                     )}
 
+                    {/* Current session data summary */}
+                    {(holdings.length > 0 || sales.length > 0 || dividends.length > 0 || stockYield.length > 0 || brokerInterest.length > 0) && (() => {
+                        const sourceFiles = new Set<string>();
+                        for (const h of holdings) if (h.source?.file) sourceFiles.add(h.source.file);
+                        for (const s of sales) if (s.source?.file) sourceFiles.add(s.source.file);
+                        for (const d of dividends) if (d.source?.file) sourceFiles.add(d.source.file);
+                        for (const sy of stockYield) if (sy.source?.file) sourceFiles.add(sy.source.file);
+                        for (const bi of brokerInterest) for (const e of bi.entries) if (e.source?.file) sourceFiles.add(e.source.file);
+
+                        return (
+                            <div
+                                style={{
+                                    marginBottom: '1.5rem',
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    fontSize: '0.9rem',
+                                }}
+                            >
+                                <strong>{t('import.currentData')}:</strong>
+                                <span style={{ marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>
+                                    {[
+                                        holdings.length > 0 && `${holdings.length} ${t('tab.holdings').toLowerCase()}`,
+                                        sales.length > 0 && `${sales.length} ${t('tab.sales').toLowerCase()}`,
+                                        dividends.length > 0 && `${dividends.length} ${t('tab.dividends').toLowerCase()}`,
+                                        stockYield.length > 0 && `${stockYield.length} ${t('tab.stockYield').toLowerCase()}`,
+                                        brokerInterest.length > 0 && `${brokerInterest.reduce((s, bi) => s + bi.entries.length, 0)} ${t('tab.interest').toLowerCase()}`,
+                                    ].filter(Boolean).join(', ')}
+                                </span>
+                                {sourceFiles.size > 0 && (
+                                    <div style={{ marginTop: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                        {t('import.sourceFiles')}: {Array.from(sourceFiles).join(', ')}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     {/* Imported files list */}
                     {importedFiles.length > 0 && (
                         <div style={{ marginBottom: '1.5rem' }}>
@@ -509,43 +774,16 @@ export function Import() {
                     }}
                 >
                     <h3 style={{ marginBottom: '0.75rem' }}>{t('import.howTo')}</h3>
-                    <div style={{ marginBottom: '0.75rem' }}>
-                        <strong>Interactive Brokers:</strong>
-                        <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
-                            <li>
-                                Go to <em>Performance & Reports → Statements</em>
-                            </li>
-                            <li>
-                                Click <em>Activity Statement</em>
-                            </li>
-                            <li>
-                                Period: <strong>Annual</strong>, Date: the tax year
-                            </li>
-                            <li>
-                                Click <strong>Download CSV</strong>
-                            </li>
-                        </ol>
-                    </div>
-                    <div style={{ marginBottom: '0.75rem' }}>
-                        <strong>Revolut Savings:</strong>
-                        <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
-                            <li>
-                                Go to <em>Savings → your vault → Statements</em>
-                            </li>
-                            <li>Select the tax year period</li>
-                            <li>Download one CSV per currency vault (EUR, USD, GBP)</li>
-                        </ol>
-                    </div>
-                    <div>
-                        <strong>Revolut Investments:</strong>
-                        <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
-                            <li>
-                                Go to <em>Invest → Statements</em>
-                            </li>
-                            <li>Select the tax year</li>
-                            <li>Download the yearly statement CSV</li>
-                        </ol>
-                    </div>
+                    {providers.map(p =>
+                        p.exportInstructions.map(instr => (
+                            <div key={instr.label} style={{ marginBottom: '0.75rem' }}>
+                                <strong>{t(instr.label)}:</strong>
+                                <ol style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+                                    {instr.steps.map(step => <li key={step}>{t(step)}</li>)}
+                                </ol>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </div>

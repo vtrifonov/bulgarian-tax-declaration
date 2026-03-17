@@ -1,7 +1,7 @@
-import type { BaseCurrency } from '../types/index.js';
-import type { FxCache } from './fx-cache.js';
 import { fetchYearRates } from './ecb-api.js';
+import type { FxCache } from './fx-cache.js';
 import { gapFillRates } from './gap-fill.js';
+import type { BaseCurrency } from '../types/index.js';
 
 const EUR_BGN_FIXED = 1.95583;
 
@@ -31,15 +31,29 @@ export class FxService {
         date: string,
         rates: Record<string, Record<string, number>>,
     ): number | null {
-        if (currency === this.baseCurrency) return 1;
-        if (currency === 'EUR' && this.baseCurrency === 'BGN') return EUR_BGN_FIXED;
-        if (currency === 'BGN' && this.baseCurrency === 'EUR') return 1 / EUR_BGN_FIXED;
+        if (currency === this.baseCurrency) {
+            return 1;
+        }
+
+        if (currency === 'EUR' && this.baseCurrency === 'BGN') {
+            return EUR_BGN_FIXED;
+        }
+
+        if (currency === 'BGN' && this.baseCurrency === 'EUR') {
+            return 1 / EUR_BGN_FIXED;
+        }
 
         const currencyRates = rates[currency];
-        if (!currencyRates) return null;
+
+        if (!currencyRates) {
+            return null;
+        }
 
         const ecbRate = currencyRates[date];
-        if (ecbRate === undefined) return null;
+
+        if (ecbRate === undefined) {
+            return null;
+        }
 
         // ECB rates are EUR-native: 1 EUR = X currency
         // We need: 1 unit of currency = ? base currency
@@ -47,6 +61,7 @@ export class FxService {
         if (this.baseCurrency === 'EUR') {
             return 1 / ecbRate;
         }
+
         // For BGN base: 1 USD = (1/ecbRate) × EUR_BGN_FIXED BGN
         return EUR_BGN_FIXED / ecbRate;
     }
@@ -68,6 +83,7 @@ export class FxService {
         // Fetch all currencies in parallel
         await Promise.all(uniqueCurrencies.map(async (ccy) => {
             let rates = await this.cache.get(ccy, year);
+
             if (!rates) {
                 try {
                     rates = await fetchYearRates(ccy, year);
@@ -78,6 +94,7 @@ export class FxService {
             }
             result[ccy] = gapFillRates(rates, `${year}-01-01`, `${year}-12-31`);
         }));
+
         return result;
     }
 }

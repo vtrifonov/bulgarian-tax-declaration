@@ -15,10 +15,15 @@ type ImportOption = 'none' | 'excel' | 'excel-full' | 'fresh';
 
 export function YearSetup() {
     const navigate = useNavigate();
-    const { taxYear, baseCurrency, setTaxYear, setBaseCurrency, importHoldings, reset } = useAppStore();
+    const { taxYear, baseCurrency, setTaxYear, setBaseCurrency, importHoldings, reset, clearImportedFiles } = useAppStore();
+    const hasData = () => {
+        const s = useAppStore.getState();
+        return s.holdings.length > 0 || s.sales.length > 0 || s.dividends.length > 0 || s.stockYield.length > 0 || s.brokerInterest.length > 0;
+    };
     const [importOption, setImportOption] = useState<ImportOption>('fresh');
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleYearChange = (year: number) => {
@@ -46,7 +51,7 @@ export function YearSetup() {
             } else if (importOption === 'excel-full') {
                 const buffer = await file.arrayBuffer();
                 const data = await importFullExcel(buffer);
-                const { importSales, importDividends, importStockYield, importIbInterest, importRevolutInterest } = useAppStore.getState();
+                const { importSales, importDividends, importStockYield, importBrokerInterest } = useAppStore.getState();
                 const parts: string[] = [];
                 if (data.holdings.length) {
                     for (const h of data.holdings) h.source = { type: 'Initial import', file: file.name };
@@ -64,17 +69,17 @@ export function YearSetup() {
                     parts.push(`${data.dividends.length} дивиденти`);
                 }
                 if (data.stockYield.length) {
+                    for (const sy of data.stockYield) sy.source = { type: 'Initial import', file: file.name };
                     importStockYield(data.stockYield);
-                    parts.push(`${data.stockYield.length} stock yield`);
+                    parts.push(`${data.stockYield.length} ${t('tab.stockYield').toLowerCase()}`);
                 }
-                if (data.ibInterest.length) {
-                    for (const i of data.ibInterest) i.source = { type: 'Initial import', file: file.name };
-                    importIbInterest(data.ibInterest);
-                    parts.push(`${data.ibInterest.length} IB лихви`);
-                }
-                if (data.revolutInterest.length) {
-                    importRevolutInterest(data.revolutInterest);
-                    parts.push(`${data.revolutInterest.length} Revolut лихви`);
+                if (data.brokerInterest.length) {
+                    for (const bi of data.brokerInterest) {
+                        for (const e of bi.entries) e.source = { type: 'Initial import', file: file.name };
+                    }
+                    importBrokerInterest(data.brokerInterest);
+                    const interestCount = data.brokerInterest.reduce((sum, bi) => sum + bi.entries.length, 0);
+                    parts.push(`${interestCount} лихви (${data.brokerInterest.map(bi => bi.broker).join(', ')})`);
                 }
                 setImportStatus(parts.length > 0 ? `Imported: ${parts.join(', ')}` : 'No data found in file');
             }
@@ -252,11 +257,12 @@ export function YearSetup() {
                 )}
 
                 <button
+                    disabled={(importOption === 'excel' || importOption === 'excel-full') && !importStatus}
                     onClick={() => navigate('/import')}
                     style={{
                         padding: '0.75rem 2rem',
                         fontSize: '1rem',
-                        backgroundColor: 'var(--accent)',
+                        backgroundColor: (importOption === 'excel' || importOption === 'excel-full') && !importStatus ? 'var(--border)' : 'var(--accent)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -267,28 +273,86 @@ export function YearSetup() {
                 </button>
 
                 <button
-                    onClick={() => {
-                        if (confirm(t('confirm.resetAll'))) {
-                            reset();
-                            localStorage.removeItem('bg-tax-autosave');
-                            setImportStatus(null);
-                            setImportError(null);
-                            setImportOption('fresh');
-                        }
-                    }}
+                    disabled={!hasData()}
+                    onClick={() => setShowResetConfirm(true)}
                     style={{
                         padding: '0.75rem 2rem',
                         fontSize: '1rem',
                         backgroundColor: 'transparent',
-                        color: '#dc3545',
-                        border: '1px solid #dc3545',
+                        color: hasData() ? '#dc3545' : 'var(--text-secondary)',
+                        border: `1px solid ${hasData() ? '#dc3545' : 'var(--border)'}`,
                         borderRadius: '4px',
-                        cursor: 'pointer',
+                        cursor: hasData() ? 'pointer' : 'default',
                         marginLeft: '1rem',
+                        opacity: hasData() ? 1 : 0.5,
                     }}
                 >
                     {t('button.reset')}
                 </button>
+
+                {showResetConfirm && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000,
+                        }}
+                    >
+                        <div
+                            style={{
+                                backgroundColor: 'var(--bg)',
+                                borderRadius: '8px',
+                                padding: '1.5rem',
+                                maxWidth: '400px',
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                            }}
+                        >
+                            <p style={{ margin: '0 0 1.5rem', fontSize: '1rem' }}>{t('confirm.resetAll')}</p>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={() => setShowResetConfirm(false)}
+                                    style={{
+                                        padding: '0.5rem 1.5rem',
+                                        fontSize: '0.9rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid var(--border)',
+                                        backgroundColor: 'var(--bg-secondary)',
+                                        color: 'var(--text)',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        reset();
+                                        clearImportedFiles();
+                                        localStorage.removeItem('bg-tax-autosave');
+                                        setImportStatus(null);
+                                        setImportError(null);
+                                        setImportOption('fresh');
+                                        setShowResetConfirm(false);
+                                    }}
+                                    style={{
+                                        padding: '0.5rem 1.5rem',
+                                        fontSize: '0.9rem',
+                                        borderRadius: '4px',
+                                        border: 'none',
+                                        backgroundColor: '#dc3545',
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div

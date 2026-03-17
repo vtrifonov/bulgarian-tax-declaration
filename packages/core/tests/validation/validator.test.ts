@@ -93,8 +93,7 @@ describe('validate', () => {
             dividends: [],
             sales: [],
             stockYield: [],
-            ibInterest: [],
-            revolutInterest: [],
+            brokerInterest: [],
             manualEntries: [],
             fxRates: {},
         };

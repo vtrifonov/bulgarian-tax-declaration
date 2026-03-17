@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+
 import type { Holding } from '../types/index.js';
 const randomUUID = () => crypto.randomUUID();
 
@@ -17,19 +18,30 @@ const HEADER_PATTERNS: [RegExp, string][] = [
 
 function matchHeader(value: string): string | null {
     const v = value.toLowerCase().trim();
-    if (!v) return null;
-    for (const [pattern, field] of HEADER_PATTERNS) {
-        if (pattern.test(v)) return field;
+
+    if (!v) {
+        return null;
     }
+
+    for (const [pattern, field] of HEADER_PATTERNS) {
+        if (pattern.test(v)) {
+            return field;
+        }
+    }
+
     return null;
 }
 
 export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Holding[]> {
     const wb = new ExcelJS.Workbook();
+
     await wb.xlsx.load(buffer);
 
     const ws = wb.getWorksheet('Притежания') ?? wb.worksheets[0];
-    if (!ws) throw new Error('No sheets found in Excel file');
+
+    if (!ws) {
+        throw new Error('No sheets found in Excel file');
+    }
 
     // Find header row and build column mapping
     let headerRow = 0;
@@ -43,6 +55,7 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
         for (let c = 1; c <= 20; c++) {
             const val = String(row.getCell(c).value ?? '');
             const field = matchHeader(val);
+
             if (field && !candidates[field]) { // First match wins (avoid "Валута" matching twice)
                 candidates[field] = c;
                 matchCount++;
@@ -60,14 +73,22 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
     if (headerRow === 0) {
         // Collect first 5 rows of headers for error message
         const found: string[] = [];
+
         for (let r = 1; r <= Math.min(5, ws.rowCount); r++) {
             const row = ws.getRow(r);
             const cells: string[] = [];
+
             for (let c = 1; c <= 15; c++) {
                 const v = String(row.getCell(c).value ?? '').trim();
-                if (v) cells.push(v);
+
+                if (v) {
+                    cells.push(v);
+                }
             }
-            if (cells.length > 0) found.push(`Row ${r}: ${cells.join(', ')}`);
+
+            if (cells.length > 0) {
+                found.push(`Row ${r}: ${cells.join(', ')}`);
+            }
         }
         throw new Error(
             `Could not detect column headers in sheet "${ws.name}". `
@@ -81,34 +102,63 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
     /** Extract cell value — handles formula cells (exceljs returns {formula, result}) */
     function cellStr(cell: ExcelJS.Cell): string {
         const v = cell.value;
-        if (v === null || v === undefined) return '';
-        if (typeof v === 'object' && 'result' in v) return String(v.result ?? '').trim();
-        if (v instanceof Date) return v.toISOString().split('T')[0];
+
+        if (v === null || v === undefined) {
+            return '';
+        }
+
+        if (typeof v === 'object' && 'result' in v) {
+            return String(v.result ?? '').trim();
+        }
+
+        if (v instanceof Date) {
+            return v.toISOString().split('T')[0];
+        }
+
         return String(v).trim();
     }
+
     function cellNum(cell: ExcelJS.Cell): number {
         const v = cell.value;
-        if (v === null || v === undefined) return 0;
-        if (typeof v === 'object' && 'result' in v) return Number(v.result ?? 0);
+
+        if (v === null || v === undefined) {
+            return 0;
+        }
+
+        if (typeof v === 'object' && 'result' in v) {
+            return Number(v.result ?? 0);
+        }
+
         return Number(v) || 0;
     }
+
     function cellDate(cell: ExcelJS.Cell): string {
         const v = cell.value;
-        if (v instanceof Date) return v.toISOString().split('T')[0];
+
+        if (v instanceof Date) {
+            return v.toISOString().split('T')[0];
+        }
+
         if (v && typeof v === 'object' && 'result' in v) {
             const r = v.result;
+
             return r instanceof Date ? r.toISOString().split('T')[0] : String(r ?? '').split('T')[0].trim();
         }
+
         return v ? String(v).split('T')[0].trim() : '';
     }
 
     ws.eachRow((row, rowNumber) => {
-        if (rowNumber <= headerRow) return;
+        if (rowNumber <= headerRow) {
+            return;
+        }
 
         const symbol = colMap.symbol ? cellStr(row.getCell(colMap.symbol)) : '';
         const quantity = colMap.quantity ? cellNum(row.getCell(colMap.quantity)) : 0;
 
-        if (!symbol || quantity <= 0) return;
+        if (!symbol || quantity <= 0) {
+            return;
+        }
 
         holdings.push({
             id: randomUUID(),
@@ -131,8 +181,10 @@ function parseCsvRow(line: string): string[] {
     const fields: string[] = [];
     let current = '';
     let inQuotes = false;
+
     for (let i = 0; i < line.length; i++) {
         const ch = line[i];
+
         if (ch === '"') {
             inQuotes = !inQuotes;
         } else if (ch === ',' && !inQuotes) {
@@ -143,12 +195,16 @@ function parseCsvRow(line: string): string[] {
         }
     }
     fields.push(current.trim());
+
     return fields;
 }
 
 export function importHoldingsFromCsv(content: string): Holding[] {
     const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) return [];
+
+    if (lines.length < 2) {
+        return [];
+    }
 
     // Detect header row (first 5 lines)
     let headerRowIdx = -1;
@@ -161,6 +217,7 @@ export function importHoldingsFromCsv(content: string): Holding[] {
 
         for (let c = 0; c < fields.length; c++) {
             const field = matchHeader(fields[c]);
+
             if (field && !candidates[field]) {
                 candidates[field] = c;
                 matchCount++;
@@ -176,6 +233,7 @@ export function importHoldingsFromCsv(content: string): Holding[] {
 
     if (headerRowIdx === -1) {
         const preview = lines.slice(0, 3).join('\n');
+
         throw new Error(
             `Could not detect column headers in CSV. `
                 + `Expected headers like: Брокер, Символ, Държава, Дата, Количество, Валута, Цена.\n`
@@ -192,7 +250,9 @@ export function importHoldingsFromCsv(content: string): Holding[] {
         const quantityStr = colMap.quantity !== undefined ? (fields[colMap.quantity] ?? '') : '';
         const quantity = parseFloat(quantityStr) || 0;
 
-        if (!symbol || quantity <= 0) continue;
+        if (!symbol || quantity <= 0) {
+            continue;
+        }
 
         const dateRaw = colMap.dateAcquired !== undefined ? (fields[colMap.dateAcquired] ?? '') : '';
         // Normalize date: strip time part if present

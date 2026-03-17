@@ -1,14 +1,20 @@
-import type { RevolutInterest } from '../types/index.js';
+import type {
+    BrokerInterest,
+    InterestEntry,
+} from '../types/index.js';
 
-export function parseRevolutCsv(csv: string): RevolutInterest {
+export function parseRevolutCsv(csv: string): BrokerInterest {
     const lines = csv.split('\n').filter(l => l.trim());
-    if (lines.length === 0) throw new Error('Empty CSV');
+
+    if (lines.length === 0) {
+        throw new Error('Empty CSV');
+    }
 
     const header = lines[0];
     const currency = detectCurrency(header);
     const valueColIndex = getValueColumnIndex(header, currency);
 
-    const entries: RevolutInterest['entries'] = [];
+    const entries: InterestEntry[] = [];
 
     for (let i = 1; i < lines.length; i++) {
         const fields = parseCSVRow(lines[i]);
@@ -16,34 +22,55 @@ export function parseRevolutCsv(csv: string): RevolutInterest {
 
         // Only keep Interest PAID and Service Fee Charged
         const descType = classifyDescription(description);
-        if (!descType) continue;
+
+        if (!descType) {
+            continue;
+        }
 
         const date = parseRevolutDate(fields[0]);
         const amount = parseFloat(fields[valueColIndex]);
-        if (isNaN(amount)) continue;
 
-        entries.push({ date, description: descType, amount });
+        if (isNaN(amount)) {
+            continue;
+        }
+
+        entries.push({ currency, date, description: descType, amount });
     }
 
-    return { currency, entries };
+    return { broker: 'Revolut', currency, entries };
 }
 
 function detectCurrency(header: string): string {
     // "Value, EUR" or "Value, USD" or "Value, GBP"
     const match = header.match(/Value, (\w{3})/);
-    if (!match) throw new Error('Cannot detect currency from header: ' + header);
+
+    if (!match) {
+        throw new Error('Cannot detect currency from header: ' + header);
+    }
+
     return match[1];
 }
 
 function getValueColumnIndex(header: string, currency: string): number {
     const fields = parseCSVRow(header);
-    // Find the column "Value, {currency}"
-    return fields.findIndex(f => f.includes(`Value, ${currency}`));
+    const index = fields.findIndex(f => f.includes(`Value, ${currency}`));
+
+    if (index === -1) {
+        throw new Error(`Cannot find "Value, ${currency}" column in header: ${header}`);
+    }
+
+    return index;
 }
 
 function classifyDescription(desc: string): string | null {
-    if (desc.startsWith('Interest PAID')) return 'Interest PAID';
-    if (desc.startsWith('Service Fee Charged')) return 'Service Fee Charged';
+    if (desc.startsWith('Interest PAID')) {
+        return 'Interest PAID';
+    }
+
+    if (desc.startsWith('Service Fee Charged')) {
+        return 'Service Fee Charged';
+    }
+
     return null; // Skip BUY, SELL, Reinvested, etc.
 }
 
@@ -52,7 +79,10 @@ function parseRevolutDate(raw: string): string {
     // Remove time part: everything after the year
     const cleaned = raw.replace(/"/g, '').trim();
     const match = cleaned.match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})/);
-    if (!match) throw new Error('Cannot parse date: ' + raw);
+
+    if (!match) {
+        throw new Error('Cannot parse date: ' + raw);
+    }
     const [, monthStr, day, year] = match;
     const months: Record<string, string> = {
         Jan: '01',
@@ -69,7 +99,11 @@ function parseRevolutDate(raw: string): string {
         Dec: '12',
     };
     const month = months[monthStr];
-    if (!month) throw new Error('Unknown month: ' + monthStr);
+
+    if (!month) {
+        throw new Error('Unknown month: ' + monthStr);
+    }
+
     return `${year}-${month}-${day.padStart(2, '0')}`;
 }
 
@@ -77,8 +111,10 @@ function parseCSVRow(row: string): string[] {
     const fields: string[] = [];
     let current = '';
     let inQuotes = false;
+
     for (let i = 0; i < row.length; i++) {
         const ch = row[i];
+
         if (ch === '"') {
             inQuotes = !inQuotes;
         } else if (ch === ',' && !inQuotes) {
@@ -89,5 +125,6 @@ function parseCSVRow(row: string): string[] {
         }
     }
     fields.push(current.trim());
+
     return fields;
 }

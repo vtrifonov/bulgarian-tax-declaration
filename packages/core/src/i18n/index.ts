@@ -1,5 +1,5 @@
-import { en } from './en.js';
 import { bg } from './bg.js';
+import { en } from './en.js';
 
 type Language = 'en' | 'bg';
 

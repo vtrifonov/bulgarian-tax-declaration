@@ -8,8 +8,8 @@ Trades,Data,Order,Stocks,USD,GOOG,"2025-08-20, 11:15:33",-8,189.75,189.75,1518.0
 Trades,Data,Order,Stocks,USD,AMZN,"2025-03-18, 14:22:45",20,178.90,179.10,-3578.00,-2.00,3580.00,0,4.00,O
 Trades,Data,Order,Stocks,USD,AMZN,"2025-10-08, 10:05:19",-20,205.40,205.40,4108.00,-2.00,-3580.00,526.00,0,O
 Trades,Data,Order,Stocks,EUR,ASML,"2025-01-14, 10:42:08",5,680.50,681.00,-3402.50,-2.50,3405.00,0,2.50,O
-Trades,Data,Order,Stocks,EUR,SAP,"2025-04-22, 11:30:55",12,195.20,195.60,-2342.40,-1.80,2344.20,0,4.80,O
-Trades,Data,Order,Stocks,EUR,SAP,"2025-11-12, 09:50:22",-12,228.10,228.10,2737.20,-1.80,-2344.20,391.20,0,O
+Trades,Data,Order,Stocks,EUR,SAPd,"2025-04-22, 11:30:55",12,195.20,195.60,-2342.40,-1.80,2344.20,0,4.80,O
+Trades,Data,Order,Stocks,EUR,SAPd,"2025-11-12, 09:50:22",-12,228.10,228.10,2737.20,-1.80,-2344.20,391.20,0,O
 Trades,Data,Order,Stocks,GBP,RIO,"2025-05-07, 08:15:30",25,52.80,52.90,-1320.00,-1.50,1321.50,0,2.50,O
 Trades,Data,Order,Stocks,HKD,1810,"2025-06-11, 02:30:15",200,148.00,148.50,-29600.00,-50.00,29650.00,0,100.00,O
 Trades,SubTotal,,Stocks,USD,GOOG,,7,,,-616.50,-2.50,997.60,378.60,3.75,
@@ -75,3 +75,19 @@ Stock Yield Enhancement Program Securities Lent Interest Details,Data,USD,2025-0
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-02-10,ASML,2025-02-10,-5,3410.00,1.50,0.75,0.07,Po
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,EUR,2025-02-11,ASML,2025-02-11,-5,3415.60,1.50,0.75,0.07,Po
 Stock Yield Enhancement Program Securities Lent Interest Details,Data,Total,,,,,,,,0.52,
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code
+Open Positions,Data,Summary,Stocks,USD,GOOG,10,1,150.50,1505.00,178.25,1782.50,277.50,
+Open Positions,Data,Summary,Stocks,USD,MSFT,5,1,320.00,1600.00,415.50,2077.50,477.50,
+Open Positions,Data,Summary,Stocks,EUR,ASML,5,1,680.00,3400.00,921.40,4607.00,1207.00,
+Open Positions,Data,Summary,Stocks,GBP,RIO,25,1,52.80,1320.00,58.50,1462.50,142.50,
+Open Positions,Data,Summary,Stocks,HKD,1810,200,1,148.00,29600.00,155.00,31000.00,1400.00,
+Open Positions,Total,,Stocks,USD,,,,,3105.00,,3860.00,755.00,
+Open Positions,Total,,Stocks,EUR,,,,,3400.00,,4607.00,1207.00,
+Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+Financial Instrument Information,Data,Stocks,GOOG,ALPHABET INC-CL C,265768,US02079K1079,GOOG,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,MSFT,MICROSOFT CORP,272093,US5949181045,MSFT,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,ASML,ASML HOLDING NV,117589399,NL0010273215,ASML,AEB,1,COMMON,
+Financial Instrument Information,Data,Stocks,AMZN,AMAZON.COM INC,3691937,US0231351067,AMZN,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,"SAP, SAPd",SAP SE,14204,DE0007164600,SAP,IBIS,1,COMMON,
+Financial Instrument Information,Data,Stocks,RIO,RIO TINTO PLC-SPON ADR,4095586,US7672041008,RIO,NYSE,1,ADR,
+Financial Instrument Information,Data,Stocks,1810,XIAOMI CORP-CLASS B,323608988,KYG9830T1067,1810,SEHK,1,COMMON,

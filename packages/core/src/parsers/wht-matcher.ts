@@ -15,8 +15,10 @@ export function matchWhtToDividends(
 ): MatchResult {
     // Step 1: Combine WHT entries by symbol+date+currency
     const whtMap = new Map<string, number>();
+
     for (const w of whts) {
         const key = `${w.symbol}|${w.date}|${w.currency}`;
+
         whtMap.set(key, (whtMap.get(key) ?? 0) + w.amount);
     }
 
@@ -27,6 +29,7 @@ export function matchWhtToDividends(
     for (const d of dividends) {
         const key = `${d.symbol}|${d.date}|${d.currency}`;
         const whtAmount = whtMap.get(key) ?? 0;
+
         matchedKeys.add(key);
 
         matched.push({
@@ -43,9 +46,13 @@ export function matchWhtToDividends(
 
     // Step 3: Unmatched WHT → standalone rows
     const unmatched: Dividend[] = [];
+
     for (const [key, amount] of whtMap) {
-        if (matchedKeys.has(key)) continue;
+        if (matchedKeys.has(key)) {
+            continue;
+        }
         const [symbol, date, currency] = key.split('|');
+
         unmatched.push({
             symbol,
             country: '',

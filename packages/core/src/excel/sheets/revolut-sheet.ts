@@ -1,4 +1,6 @@
 import type { Workbook } from 'exceljs';
+
+import type { AppState } from '../../types/index.js';
 import {
     baseCcyFormat,
     CCY_FORMAT,
@@ -7,10 +9,11 @@ import {
     FX_RATE_FORMAT,
     HEADER_STYLE,
 } from '../styles.js';
-import type { AppState } from '../../types/index.js';
 
 export function addRevolutSheets(workbook: Workbook, state: AppState): void {
-    if (state.revolutInterest.length === 0) return;
+    if (state.revolutInterest.length === 0) {
+        return;
+    }
 
     const ccy = state.baseCurrency;
 
@@ -18,11 +21,13 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
     const summarySheet = workbook.addWorksheet('Revolut Лихва');
     const summaryHeaders = ['Валута', 'Записи', `Нетна лихва`, `Нетна лихва (${ccy})`, `Данък 10% (${ccy})`];
     const summaryHeaderRow = summarySheet.addRow(summaryHeaders);
+
     summaryHeaderRow.eachCell((cell) => {
         cell.style = { ...HEADER_STYLE, font: FONT };
     });
 
     let summaryR = 2;
+
     for (const ri of state.revolutInterest) {
         const net = ri.entries.reduce((sum, e) => sum + e.amount, 0);
         const row = summarySheet.addRow([
@@ -36,6 +41,7 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
         // Use mid-year date for FX approximation
         const midDate = `${state.taxYear}-06-30`;
         const fxRate = getFxRate(ri.currency, midDate, state);
+
         row.getCell(4).value = { formula: `ROUND(C${summaryR}*${fxRate},2)` };
         row.getCell(5).value = { formula: `ROUND(D${summaryR}*0.1,2)` };
 
@@ -48,6 +54,7 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
 
     // Total row
     const lastDataRow = summaryR - 1;
+
     if (lastDataRow >= 2) {
         const totalRow = summarySheet.addRow([
             'Общо',
@@ -56,6 +63,7 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
             null,
             null,
         ]);
+
         totalRow.getCell(4).value = { formula: `SUM(D2:D${lastDataRow})` };
         totalRow.getCell(5).value = { formula: `SUM(E2:E${lastDataRow})` };
         totalRow.getCell(4).numFmt = baseCcyFormat(ccy);
@@ -75,11 +83,13 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
 
         const detailHeaders = ['Дата', 'Описание', 'Размер', 'Валутен курс', `Размер (${ccy})`];
         const detailHeaderRow = detailSheet.addRow(detailHeaders);
+
         detailHeaderRow.eachCell((cell) => {
             cell.style = { ...HEADER_STYLE, font: FONT };
         });
 
         let r = 2;
+
         for (const entry of ri.entries) {
             const row = detailSheet.addRow([
                 entry.date,
@@ -109,11 +119,23 @@ export function addRevolutSheets(workbook: Workbook, state: AppState): void {
 }
 
 function getFxRate(currency: string, date: string, state: AppState): number {
-    if (currency === state.baseCurrency) return 1;
-    if (currency === 'EUR' && state.baseCurrency === 'BGN') return 1.95583;
-    if (currency === 'BGN' && state.baseCurrency === 'EUR') return 1 / 1.95583;
+    if (currency === state.baseCurrency) {
+        return 1;
+    }
+
+    if (currency === 'EUR' && state.baseCurrency === 'BGN') {
+        return 1.95583;
+    }
+
+    if (currency === 'BGN' && state.baseCurrency === 'EUR') {
+        return 1 / 1.95583;
+    }
     const ecbRate = state.fxRates[currency]?.[date];
-    if (!ecbRate) return 1;
+
+    if (!ecbRate) {
+        return 1;
+    }
+
     return state.baseCurrency === 'BGN' ? 1.95583 / ecbRate : 1 / ecbRate;
 }
 
@@ -125,17 +147,21 @@ function setFxRateCell(
 ): void {
     if (currency === state.baseCurrency) {
         cell.value = 1;
+
         return;
     }
+
     if (state.baseCurrency === 'BGN') {
         if (currency === 'EUR') {
             cell.value = 1.95583;
+
             return;
         }
         cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT("${currency}!A:B"),2,FALSE),"")` };
     } else {
         if (currency === 'EUR') {
             cell.value = 1;
+
             return;
         }
         cell.value = { formula: `IFERROR(VLOOKUP(A${rowNum},INDIRECT("${currency}!A:B"),2,FALSE),"")` };

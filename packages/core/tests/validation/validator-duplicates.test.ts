@@ -28,8 +28,7 @@ function makeState(holdings: Partial<Holding>[]): AppState {
         sales: [],
         dividends: [],
         stockYield: [],
-        ibInterest: [],
-        revolutInterest: [],
+        brokerInterest: [],
         fxRates: {},
         manualEntries: [],
     };

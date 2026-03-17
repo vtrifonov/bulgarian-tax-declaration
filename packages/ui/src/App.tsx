@@ -49,18 +49,22 @@ function Layout() {
         const saved = loadAutoSave();
         if (saved) {
             const store = useAppStore.getState();
-            if (saved.holdings) store.importHoldings(saved.holdings as any);
-            if (saved.sales) store.importSales(saved.sales as any);
-            if (saved.dividends) store.importDividends(saved.dividends as any);
-            if (saved.stockYield) store.importStockYield(saved.stockYield as any);
-            if (saved.ibInterest) store.importIbInterest(saved.ibInterest as any);
-            if (saved.revolutInterest) store.importRevolutInterest(saved.revolutInterest as any);
-            if (saved.fxRates) store.setFxRates(saved.fxRates as any);
+            // Restore settings first (affects validation and FX conversion)
             if (saved.taxYear) store.setTaxYear(saved.taxYear as number);
             if (saved.language) {
                 store.setLanguage(saved.language as 'en' | 'bg');
                 setCoreLanguage(saved.language as 'en' | 'bg');
             }
+            // Then restore data
+            if (saved.holdings) store.importHoldings(saved.holdings as any);
+            if (saved.sales) store.importSales(saved.sales as any);
+            if (saved.dividends) store.importDividends(saved.dividends as any);
+            if (saved.stockYield) store.importStockYield(saved.stockYield as any);
+            if (saved.brokerInterest) store.importBrokerInterest(saved.brokerInterest as any);
+            if (saved.importedFiles && Array.isArray(saved.importedFiles)) {
+                for (const f of saved.importedFiles as any[]) store.addImportedFile(f);
+            }
+            if (saved.fxRates) store.setFxRates(saved.fxRates as any);
         }
     }, []);
 
@@ -75,7 +79,6 @@ function Layout() {
                 generateExcel({
                     ...state,
                     language: 'en',
-                    ibInterest: state.ibInterest || [],
                     manualEntries: [],
                 }).then(buffer => {
                     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -126,7 +129,7 @@ function Layout() {
                             key={step.name}
                             to={step.path}
                             style={{
-                                padding: '0.4rem 0.75rem',
+                                padding: '0.5rem 1.5rem',
                                 backgroundColor: idx <= currentStepIndex ? 'var(--accent)' : 'var(--bg-secondary)',
                                 color: idx <= currentStepIndex ? 'white' : 'var(--text-secondary)',
                                 textDecoration: 'none',
@@ -161,7 +164,7 @@ function Layout() {
                             onClick={signOut}
                             title={user.email ?? ''}
                             style={{
-                                padding: '0.4rem 0.75rem',
+                                padding: '0.5rem 1.5rem',
                                 backgroundColor: 'var(--bg)',
                                 color: 'var(--text-secondary)',
                                 border: '1px solid var(--border)',

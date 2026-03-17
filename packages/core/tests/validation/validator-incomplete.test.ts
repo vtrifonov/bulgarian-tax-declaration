@@ -15,8 +15,7 @@ describe('checkIncompleteRows', () => {
         sales: [],
         dividends: [],
         stockYield: [],
-        ibInterest: [],
-        revolutInterest: [],
+        brokerInterest: [],
         fxRates: {},
         manualEntries: [],
     });
@@ -440,17 +439,16 @@ describe('checkIncompleteRows', () => {
         });
     });
 
-    describe('IB Interest', () => {
+    describe('Broker Interest', () => {
         it('warns on missing date', () => {
             const state = createBaseState();
-            state.ibInterest = [
-                {
-                    currency: 'USD',
-                    date: '', // missing
-                    description: 'Monthly interest',
-                    amount: 25.5,
-                },
-            ];
+            state.brokerInterest = [{
+                broker: 'IB',
+                currency: 'USD',
+                entries: [
+                    { currency: 'USD', date: '', description: 'Monthly interest', amount: 25.5 },
+                ],
+            }];
             const warnings = validate(state);
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
@@ -462,14 +460,13 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
-            state.ibInterest = [
-                {
-                    currency: '', // missing
-                    date: '2024-01-15',
-                    description: 'Monthly interest',
-                    amount: 25.5,
-                },
-            ];
+            state.brokerInterest = [{
+                broker: 'IB',
+                currency: 'USD',
+                entries: [
+                    { currency: '', date: '2024-01-15', description: 'Monthly interest', amount: 25.5 },
+                ],
+            }];
             const warnings = validate(state);
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
@@ -481,14 +478,13 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero amount', () => {
             const state = createBaseState();
-            state.ibInterest = [
-                {
-                    currency: 'USD',
-                    date: '2024-01-15',
-                    description: 'Monthly interest',
-                    amount: 0, // zero
-                },
-            ];
+            state.brokerInterest = [{
+                broker: 'IB',
+                currency: 'USD',
+                entries: [
+                    { currency: 'USD', date: '2024-01-15', description: 'Monthly interest', amount: 0 },
+                ],
+            }];
             const warnings = validate(state);
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
@@ -500,14 +496,13 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when complete', () => {
             const state = createBaseState();
-            state.ibInterest = [
-                {
-                    currency: 'USD',
-                    date: '2024-01-15',
-                    description: 'Monthly interest',
-                    amount: 25.5,
-                },
-            ];
+            state.brokerInterest = [{
+                broker: 'IB',
+                currency: 'USD',
+                entries: [
+                    { currency: 'USD', date: '2024-01-15', description: 'Monthly interest', amount: 25.5 },
+                ],
+            }];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'IB Interest');
             expect(warnings).toHaveLength(0);
         });
