@@ -98,6 +98,9 @@ function Layout() {
         const newLanguage = language === 'en' ? 'bg' : 'en';
         setLanguage(newLanguage);
         setCoreLanguage(newLanguage);
+        try {
+            localStorage.setItem('bg-tax-language', newLanguage);
+        } catch {}
     };
 
     return (
