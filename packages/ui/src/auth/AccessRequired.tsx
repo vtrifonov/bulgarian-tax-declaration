@@ -1,4 +1,9 @@
-import { t } from '@bg-tax/core';
+import { useState } from 'react';
+import {
+    getLanguage,
+    setLanguage as setCoreLanguage,
+    t,
+} from '@bg-tax/core';
 import { useAuth } from './AuthProvider';
 
 const OWNER_EMAIL = 'v.trifonov@gmail.com';
@@ -6,6 +11,16 @@ const OWNER_NAME = 'Vasil Trifonov';
 
 export function AccessRequired() {
     const { user, signOut } = useAuth();
+    const [lang, setLang] = useState(getLanguage());
+
+    const toggleLanguage = () => {
+        const newLang = lang === 'en' ? 'bg' : 'en';
+        setCoreLanguage(newLang);
+        setLang(newLang);
+        try {
+            localStorage.setItem('bg-tax-language', newLang);
+        } catch {}
+    };
 
     const subject = encodeURIComponent('Access Request — BG Tax Declaration');
     const body = encodeURIComponent(
@@ -32,8 +47,27 @@ export function AccessRequired() {
                     border: '1px solid var(--border)',
                     maxWidth: '400px',
                     width: '100%',
+                    position: 'relative',
                 }}
             >
+                <button
+                    onClick={toggleLanguage}
+                    style={{
+                        position: 'absolute',
+                        top: '0.75rem',
+                        right: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.75rem',
+                        backgroundColor: 'transparent',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    {lang === 'bg' ? 'EN' : 'BG'}
+                </button>
+
                 <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
                     {t('auth.accessRequired.title')}
                 </h1>
