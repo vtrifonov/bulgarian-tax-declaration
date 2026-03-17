@@ -175,4 +175,5 @@ export const en = {
     'auth.connectionError.title': 'Connection Error',
     'auth.connectionError.retry': 'Retry',
     'auth.loading': 'Loading...',
+    'privacy.notice': 'All data is stored locally. Nothing is sent to any server.',
 };

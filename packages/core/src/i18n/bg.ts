@@ -175,4 +175,5 @@ export const bg = {
     'auth.connectionError.title': 'Грешка при свързване',
     'auth.connectionError.retry': 'Опитай отново',
     'auth.loading': 'Зареждане...',
+    'privacy.notice': 'Всички данни се съхраняват локално. Нищо не се изпраща към сървър.',
 };
