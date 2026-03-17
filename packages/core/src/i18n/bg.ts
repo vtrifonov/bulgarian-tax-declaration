@@ -166,9 +166,11 @@ export const bg = {
 
     // Auth — access request
     'auth.accessRequired.title': 'Необходим достъп',
-    'auth.accessRequired.description': 'Приложението е само с покана. Натиснете бутона по-долу, за да изпратите имейл до администратора.',
+    'auth.accessRequired.description': 'Приложението е само с покана. Свържете се с администратора, за да получите достъп.',
     'auth.accessRequired.requestButton': 'Поискай достъп',
-    'auth.accessRequired.contactPrefix': 'Или се свържете с',
+    'auth.accessRequired.copyButton': 'Копирай',
+    'auth.accessRequired.contactPrefix': 'Свържете се с',
+    'auth.accessRequired.contactPrefixAlt': 'Или се свържете с',
     'auth.accessRequired.contactSuffix': 'на',
     'auth.connectionError.title': 'Грешка при свързване',
     'auth.connectionError.retry': 'Опитай отново',

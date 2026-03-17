@@ -166,9 +166,11 @@ export const en = {
 
     // Auth — access request
     'auth.accessRequired.title': 'Access Required',
-    'auth.accessRequired.description': 'This app is invite-only. Click the button below to send an email to the app owner.',
+    'auth.accessRequired.description': 'This app is invite-only. Contact the owner to request access.',
     'auth.accessRequired.requestButton': 'Request Access',
-    'auth.accessRequired.contactPrefix': 'Or contact',
+    'auth.accessRequired.copyButton': 'Copy',
+    'auth.accessRequired.contactPrefix': 'Contact',
+    'auth.accessRequired.contactPrefixAlt': 'Or contact',
     'auth.accessRequired.contactSuffix': 'at',
     'auth.connectionError.title': 'Connection Error',
     'auth.connectionError.retry': 'Retry',
