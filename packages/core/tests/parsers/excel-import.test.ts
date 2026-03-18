@@ -1,16 +1,18 @@
+import * as ExcelJS from 'exceljs';
 import {
     describe,
     expect,
     it,
 } from 'vitest';
+
 import { importHoldingsFromExcel } from '../../src/parsers/excel-import.js';
-import ExcelJS from 'exceljs';
 
 describe('importHoldingsFromExcel', () => {
     it('parses holdings from Притежания sheet', async () => {
         // Create a minimal xlsx matching the app's known export format
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена', 'Общо', 'Курс', 'Общо BGN', 'Бележки']);
         ws.addRow(['IB', 'AAPL', 'САЩ', '2024-03-15', 50, 'USD', 250.42, '', '', '', '']);
 
@@ -27,10 +29,12 @@ describe('importHoldingsFromExcel', () => {
     it('falls back to first sheet if Pritezhaniya is missing', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Other');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена']);
         ws.addRow(['IB', 'GOOG', 'US', '2024-05-01', 10, 'USD', 150]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
         const holdings = await importHoldingsFromExcel(buffer);
+
         expect(holdings).toHaveLength(1);
         expect(holdings[0].symbol).toBe('GOOG');
     });
@@ -38,6 +42,7 @@ describe('importHoldingsFromExcel', () => {
     it('skips rows with quantity 0', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена', 'Общо', 'Курс', 'Общо BGN', 'Бележки']);
         ws.addRow(['IB', 'AAPL', 'САЩ', '2024-03-15', 50, 'USD', 250.42, '', '', '', '']);
         ws.addRow(['IB', 'MSFT', 'САЩ', '2024-04-10', 0, 'USD', 100.0, '', '', '', '']); // Quantity = 0
@@ -53,6 +58,7 @@ describe('importHoldingsFromExcel', () => {
     it('handles empty cells gracefully', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена', 'Общо', 'Курс', 'Общо BGN', 'Бележки']);
         ws.addRow(['IB', 'AAPL', 'САЩ', '2024-03-15', 50, 'USD', 250.42, '', '', '', '']); // Empty columns
         ws.addRow([undefined, 'MSFT', '', '2024-04-10', 20, 'USD', 100.0, null, null, null, undefined]); // Mixed empties, but valid quantity
@@ -69,6 +75,7 @@ describe('importHoldingsFromExcel', () => {
     it('parses multiple rows correctly', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена', 'Общо', 'Курс', 'Общо BGN', 'Бележки']);
         ws.addRow(['IB', 'AAPL', 'САЩ', '2024-03-15', 50, 'USD', 250.42, '', '', '', 'First holding']);
         ws.addRow(['IB', 'CSPX', 'Ирландия', '2024-06-10', 5, 'EUR', 600.0, '', '', '', 'Second holding']);
@@ -101,10 +108,12 @@ describe('importHoldingsFromExcel', () => {
     it('recognizes English column headers', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Sheet1');
+
         ws.addRow(['Broker', 'Symbol', 'Country', 'Date acquired', 'Quantity', 'Currency', 'Unit price']);
         ws.addRow(['IB', 'AAPL', 'US', '2024-03-15', 50, 'USD', 250.42]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
         const holdings = await importHoldingsFromExcel(buffer);
+
         expect(holdings).toHaveLength(1);
         expect(holdings[0].symbol).toBe('AAPL');
         expect(holdings[0].unitPrice).toBe(250.42);
@@ -113,10 +122,12 @@ describe('importHoldingsFromExcel', () => {
     it('recognizes alternative BG headers like "Ед. цена във валута" and "Брой"', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Държава', 'Символ', 'Дата на придобиване', 'Брой', 'Валута', 'Ед. цена във валута']);
         ws.addRow(['IB', 'САЩ', 'AAPL', '2024-03-15', 50, 'USD', 250.42]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
         const holdings = await importHoldingsFromExcel(buffer);
+
         expect(holdings).toHaveLength(1);
         expect(holdings[0].unitPrice).toBe(250.42);
         expect(holdings[0].currency).toBe('USD');
@@ -125,10 +136,12 @@ describe('importHoldingsFromExcel', () => {
     it('does not confuse "Ед. цена във валута" with currency column', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Държава', 'Символ', 'Дата', 'Брой', 'Валута', 'Ед. цена във валута']);
         ws.addRow(['IB', 'САЩ', 'AAPL', '2024-03-15', 50, 'USD', 250.42]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
         const holdings = await importHoldingsFromExcel(buffer);
+
         expect(holdings[0].currency).toBe('USD'); // "Валута" col, not price col
         expect(holdings[0].unitPrice).toBe(250.42); // "Ед. цена" col
     });
@@ -136,20 +149,24 @@ describe('importHoldingsFromExcel', () => {
     it('throws descriptive error when headers not found', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Data');
+
         ws.addRow(['Col1', 'Col2', 'Col3']);
         ws.addRow([1, 2, 3]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+
         await expect(importHoldingsFromExcel(buffer)).rejects.toThrow('Could not detect column headers');
     });
 
     it('finds headers in row 2 when row 1 has merged cells', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['', '', '', '', '', 'Валута']); // Row 1: partial merged header
         ws.addRow(['Брокер', 'Държава', 'Символ', 'Дата', 'Количество', 'Валута', 'Цена']);
         ws.addRow(['IB', 'САЩ', 'AAPL', '2024-03-15', 50, 'USD', 250.42]);
         const buffer = Buffer.from(await wb.xlsx.writeBuffer());
         const holdings = await importHoldingsFromExcel(buffer);
+
         expect(holdings).toHaveLength(1);
         expect(holdings[0].symbol).toBe('AAPL');
     });
@@ -157,6 +174,7 @@ describe('importHoldingsFromExcel', () => {
     it('preserves notes field', async () => {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('Притежания');
+
         ws.addRow(['Брокер', 'Символ', 'Държава', 'Дата', 'Количество', 'Валута', 'Цена', 'Общо', 'Курс', 'Общо BGN', 'Бележки']);
         ws.addRow(['IB', 'AAPL', 'САЩ', '2024-03-15', 50, 'USD', 250.42, '', '', '', 'Inherited from parent']);
         ws.addRow(['IB', 'MSFT', 'САЩ', '2024-04-10', 20, 'USD', 120.0, '', '', '', '']);

@@ -1,4 +1,3 @@
-import { create } from 'zustand';
 import type {
     BrokerInterest,
     Dividend,
@@ -6,6 +5,7 @@ import type {
     Sale,
     StockYieldEntry,
 } from '@bg-tax/core';
+import { create } from 'zustand';
 
 export interface ImportedFile {
     name: string;
@@ -38,6 +38,8 @@ export interface AppState {
     addHolding: (holding: Holding) => void;
     updateHolding: (index: number, holding: Holding) => void;
     deleteHolding: (index: number) => void;
+    moveHolding: (fromIndex: number, toIndex: number) => void;
+    insertHolding: (index: number, holding: Holding) => void;
     importHoldings: (holdings: Holding[]) => void;
 
     // Sales
@@ -71,8 +73,36 @@ export interface AppState {
     addImportedFile: (file: ImportedFile) => void;
     clearImportedFiles: () => void;
 
+    // UI state synced from DataTable
+    tableSorting: Record<string, { id: string; desc: boolean }[]>;
+    setTableSorting: (table: string, sorting: { id: string; desc: boolean }[]) => void;
+
     // Reset
     reset: () => void;
+}
+
+/** Sort holdings by the active DataTable column. Returns a new array. */
+export function applySorting<T>(items: T[], sorting: { id: string; desc: boolean }[]): T[] {
+    if (sorting.length === 0) {
+        return items;
+    }
+    const { id, desc } = sorting[0];
+
+    if (id === '#') {
+        return items;
+    }
+    const sorted = [...items].sort((a, b) => {
+        const av = (a as Record<string, unknown>)[id];
+        const bv = (b as Record<string, unknown>)[id];
+
+        if (typeof av === 'number' && typeof bv === 'number') {
+            return av - bv;
+        }
+
+        return String(av ?? '').localeCompare(String(bv ?? ''));
+    });
+
+    return desc ? sorted.reverse() : sorted;
 }
 
 const initialState = {
@@ -86,6 +116,7 @@ const initialState = {
     brokerInterest: [] as BrokerInterest[],
     fxRates: {} as Record<string, Record<string, number>>,
     importedFiles: [] as ImportedFile[],
+    tableSorting: {} as Record<string, { id: string; desc: boolean }[]>,
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -99,20 +130,49 @@ export const useAppStore = create<AppState>((set) => ({
     updateHolding: (index: number, holding: Holding) =>
         set((state) => {
             const holdings = [...state.holdings];
+
             holdings[index] = holding;
+
             return { holdings };
         }),
     deleteHolding: (index: number) =>
         set((state) => ({
             holdings: state.holdings.filter((_, i) => i !== index),
         })),
+    moveHolding: (fromIndex: number, toIndex: number) =>
+        set((state) => {
+            if (fromIndex < 0 || fromIndex >= state.holdings.length) {
+                return state;
+            }
+
+            if (toIndex < 0 || toIndex >= state.holdings.length) {
+                return state;
+            }
+            const holdings = [...state.holdings];
+            const [item] = holdings.splice(fromIndex, 1);
+
+            holdings.splice(toIndex, 0, item);
+
+            return { holdings };
+        }),
+
+    insertHolding: (index: number, holding: Holding) =>
+        set((state) => {
+            const holdings = [...state.holdings];
+
+            holdings.splice(index, 0, holding);
+
+            return { holdings };
+        }),
     importHoldings: (holdings: Holding[]) => set({ holdings }),
 
     addSale: (sale: Sale) => set((state) => ({ sales: [...state.sales, sale] })),
     updateSale: (index: number, sale: Sale) =>
         set((state) => {
             const sales = [...state.sales];
+
             sales[index] = sale;
+
             return { sales };
         }),
     deleteSale: (index: number) =>
@@ -125,7 +185,9 @@ export const useAppStore = create<AppState>((set) => ({
     updateDividend: (index: number, dividend: Dividend) =>
         set((state) => {
             const dividends = [...state.dividends];
+
             dividends[index] = dividend;
+
             return { dividends };
         }),
     deleteDividend: (index: number) =>
@@ -138,7 +200,9 @@ export const useAppStore = create<AppState>((set) => ({
     updateStockYield: (index: number, item: StockYieldEntry) =>
         set((state) => {
             const stockYield = [...state.stockYield];
+
             stockYield[index] = item;
+
             return { stockYield };
         }),
     deleteStockYield: (index: number) =>
@@ -154,7 +218,9 @@ export const useAppStore = create<AppState>((set) => ({
     updateBrokerInterest: (index: number, interest: BrokerInterest) =>
         set((state) => {
             const brokerInterest = [...state.brokerInterest];
+
             brokerInterest[index] = interest;
+
             return { brokerInterest };
         }),
     deleteBrokerInterest: (index: number) =>
@@ -166,14 +232,18 @@ export const useAppStore = create<AppState>((set) => ({
     setFxRates: (rates: Record<string, Record<string, number>>) =>
         set((state) => {
             const merged: Record<string, Record<string, number>> = { ...state.fxRates };
+
             for (const currency in rates) {
                 merged[currency] = { ...merged[currency], ...rates[currency] };
             }
+
             return { fxRates: merged };
         }),
 
     addImportedFile: (file: ImportedFile) => set((state) => ({ importedFiles: [...state.importedFiles, file] })),
     clearImportedFiles: () => set({ importedFiles: [] }),
+
+    setTableSorting: (table: string, sorting: { id: string; desc: boolean }[]) => set((state) => ({ tableSorting: { ...state.tableSorting, [table]: sorting } })),
 
     reset: () => set(initialState),
 }));

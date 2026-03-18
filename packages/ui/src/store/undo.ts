@@ -32,6 +32,7 @@ export const createUndoMiddleware = <T extends object>(
         if (diffs.length > 0) {
             undoStack.push(diffs);
             redoStack = [];
+
             if (undoStack.length > MAX_UNDO) {
                 undoStack.shift();
             }
@@ -39,12 +40,16 @@ export const createUndoMiddleware = <T extends object>(
     };
 
     const undo = () => {
-        if (undoStack.length === 0) return;
+        if (undoStack.length === 0) {
+            return;
+        }
         // Simplified version; real implementation integrates with Zustand store directly
     };
 
     const redo = () => {
-        if (redoStack.length === 0) return;
+        if (redoStack.length === 0) {
+            return;
+        }
         // Simplified version
     };
 

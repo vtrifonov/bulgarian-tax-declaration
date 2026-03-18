@@ -3,6 +3,7 @@ import {
     expect,
     it,
 } from 'vitest';
+
 import {
     populateDividendFxRates,
     populateSaleFxRates,
@@ -31,10 +32,11 @@ describe('populateSaleFxRates', () => {
             currency: 'USD',
             buyPrice: 170,
             sellPrice: 250,
-            fxRateBuy: 0,
-            fxRateSell: 0,
+            fxRateBuy: null,
+            fxRateSell: null,
         }];
         const filled = populateSaleFxRates(sales, getRate);
+
         expect(filled[0].fxRateBuy).toBeCloseTo(1.95583 / 1.09, 3);
         expect(filled[0].fxRateSell).toBeCloseTo(1.95583 / 1.08, 3);
     });
@@ -51,12 +53,13 @@ describe('populateSaleFxRates', () => {
             currency: 'USD',
             buyPrice: 170,
             sellPrice: 250,
-            fxRateBuy: 0,
-            fxRateSell: 0,
+            fxRateBuy: null,
+            fxRateSell: null,
         }];
         const filled = populateSaleFxRates(sales, getRate);
+
         expect(filled[0].fxRateBuy).toBeGreaterThan(0); // buy date has rate
-        expect(filled[0].fxRateSell).toBe(0); // sell date missing
+        expect(filled[0].fxRateSell).toBeNull(); // sell date missing
     });
 });
 
@@ -77,6 +80,7 @@ describe('populateDividendFxRates', () => {
             whtCredit: 0,
         }];
         const result = populateDividendFxRates(dividends, getRate);
+
         expect(result).toEqual(dividends);
     });
 });
@@ -98,10 +102,11 @@ describe('populateSaleFxRates edge cases', () => {
             currency: 'EUR',
             buyPrice: 100,
             sellPrice: 110,
-            fxRateBuy: 0,
-            fxRateSell: 0,
+            fxRateBuy: null,
+            fxRateSell: null,
         }];
         const filled = populateSaleFxRates(sales, getRate, 'BGN');
+
         expect(filled[0].fxRateBuy).toBeCloseTo(1.95583, 3);
         expect(filled[0].fxRateSell).toBeCloseTo(1.95583, 3);
     });
@@ -121,13 +126,14 @@ describe('populateSaleFxRates edge cases', () => {
             currency: 'BGN',
             buyPrice: 100,
             sellPrice: 110,
-            fxRateBuy: 0,
-            fxRateSell: 0,
+            fxRateBuy: null,
+            fxRateSell: null,
         }];
         const filled = populateSaleFxRates(sales, getRate, 'BGN');
-        // BGN with BGN base: getRate returns undefined, so fxRate = 0
-        expect(filled[0].fxRateBuy).toBe(0);
-        expect(filled[0].fxRateSell).toBe(0);
+
+        // BGN with BGN base: same currency, rate is 1
+        expect(filled[0].fxRateBuy).toBe(1);
+        expect(filled[0].fxRateSell).toBe(1);
     });
 
     it('multiple sales with different currencies', () => {
@@ -150,8 +156,8 @@ describe('populateSaleFxRates edge cases', () => {
                 currency: 'USD',
                 buyPrice: 150,
                 sellPrice: 170,
-                fxRateBuy: 0,
-                fxRateSell: 0,
+                fxRateBuy: null,
+                fxRateSell: null,
             },
             {
                 id: '2',
@@ -164,11 +170,12 @@ describe('populateSaleFxRates edge cases', () => {
                 currency: 'EUR',
                 buyPrice: 100,
                 sellPrice: 120,
-                fxRateBuy: 0,
-                fxRateSell: 0,
+                fxRateBuy: null,
+                fxRateSell: null,
             },
         ];
         const filled = populateSaleFxRates(sales, getRate, 'BGN');
+
         // USD: 1.95583 / 1.0353 ≈ 1.8891, 1.95583 / 1.08 ≈ 1.8110
         expect(filled[0].fxRateBuy).toBeCloseTo(1.8891, 3);
         expect(filled[0].fxRateSell).toBeCloseTo(1.8110, 3);
@@ -177,12 +184,38 @@ describe('populateSaleFxRates edge cases', () => {
         expect(filled[1].fxRateSell).toBeCloseTo(1.95583, 3);
     });
 
+    it('returns null fxRateBuy when buy date has no rate but sell date does', () => {
+        const fxRates = { USD: { '2025-03-01': 1.08 } }; // Only sell date has rate
+        const getRate = (currency: string, date: string): number | undefined => {
+            return fxRates[currency]?.[date];
+        };
+        const sales: Sale[] = [{
+            id: '1',
+            broker: 'IB',
+            country: 'САЩ',
+            symbol: 'AAPL',
+            dateAcquired: '2025-01-01', // no rate for this date
+            dateSold: '2025-03-01',
+            quantity: 10,
+            currency: 'USD',
+            buyPrice: 150,
+            sellPrice: 170,
+            fxRateBuy: null,
+            fxRateSell: null,
+        }];
+        const filled = populateSaleFxRates(sales, getRate, 'BGN');
+
+        expect(filled[0].fxRateBuy).toBeNull(); // buy date missing
+        expect(filled[0].fxRateSell).toBeCloseTo(1.95583 / 1.08, 3); // sell date available
+    });
+
     it('empty sales array returns empty', () => {
         const getRate = (currency: string, date: string): number | undefined => {
             return undefined;
         };
         const sales: Sale[] = [];
         const filled = populateSaleFxRates(sales, getRate, 'BGN');
+
         expect(filled).toHaveLength(0);
     });
 });

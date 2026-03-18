@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 import { toBaseCurrency } from '../fx/convert.js';
 import type { Holding } from '../types/index.js';
@@ -54,8 +54,7 @@ export async function generateNraAppendix8(
 
     // Data rows — only complete holdings with quantity > 0
     const validHoldings = holdings
-        .filter(h => h.symbol && h.quantity > 0)
-        .sort((a, b) => a.symbol.localeCompare(b.symbol));
+        .filter(h => h.symbol && h.quantity > 0);
 
     for (const h of validHoldings) {
         const totalCcy = h.quantity * h.unitPrice;

@@ -5,6 +5,12 @@
   "permissions": [
     "core:default",
     "dialog:default",
-    "fs:default"
+    "fs:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.openfigi.com/*" }
+      ]
+    }
   ]
 }

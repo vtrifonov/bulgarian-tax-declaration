@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 import type { AppState } from '../types/index.js';
 import { addBrokerInterestSheets } from './sheets/broker-interest-sheet.js';

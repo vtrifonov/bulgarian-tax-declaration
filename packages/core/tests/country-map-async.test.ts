@@ -5,6 +5,7 @@ import {
     it,
     vi,
 } from 'vitest';
+
 import {
     EXCHANGE_COUNTRY,
     resolveCountries,
@@ -26,6 +27,7 @@ describe('resolveCountries (async batch)', () => {
             }),
         );
         const result = await resolveCountries([{ symbol: 'AAPL', currency: 'USD' }]);
+
         expect(result['AAPL']).toBe('САЩ');
         expect(fetch).toHaveBeenCalledTimes(1);
         vi.unstubAllGlobals();
@@ -48,6 +50,7 @@ describe('resolveCountries (async batch)', () => {
             { symbol: 'UNKNOWNA', currency: 'USD' },
             { symbol: 'UNKNOWNB', currency: 'EUR' },
         ]);
+
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(result['UNKNOWNA']).toBe('САЩ');
         expect(result['UNKNOWNB']).toBe('Германия');
@@ -69,6 +72,7 @@ describe('resolveCountries (async batch)', () => {
         ]);
         const mockFetch = fetch as unknown as { mock: { calls: [string, { body: string }][] } };
         const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+
         expect(body).toHaveLength(1);
         vi.unstubAllGlobals();
     });
@@ -83,6 +87,7 @@ describe('resolveCountries (async batch)', () => {
             }),
         );
         const result = await resolveCountries([{ symbol: 'NOSUCH1', currency: 'USD' }]);
+
         expect(result['NOSUCH1']).toBe('');
         vi.unstubAllGlobals();
     });
@@ -104,6 +109,7 @@ describe('resolveCountries (async batch)', () => {
             { symbol: 'GOODSYM', currency: 'USD' },
             { symbol: 'BADSYM', currency: 'USD' },
         ]);
+
         expect(result['GOODSYM']).toBe('САЩ');
         expect(result['BADSYM']).toBe('');
         vi.unstubAllGlobals();
@@ -112,6 +118,7 @@ describe('resolveCountries (async batch)', () => {
     it('handles fetch network error without throwing', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
         const result = await resolveCountries([{ symbol: 'OFFLINE1', currency: 'USD' }]);
+
         expect(result['OFFLINE1']).toBe('');
         vi.unstubAllGlobals();
     });
@@ -138,6 +145,61 @@ describe('resolveCountrySync', () => {
     });
 });
 
+describe('resolveCountries with symbolExchanges', () => {
+    it('resolves symbols using provider-supplied exchange mapping before OpenFIGI', async () => {
+        const mockFetch = vi.fn();
+
+        vi.stubGlobal('fetch', mockFetch);
+
+        const symbolExchanges = {
+            CSPX: 'IBIS',
+            AAPL: 'NASDAQ',
+            ASML: 'AEB',
+        };
+
+        const result = await resolveCountries(
+            [
+                { symbol: 'CSPX', currency: 'EUR' },
+                { symbol: 'AAPL', currency: 'USD' },
+                { symbol: 'ASML', currency: 'EUR' },
+            ],
+            fetch,
+            symbolExchanges,
+        );
+
+        expect(result['CSPX']).toBe('Германия');
+        expect(result['AAPL']).toBe('САЩ');
+        expect(result['ASML']).toBe('Нидерландия (Холандия)');
+        // No OpenFIGI call needed — all resolved from exchange mapping
+        expect(mockFetch).not.toHaveBeenCalled();
+        vi.unstubAllGlobals();
+    });
+
+    it('falls back to OpenFIGI when exchange not in EXCHANGE_COUNTRY', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                headers: new Headers(),
+                json: () => Promise.resolve([{ data: [{ exchCode: 'US' }] }]),
+            }),
+        );
+
+        const symbolExchanges = { TEST: 'UNKNOWN_EXCHANGE' };
+
+        const result = await resolveCountries(
+            [{ symbol: 'TEST', currency: 'USD' }],
+            fetch,
+            symbolExchanges,
+        );
+
+        // Should call OpenFIGI because UNKNOWN_EXCHANGE is not in EXCHANGE_COUNTRY
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(result['TEST']).toBe('САЩ');
+        vi.unstubAllGlobals();
+    });
+});
+
 describe('EXCHANGE_COUNTRY map', () => {
     it('maps US exchange codes to САЩ', () => {
         expect(EXCHANGE_COUNTRY['US']).toBe('САЩ');
@@ -156,5 +218,16 @@ describe('EXCHANGE_COUNTRY map', () => {
     it('maps Asian exchange codes', () => {
         expect(EXCHANGE_COUNTRY['HK']).toBe('Хонконг');
         expect(EXCHANGE_COUNTRY['JT']).toBe('Япония');
+    });
+
+    it('maps IB exchange names', () => {
+        expect(EXCHANGE_COUNTRY['NASDAQ']).toBe('САЩ');
+        expect(EXCHANGE_COUNTRY['NYSE']).toBe('САЩ');
+        expect(EXCHANGE_COUNTRY['IBIS']).toBe('Германия');
+        expect(EXCHANGE_COUNTRY['LSE']).toBe('Великобритания');
+        expect(EXCHANGE_COUNTRY['SBF']).toBe('Франция');
+        expect(EXCHANGE_COUNTRY['SEHK']).toBe('Хонконг');
+        expect(EXCHANGE_COUNTRY['AEB']).toBe('Нидерландия (Холандия)');
+        expect(EXCHANGE_COUNTRY['ISE']).toBe('Ирландия');
     });
 });

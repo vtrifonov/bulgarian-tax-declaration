@@ -8,6 +8,7 @@ const randomUUID = () => crypto.randomUUID();
 
 export interface FifoResult {
     holdings: Holding[];
+    consumedHoldings: Holding[];
     sales: Sale[];
     warnings: ValidationWarning[];
 }
@@ -38,6 +39,7 @@ export class FifoEngine {
     ): FifoResult {
         const sales: Sale[] = [];
         const warnings: ValidationWarning[] = [];
+        const consumedHoldings: Holding[] = [];
 
         // Sort trades by datetime ascending
         const sorted = [...trades].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
@@ -50,6 +52,7 @@ export class FifoEngine {
 
                 sales.push(...result.sales);
                 warnings.push(...result.warnings);
+                consumedHoldings.push(...result.consumed);
             }
         }
 
@@ -60,7 +63,7 @@ export class FifoEngine {
             holdings.push(...list.filter(h => h.quantity > 0));
         }
 
-        return { holdings, sales, warnings };
+        return { holdings, consumedHoldings, sales, warnings };
     }
 
     private addLot(trade: Trade, broker: string, countryMap: Record<string, string>): void {
@@ -85,37 +88,53 @@ export class FifoEngine {
         trade: Trade,
         broker: string,
         countryMap: Record<string, string>,
-    ): { sales: Sale[]; warnings: ValidationWarning[] } {
+    ): { sales: Sale[]; warnings: ValidationWarning[]; consumed: Holding[] } {
         const sales: Sale[] = [];
         const warnings: ValidationWarning[] = [];
+        const consumed: Holding[] = [];
         let remaining = Math.abs(trade.quantity);
         const dateSold = trade.dateTime.split(',')[0].trim();
         const lots = this.lots.get(trade.symbol) ?? [];
 
+        // Per-share cost basis from the sell trade (IB provides total basis)
+        const basisPerShare = trade.basis !== undefined && trade.basis !== null
+            ? Math.abs(trade.basis) / Math.abs(trade.quantity)
+            : 0;
+
         while (remaining > 0 && lots.length > 0) {
             const lot = lots[0];
-            const consumed = Math.min(lot.quantity, remaining);
+            const consumedQty = Math.min(lot.quantity, remaining);
+
+            // Use lot price if available, fall back to trade's basis (e.g. for transfers with no price)
+            const buyPrice = lot.unitPrice > 0 ? lot.unitPrice : basisPerShare;
+
+            const saleId = randomUUID();
 
             sales.push({
-                id: randomUUID(),
+                id: saleId,
                 broker,
                 country: countryMap[trade.symbol] ?? '',
                 symbol: trade.symbol,
                 dateAcquired: lot.dateAcquired,
                 dateSold,
-                quantity: consumed,
+                quantity: consumedQty,
                 currency: trade.currency,
-                buyPrice: lot.unitPrice,
+                buyPrice,
                 sellPrice: trade.price,
-                fxRateBuy: 0, // Filled later by FX service
-                fxRateSell: 0,
+                fxRateBuy: null, // Filled later by FX service
+                fxRateSell: null,
             });
 
-            lot.quantity -= consumed;
-            remaining -= consumed;
+            // Track which sales consumed this lot
+            lot.consumedBySaleIds ??= [];
+            lot.consumedBySaleIds.push(saleId);
+
+            lot.quantity -= consumedQty;
+            remaining -= consumedQty;
 
             if (lot.quantity <= 0) {
-                lots.shift();
+                lot.consumedByFifo = true;
+                consumed.push(lots.shift() as Holding);
             }
         }
 
@@ -130,10 +149,10 @@ export class FifoEngine {
                 dateSold,
                 quantity: remaining,
                 currency: trade.currency,
-                buyPrice: 0,
+                buyPrice: basisPerShare,
                 sellPrice: trade.price,
-                fxRateBuy: 0,
-                fxRateSell: 0,
+                fxRateBuy: null,
+                fxRateSell: null,
             });
             warnings.push({
                 type: 'negative-holdings',
@@ -142,6 +161,6 @@ export class FifoEngine {
             });
         }
 
-        return { sales, warnings };
+        return { sales, warnings, consumed };
     }
 }

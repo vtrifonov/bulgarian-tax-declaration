@@ -3,6 +3,7 @@ import {
     expect,
     it,
 } from 'vitest';
+
 import { matchWhtToDividends } from '../../src/parsers/wht-matcher.js';
 import type {
     IBDividend,
@@ -18,6 +19,7 @@ describe('matchWhtToDividends', () => {
             { currency: 'USD', date: '2025-02-13', symbol: 'AAPL', description: '', amount: -1.25 },
         ];
         const result = matchWhtToDividends(dividends, whts);
+
         expect(result.matched).toHaveLength(1);
         expect(result.matched[0].grossAmount).toBe(12.50);
         expect(result.matched[0].withholdingTax).toBe(1.25); // Normalized to positive
@@ -34,6 +36,7 @@ describe('matchWhtToDividends', () => {
             { currency: 'USD', date: '2025-02-19', symbol: 'ET', description: '', amount: -24.05 },
         ];
         const result = matchWhtToDividends(dividends, whts);
+
         expect(result.matched).toHaveLength(1);
         expect(result.matched[0].withholdingTax).toBeCloseTo(30.55); // |(-6.50) + (-24.05)|
     });
@@ -44,6 +47,7 @@ describe('matchWhtToDividends', () => {
         ];
         const whts: IBWithholdingTax[] = []; // BABA has 0% WHT
         const result = matchWhtToDividends(dividends, whts);
+
         expect(result.matched).toHaveLength(1);
         expect(result.matched[0].withholdingTax).toBe(0);
     });
@@ -58,6 +62,7 @@ describe('matchWhtToDividends', () => {
             { currency: 'EUR', date: '2025-02-19', symbol: 'ASML', description: '', amount: -1.60 },
         ];
         const result = matchWhtToDividends(dividends, whts);
+
         expect(result.matched).toHaveLength(1);
         expect(result.matched[0].withholdingTax).toBeCloseTo(1.60); // net: |-1.60 + 1.60 + -1.60| = 1.60
     });
@@ -68,6 +73,7 @@ describe('matchWhtToDividends', () => {
             { currency: 'USD', date: '2024-12-04', symbol: 'VCLT', description: 'prior year adj', amount: 0.95 }, // net of +1.05 and -0.10
         ];
         const result = matchWhtToDividends(dividends, whts);
+
         expect(result.unmatched).toHaveLength(1);
         expect(result.unmatched[0].grossAmount).toBe(0);
         expect(result.unmatched[0].withholdingTax).toBeCloseTo(0.95);

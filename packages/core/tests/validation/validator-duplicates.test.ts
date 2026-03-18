@@ -3,11 +3,12 @@ import {
     expect,
     it,
 } from 'vitest';
-import { validate } from '../../src/validation/validator.js';
+
 import type {
     AppState,
     Holding,
 } from '../../src/types/index.js';
+import { validate } from '../../src/validation/validator.js';
 
 function makeState(holdings: Partial<Holding>[]): AppState {
     return {
@@ -41,6 +42,7 @@ describe('checkDuplicateHoldings', () => {
             { symbol: 'AAPL', quantity: 100, dateAcquired: '2024-01-15', source: { type: 'IB' } },
         ]));
         const dupes = warnings.filter(w => w.type === 'duplicate-holding');
+
         expect(dupes).toHaveLength(2);
         expect(dupes[0].message).toContain('same date');
     });
@@ -51,6 +53,7 @@ describe('checkDuplicateHoldings', () => {
             { symbol: 'AAPL', quantity: 50, dateAcquired: '2024-01-15', source: { type: 'IB' } },
         ]));
         const dupes = warnings.filter(w => w.type === 'duplicate-holding');
+
         expect(dupes).toHaveLength(0);
     });
 
@@ -60,6 +63,7 @@ describe('checkDuplicateHoldings', () => {
             { symbol: 'AAPL', quantity: 50, dateAcquired: '', unitPrice: 0, source: { type: 'IB' } },
         ]));
         const dupes = warnings.filter(w => w.type === 'duplicate-holding');
+
         expect(dupes).toHaveLength(2);
         expect(dupes[0].message).toContain('missing date/price');
     });
@@ -70,6 +74,7 @@ describe('checkDuplicateHoldings', () => {
             { symbol: 'AAPL', quantity: 100, dateAcquired: '2024-01-15', source: { type: 'Manual' } },
         ]));
         const dupes = warnings.filter(w => w.type === 'duplicate-holding');
+
         expect(dupes).toHaveLength(0);
     });
 
@@ -79,6 +84,7 @@ describe('checkDuplicateHoldings', () => {
             { symbol: 'AAPL', quantity: 100, dateAcquired: '2024-06-20', unitPrice: 200, source: { type: 'IB' } },
         ]));
         const dupes = warnings.filter(w => w.type === 'duplicate-holding');
+
         expect(dupes).toHaveLength(0);
     });
 });

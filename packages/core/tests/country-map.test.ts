@@ -3,6 +3,7 @@ import {
     expect,
     it,
 } from 'vitest';
+
 import { resolveCountry } from '../src/country-map.js';
 
 describe('resolveCountry (sync — hardcoded map only)', () => {
@@ -21,6 +22,7 @@ describe('resolveCountry (sync — hardcoded map only)', () => {
         // This test is valid for any non-empty map entry
         // If map is empty, resolveCountry always returns ''
         const result = resolveCountry('AAPL');
+
         expect(typeof result).toBe('string');
     });
 });

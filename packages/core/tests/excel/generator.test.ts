@@ -1,9 +1,10 @@
+import * as ExcelJS from 'exceljs';
 import {
     describe,
     expect,
     it,
 } from 'vitest';
-import ExcelJS from 'exceljs';
+
 import { generateExcel } from '../../src/excel/generator.js';
 import type { AppState } from '../../src/types/index.js';
 
@@ -121,10 +122,12 @@ describe('Excel Generator', () => {
 
         // Read back with exceljs
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         // Verify sheet names exist
         const sheetNames = workbook.worksheets.map((ws) => ws.name);
+
         expect(sheetNames).toContain('USD');
         // EUR/BGN is fixed rate — no FX sheet needed
         expect(sheetNames).toContain('Притежания');
@@ -136,10 +139,12 @@ describe('Excel Generator', () => {
 
         // Verify Holdings sheet structure
         const holdingsSheet = workbook.getWorksheet('Притежания');
+
         expect(holdingsSheet).toBeDefined();
         expect(holdingsSheet!.rowCount).toBeGreaterThan(1); // Header + data rows
 
         const headerRow = holdingsSheet!.getRow(1);
+
         expect(headerRow.getCell(1).value).toBe('Брокер');
         expect(headerRow.getCell(2).value).toBe('Символ');
         expect(headerRow.getCell(3).value).toBe('Държава');
@@ -148,55 +153,67 @@ describe('Excel Generator', () => {
         // Verify at least one formula is present
         const dataRow = holdingsSheet!.getRow(2);
         const formulaCell = dataRow.getCell(9); // Курс column
+
         expect(formulaCell.value).toBeDefined();
         // Should contain formula (either simple like "1", "1.95583" or a VLOOKUP)
         const cellValue = String(formulaCell.value);
+
         expect(cellValue.length).toBeGreaterThan(0);
 
         // Verify Sales sheet
         const salesSheet = workbook.getWorksheet('Продажби');
+
         expect(salesSheet).toBeDefined();
         expect(salesSheet!.rowCount).toBeGreaterThan(1);
 
         const salesHeader = salesSheet!.getRow(1);
+
         expect(salesHeader.getCell(1).value).toBe('Брокер');
         expect(salesHeader.getCell(4).value).toBe('Дата покупка');
 
         // Check for formula in sales data
         const salesDataRow = salesSheet!.getRow(2);
         const salesFormula = salesDataRow.getCell(12); // Приходи
+
         expect(salesFormula.value).toBeDefined();
 
         // Verify Dividends sheet
         const dividendsSheet = workbook.getWorksheet('Дивиденти');
+
         expect(dividendsSheet).toBeDefined();
         expect(dividendsSheet!.rowCount).toBeGreaterThan(1);
 
         const divHeader = dividendsSheet!.getRow(1);
+
         expect(divHeader.getCell(1).value).toBe('Символ');
         expect(divHeader.getCell(3).value).toBe('Дата');
 
         // Verify Stock Yield sheet
         const stockYieldSheet = workbook.getWorksheet('IB Stock Yield');
+
         expect(stockYieldSheet).toBeDefined();
         expect(stockYieldSheet!.rowCount).toBeGreaterThan(1);
 
         const syHeader = stockYieldSheet!.getRow(1);
+
         expect(syHeader.getCell(1).value).toBe('Дата');
         expect(syHeader.getCell(2).value).toBe('Символ');
 
         // Verify FX sheets
         const usdSheet = workbook.getWorksheet('USD');
+
         expect(usdSheet).toBeDefined();
 
         // EUR/BGN fixed rate — no EUR FX sheet
 
         // Verify broker interest sheets
         const revEurSheet = workbook.getWorksheet('Revolut Лихви EUR');
+
         expect(revEurSheet).toBeDefined();
         expect(revEurSheet!.rowCount).toBeGreaterThan(1);
 
         const revHeader = revEurSheet!.getRow(1);
+
         expect(revHeader.getCell(1).value).toBe('Дата');
         expect(revHeader.getCell(2).value).toBe('Описание');
     });
@@ -233,11 +250,13 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         const holdingsSheet = workbook.getWorksheet('Притежания');
         const headerRow = holdingsSheet!.getRow(1);
         let foundEurColumn = false;
+
         headerRow.eachCell((cell) => {
             if (cell.value === 'Общо (EUR)') {
                 foundEurColumn = true;
@@ -266,17 +285,21 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         const dividendsSheet = workbook.getWorksheet('Дивиденти');
+
         expect(dividendsSheet).toBeDefined();
 
         // Get symbols from data rows (skip header)
         const symbols: string[] = [];
         const dates: string[] = [];
+
         for (let i = 2; i <= dividendsSheet!.rowCount; i++) {
             const symbol = dividendsSheet!.getRow(i).getCell(1).value;
             const date = dividendsSheet!.getRow(i).getCell(3).value;
+
             if (symbol) {
                 symbols.push(String(symbol));
                 dates.push(String(date));
@@ -319,6 +342,7 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         const salesSheet = workbook.getWorksheet('Продажби');
@@ -380,21 +404,26 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         const usdSheet = workbook.getWorksheet('USD');
+
         expect(usdSheet).toBeDefined();
 
         const headerRow = usdSheet!.getRow(1);
+
         expect(headerRow.getCell(1).value).toBe('Дата');
         expect(headerRow.getCell(2).value).toBe('Курс');
 
         // Check data rows
         const dates: string[] = [];
         const rates: number[] = [];
+
         for (let i = 2; i <= usdSheet!.rowCount; i++) {
             const date = usdSheet!.getRow(i).getCell(1).value;
             const rate = usdSheet!.getRow(i).getCell(2).value;
+
             if (date && rate) {
                 dates.push(String(date));
                 rates.push(Number(rate));
@@ -438,16 +467,19 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         // Check sheets named "{Broker} Лихви {CCY}"
         const eurSheet = workbook.getWorksheet('Revolut Лихви EUR');
         const gbpSheet = workbook.getWorksheet('Revolut Лихви GBP');
+
         expect(eurSheet).toBeDefined();
         expect(gbpSheet).toBeDefined();
 
         // Check detail sheet headers
         const eurHeaders = eurSheet!.getRow(1);
+
         expect(eurHeaders.getCell(1).value).toBe('Дата');
         expect(eurHeaders.getCell(2).value).toBe('Описание');
         expect(eurHeaders.getCell(3).value).toBe('Сума');
@@ -481,6 +513,7 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         const holdingsSheet = workbook.getWorksheet('Притежания');
@@ -488,18 +521,22 @@ describe('Excel Generator', () => {
 
         // Check column H (Общо = Qty * Price) has formula
         const totalCell = dataRow.getCell(8);
+
         expect(totalCell.value).toBeDefined();
         const totalFormula = typeof totalCell.value === 'object' && totalCell.value !== null && 'formula' in totalCell.value
             ? (totalCell.value as { formula: string }).formula
             : String(totalCell.value);
+
         expect(totalFormula).toContain('ROUND');
 
         // Check column J (Total in base currency) has formula
         const totalBaseCell = dataRow.getCell(10);
+
         expect(totalBaseCell.value).toBeDefined();
         const totalBaseFormula = typeof totalBaseCell.value === 'object' && totalBaseCell.value !== null && 'formula' in totalBaseCell.value
             ? (totalBaseCell.value as { formula: string }).formula
             : String(totalBaseCell.value);
+
         expect(totalBaseFormula).toContain('ROUND');
     });
 
@@ -519,6 +556,7 @@ describe('Excel Generator', () => {
 
         const buffer = await generateExcel(state);
         const workbook = new ExcelJS.Workbook();
+
         await workbook.xlsx.load(buffer);
 
         // Check that all main sheets exist with headers
@@ -537,6 +575,7 @@ describe('Excel Generator', () => {
 
         // Check header row exists
         const holdingsHeader = holdingsSheet!.getRow(1);
+
         expect(holdingsHeader.getCell(1).value).toBe('Брокер');
     });
 });

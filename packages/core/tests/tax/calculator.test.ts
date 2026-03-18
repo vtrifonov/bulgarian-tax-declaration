@@ -3,6 +3,7 @@ import {
     expect,
     it,
 } from 'vitest';
+
 import { TaxCalculator } from '../../src/tax/calculator.js';
 import type {
     BrokerInterest,
@@ -12,7 +13,7 @@ import type {
 } from '../../src/types/index.js';
 
 describe('TaxCalculator', () => {
-    const fxRates = { USD: { '2025-03-13': 1.0353, '2025-06-15': 1.08 } };
+    const _fxRates = { USD: { '2025-03-13': 1.0353, '2025-06-15': 1.08 } };
 
     it('calculates capital gains tax from sales', () => {
         const sales: Sale[] = [{
@@ -31,6 +32,7 @@ describe('TaxCalculator', () => {
         }];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcCapitalGains(sales);
+
         // Proceeds: 10 × 250 × 1.811 = 4527.5 BGN
         // Cost: 10 × 170 × 1.889 = 3211.3 BGN
         // Profit: 1316.2 BGN → Tax: 131.62 BGN
@@ -50,6 +52,7 @@ describe('TaxCalculator', () => {
         }];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcRevolutInterest(revolut);
+
         // Net EUR = 90, BGN = 90 × 1.95583 = 176.0247
         expect(result[0].netInterestBaseCcy).toBeCloseTo(176.02, 0);
         expect(result[0].taxDue).toBeCloseTo(17.60, 0);
@@ -72,6 +75,7 @@ describe('TaxCalculator', () => {
         }];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcCapitalGains(sales);
+
         // Proceeds: 10 × 200 × 1.811 = 3622 BGN
         // Cost: 10 × 250 × 1.889 = 4722.5 BGN
         // Profit: -1100.5 BGN → Tax: 0 (losses don't generate tax)
@@ -112,6 +116,7 @@ describe('TaxCalculator', () => {
         ];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcCapitalGains(sales);
+
         // Sale 1 profit: (10 × 250 × 1.811) - (10 × 170 × 1.889) = 4527.5 - 3211.3 = 1316.2
         // Sale 2 loss: (5 × 280 × 1.850) - (5 × 300 × 1.900) = 2590 - 2850 = -260
         // Total profit: 1316.2 - 260 = 1056.2 → Tax: 105.62
@@ -145,6 +150,7 @@ describe('TaxCalculator', () => {
         const fxRates = { USD: { '2025-03-15': 1.0353, '2025-04-20': 1.08 } };
         const calc = new TaxCalculator('BGN');
         const result = calc.calcDividendsTax(dividends, fxRates);
+
         // Assumes 1.95583 / 1.0353 = 1.8883 and 1.95583 / 1.08 = 1.8110 BGN/USD
         // Gross total = 100 × 1.8883 + 200 × 1.8110 ≈ 188.83 + 362.2 ≈ 551.03
         // WHT total = 10 × 1.8883 + 15 × 1.8110 ≈ 18.88 + 27.17 ≈ 46.05
@@ -176,15 +182,101 @@ describe('TaxCalculator', () => {
         const fxRates = { USD: { '2025-02-15': 1.05, '2025-05-20': 1.1 } };
         const calc = new TaxCalculator('BGN');
         const result = calc.calcStockYieldTax(entries, fxRates);
+
         // 50 × (1.95583/1.05) + 75 × (1.95583/1.1) = 50 × 1.8627 + 75 × 1.7780 ≈ 93.14 + 133.35 ≈ 226.49
         // Tax (10%) = 226.49 × 0.10 ≈ 22.65
         expect(result.totalGross).toBeCloseTo(226.5, 0);
         expect(result.totalTax).toBeCloseTo(22.65, 0);
     });
 
+    it('skips sales with null fxRateBuy (only counts complete sales)', () => {
+        const sales: Sale[] = [
+            {
+                id: '1',
+                broker: 'IB',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                dateAcquired: '2024-01-01',
+                dateSold: '2025-06-15',
+                quantity: 10,
+                currency: 'USD',
+                buyPrice: 170,
+                sellPrice: 250,
+                fxRateBuy: null,
+                fxRateSell: 1.811,
+            },
+            {
+                id: '2',
+                broker: 'IB',
+                country: 'САЩ',
+                symbol: 'MSFT',
+                dateAcquired: '2024-01-01',
+                dateSold: '2025-06-15',
+                quantity: 10,
+                currency: 'USD',
+                buyPrice: 170,
+                sellPrice: 250,
+                fxRateBuy: 1.889,
+                fxRateSell: 1.811,
+            },
+        ];
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcCapitalGains(sales);
+
+        // Only sale 2 should be counted
+        expect(result.totalProceeds).toBeCloseTo(10 * 250 * 1.811, 1);
+        expect(result.totalCost).toBeCloseTo(10 * 170 * 1.889, 1);
+    });
+
+    it('skips sales with null fxRateSell', () => {
+        const sales: Sale[] = [{
+            id: '1',
+            broker: 'IB',
+            country: 'САЩ',
+            symbol: 'AAPL',
+            dateAcquired: '2024-01-01',
+            dateSold: '2025-06-15',
+            quantity: 10,
+            currency: 'USD',
+            buyPrice: 170,
+            sellPrice: 250,
+            fxRateBuy: 1.889,
+            fxRateSell: null,
+        }];
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcCapitalGains(sales);
+
+        expect(result.totalProceeds).toBe(0);
+        expect(result.totalCost).toBe(0);
+        expect(result.taxDue).toBe(0);
+    });
+
+    it('skips sales with missing dateAcquired', () => {
+        const sales: Sale[] = [{
+            id: '1',
+            broker: 'IB',
+            country: 'САЩ',
+            symbol: 'AAPL',
+            dateAcquired: '',
+            dateSold: '2025-06-15',
+            quantity: 10,
+            currency: 'USD',
+            buyPrice: 170,
+            sellPrice: 250,
+            fxRateBuy: 1.889,
+            fxRateSell: 1.811,
+        }];
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcCapitalGains(sales);
+
+        expect(result.totalProceeds).toBe(0);
+        expect(result.totalCost).toBe(0);
+    });
+
     it('returns zero totals for empty sales array', () => {
         const calc = new TaxCalculator('BGN');
         const result = calc.calcCapitalGains([]);
+
         expect(result.totalProceeds).toBe(0);
         expect(result.totalCost).toBe(0);
         expect(result.profit).toBe(0);
@@ -194,6 +286,7 @@ describe('TaxCalculator', () => {
     it('returns zero totals for empty dividend array', () => {
         const calc = new TaxCalculator('BGN');
         const result = calc.calcDividendsTax([], {});
+
         expect(result.totalGross).toBe(0);
         expect(result.totalWht).toBe(0);
         expect(result.totalBgTax).toBe(0);
@@ -203,6 +296,7 @@ describe('TaxCalculator', () => {
     it('returns zero totals for empty stock yield entries', () => {
         const calc = new TaxCalculator('BGN');
         const result = calc.calcStockYieldTax([], {});
+
         expect(result.totalGross).toBe(0);
         expect(result.totalTax).toBe(0);
     });
@@ -210,6 +304,7 @@ describe('TaxCalculator', () => {
     it('returns zero totals for empty Revolut interest array', () => {
         const calc = new TaxCalculator('BGN');
         const result = calc.calcRevolutInterest([]);
+
         expect(result).toHaveLength(0);
     });
 
@@ -228,6 +323,7 @@ describe('TaxCalculator', () => {
         ];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcDividendsTax(dividends, {});
+
         // EUR amounts should be multiplied by 1.95583
         // Gross: 10.64 × 1.95583 ≈ 20.81 BGN
         // WHT: 1.596 × 1.95583 ≈ 3.12 BGN
@@ -249,6 +345,7 @@ describe('TaxCalculator', () => {
         ];
         const calc = new TaxCalculator('BGN');
         const result = calc.calcStockYieldTax(entries, {});
+
         // EUR amount should be multiplied by 1.95583
         // Amount: 25.50 × 1.95583 ≈ 49.87 BGN
         // Tax (10%) = 49.87 × 0.10 ≈ 4.99
@@ -273,6 +370,7 @@ describe('TaxCalculator (EUR base)', () => {
             whtCredit: 0,
         }];
         const result = calc.calcDividendsTax(dividends, fxRates);
+
         // 100 USD / 1.08 = 92.59 EUR
         expect(result.totalGross).toBeCloseTo(92.59, 1);
         // WHT: 15 / 1.08 = 13.89 EUR
@@ -294,6 +392,7 @@ describe('TaxCalculator (EUR base)', () => {
             whtCredit: 0,
         }];
         const result = calc.calcDividendsTax(dividends, fxRates);
+
         expect(result.totalGross).toBe(100);
         expect(result.totalWht).toBe(15);
     });
@@ -311,6 +410,7 @@ describe('TaxCalculator (EUR base)', () => {
             whtCredit: 0,
         }];
         const result = calc.calcDividendsTax(dividends, fxRates);
+
         // 84 GBP / 0.84 = 100 EUR
         expect(result.totalGross).toBeCloseTo(100, 1);
         // 0 WHT → full 5% tax
@@ -326,6 +426,7 @@ describe('TaxCalculator (EUR base)', () => {
             amount: 10.80,
         }];
         const result = calc.calcStockYieldTax(entries, fxRates);
+
         // 10.80 / 1.08 = 10 EUR, tax 10% = 1.00
         expect(result.totalGross).toBeCloseTo(10, 1);
         expect(result.totalTax).toBeCloseTo(1, 1);
@@ -342,6 +443,7 @@ describe('TaxCalculator (EUR base)', () => {
             ],
         }];
         const results = calc.calcRevolutInterest(revolut);
+
         expect(results).toHaveLength(1);
         // Net = 4.50 EUR, already in EUR base
         expect(results[0].netInterestInCurrency).toBeCloseTo(4.50, 2);
@@ -363,6 +465,7 @@ describe('TaxCalculator (EUR base)', () => {
         }];
         // No JPY rate → amounts stay unconverted
         const result = calc.calcDividendsTax(dividends, fxRates);
+
         expect(result.totalGross).toBe(1000); // Unconverted
     });
 });

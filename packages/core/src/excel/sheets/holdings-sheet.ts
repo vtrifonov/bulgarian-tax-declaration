@@ -31,6 +31,7 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
         'Курс за деня',
         `Общо (${ccy})`,
         'Бележки',
+        'Продадено чрез',
     ];
     const headerRow = sheet.addRow(headers);
 
@@ -48,6 +49,15 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
             continue;
         }
 
+        // Convert consumedBySaleIds to sale row numbers (1-based)
+        const consumedBy = h.consumedBySaleIds?.length
+            ? h.consumedBySaleIds.map(saleId => {
+                const idx = state.sales.findIndex(s => s.id === saleId);
+
+                return idx >= 0 ? String(idx + 1) : '';
+            }).filter(Boolean).join(', ')
+            : '';
+
         const row = sheet.addRow([
             h.broker,
             h.symbol,
@@ -60,6 +70,7 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
             null, // I: formula/value
             null, // J: formula
             h.notes || '',
+            consumedBy,
         ]);
 
         // H: Total = Qty * Price
@@ -80,7 +91,7 @@ export function addHoldingsSheet(workbook: Workbook, state: AppState): Worksheet
     }
 
     // Column widths
-    const widths = [12, 14, 10, 12, 12, 10, 12, 12, 12, 14, 20];
+    const widths = [12, 14, 10, 12, 12, 10, 12, 12, 12, 14, 20, 14];
 
     for (let i = 0; i < headers.length; i++) {
         sheet.getColumn(i + 1).width = widths[i];

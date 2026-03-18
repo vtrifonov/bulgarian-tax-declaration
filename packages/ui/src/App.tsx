@@ -1,23 +1,3 @@
-import { useEffect } from 'react';
-import {
-    HashRouter,
-    Link,
-    Route,
-    Routes,
-    useLocation,
-} from 'react-router-dom';
-import {
-    type ImportedFile,
-    useAppStore,
-} from './store/app-state';
-import {
-    loadAutoSave,
-    useAutoSave,
-} from './hooks/useAutoSave';
-import { YearSetup } from './pages/YearSetup';
-import { Import } from './pages/Import';
-import { Workspace } from './pages/Workspace';
-import { Declaration } from './pages/Declaration';
 import {
     generateExcel,
     setLanguage as setCoreLanguage,
@@ -30,11 +10,33 @@ import type {
     Sale,
     StockYieldEntry,
 } from '@bg-tax/core';
+import { useEffect } from 'react';
+import {
+    HashRouter,
+    Link,
+    Route,
+    Routes,
+    useLocation,
+} from 'react-router-dom';
+
+import { AuthGate } from './auth/AuthGate';
 import {
     AuthProvider,
     useAuth,
 } from './auth/AuthProvider';
-import { AuthGate } from './auth/AuthGate';
+import {
+    loadAutoSave,
+    useAutoSave,
+} from './hooks/useAutoSave';
+import { Declaration } from './pages/Declaration';
+import { Import } from './pages/Import';
+import { Workspace } from './pages/Workspace';
+import { YearSetup } from './pages/YearSetup';
+import {
+    applySorting,
+    type ImportedFile,
+    useAppStore,
+} from './store/app-state';
 import './App.css';
 
 const steps = [
@@ -57,24 +59,56 @@ function Layout() {
     // Load saved state on startup
     useEffect(() => {
         const saved = loadAutoSave();
+
         if (saved) {
             const store = useAppStore.getState();
+
             // Restore settings first (affects validation and FX conversion)
-            if (saved.taxYear) store.setTaxYear(saved.taxYear as number);
+            if (saved.taxYear) {
+                store.setTaxYear(saved.taxYear as number);
+            }
+
             if (saved.language) {
                 store.setLanguage(saved.language as 'en' | 'bg');
                 setCoreLanguage(saved.language as 'en' | 'bg');
             }
+
             // Then restore data
-            if (saved.holdings) store.importHoldings(saved.holdings as Holding[]);
-            if (saved.sales) store.importSales(saved.sales as Sale[]);
-            if (saved.dividends) store.importDividends(saved.dividends as Dividend[]);
-            if (saved.stockYield) store.importStockYield(saved.stockYield as StockYieldEntry[]);
-            if (saved.brokerInterest) store.importBrokerInterest(saved.brokerInterest as BrokerInterest[]);
-            if (saved.importedFiles && Array.isArray(saved.importedFiles)) {
-                for (const f of saved.importedFiles as ImportedFile[]) store.addImportedFile(f);
+            if (saved.holdings) {
+                store.importHoldings(saved.holdings as Holding[]);
             }
-            if (saved.fxRates) store.setFxRates(saved.fxRates as Record<string, Record<string, number>>);
+
+            if (saved.sales) {
+                store.importSales(saved.sales as Sale[]);
+            }
+
+            if (saved.dividends) {
+                store.importDividends(saved.dividends as Dividend[]);
+            }
+
+            if (saved.stockYield) {
+                store.importStockYield(saved.stockYield as StockYieldEntry[]);
+            }
+
+            if (saved.brokerInterest) {
+                store.importBrokerInterest(saved.brokerInterest as BrokerInterest[]);
+            }
+
+            if (saved.importedFiles && Array.isArray(saved.importedFiles)) {
+                for (const f of saved.importedFiles as ImportedFile[]) {
+                    store.addImportedFile(f);
+                }
+            }
+
+            if (saved.fxRates) {
+                store.setFxRates(saved.fxRates as Record<string, Record<string, number>>);
+            }
+
+            if (saved.tableSorting && typeof saved.tableSorting === 'object') {
+                for (const [table, sorting] of Object.entries(saved.tableSorting as Record<string, { id: string; desc: boolean }[]>)) {
+                    store.setTableSorting(table, sorting);
+                }
+            }
         }
     }, []);
 
@@ -82,18 +116,25 @@ function Layout() {
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             const mod = e.metaKey || e.ctrlKey;
+
             if (mod && e.key === 'e') {
                 e.preventDefault();
                 // Export Excel
                 const state = useAppStore.getState();
+                const ts = state.tableSorting;
+
                 generateExcel({
                     ...state,
+                    holdings: applySorting(state.holdings, ts.holdings ?? []),
+                    sales: applySorting(state.sales, ts.sales ?? []),
+                    dividends: applySorting(state.dividends, ts.dividends ?? []),
                     language: 'en',
                     manualEntries: [],
                 }).then(buffer => {
                     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
+
                     a.href = url;
                     a.download = `Данъчна ${state.taxYear}.xlsx`;
                     a.click();
@@ -101,7 +142,9 @@ function Layout() {
                 }).catch(err => console.error('Export failed:', err));
             }
         };
+
         window.addEventListener('keydown', handler);
+
         return () => window.removeEventListener('keydown', handler);
     }, []);
 
@@ -109,6 +152,7 @@ function Layout() {
 
     const handleLanguageToggle = () => {
         const newLanguage = language === 'en' ? 'bg' : 'en';
+
         setLanguage(newLanguage);
         setCoreLanguage(newLanguage);
         try {

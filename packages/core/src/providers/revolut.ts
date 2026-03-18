@@ -24,6 +24,7 @@ export const revolutProvider: BrokerProvider = {
             id: 'revolut-investments',
             detectFile(content: string): boolean {
                 const firstLine = content.split('\n')[0] ?? '';
+
                 return firstLine.includes('Date') && firstLine.includes('Ticker') && firstLine.includes('Type');
             },
             parseFile(content: string): BrokerProviderResult {

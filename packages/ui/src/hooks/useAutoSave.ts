@@ -2,6 +2,7 @@ import {
     useEffect,
     useRef,
 } from 'react';
+
 import { useAppStore } from '../store/app-state';
 
 const SAVE_KEY = 'bg-tax-autosave';
@@ -27,13 +28,16 @@ export function useAutoSave() {
                         brokerInterest: state.brokerInterest,
                         fxRates: state.fxRates,
                         importedFiles: state.importedFiles,
+                        tableSorting: state.tableSorting,
                     };
+
                     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
                 } catch (err) {
                     console.error('Auto-save failed:', err);
                 }
             }, DEBOUNCE_MS);
         });
+
         return () => {
             clearTimeout(timerRef.current);
             unsubscribe();
@@ -68,7 +72,9 @@ function migrateState(saved: Record<string, unknown>): Record<string, unknown> {
         const ibByCurrency = new Map<string, SavedInterestEntry[]>();
 
         for (const entry of saved.ibInterest) {
-            if (!isRecord(entry)) continue;
+            if (!isRecord(entry)) {
+                continue;
+            }
             const currency = typeof entry.currency === 'string' ? entry.currency : 'USD';
 
             if (!ibByCurrency.has(currency)) {
@@ -85,7 +91,9 @@ function migrateState(saved: Record<string, unknown>): Record<string, unknown> {
     // Migrate revolutInterest (array of {currency, entries})
     if (Array.isArray(saved.revolutInterest)) {
         for (const item of saved.revolutInterest) {
-            if (!isRecord(item)) continue;
+            if (!isRecord(item)) {
+                continue;
+            }
 
             if (typeof item.currency === 'string' && Array.isArray(item.entries)) {
                 brokerInterestList.push({
@@ -110,8 +118,12 @@ function migrateState(saved: Record<string, unknown>): Record<string, unknown> {
 export function loadAutoSave(): Record<string, unknown> | null {
     try {
         const json = localStorage.getItem(SAVE_KEY);
-        if (!json) return null;
+
+        if (!json) {
+            return null;
+        }
         const saved = JSON.parse(json);
+
         return migrateState(saved);
     } catch {
         return null;

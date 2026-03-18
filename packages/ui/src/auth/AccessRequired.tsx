@@ -1,9 +1,10 @@
-import { useState } from 'react';
 import {
     getLanguage,
     setLanguage as setCoreLanguage,
     t,
 } from '@bg-tax/core';
+import { useState } from 'react';
+
 import { useAuth } from './AuthProvider';
 
 const OWNER_EMAIL = 'v.trifonov@gmail.com';
@@ -17,6 +18,7 @@ export function AccessRequired() {
 
     const toggleLanguage = () => {
         const newLang = lang === 'en' ? 'bg' : 'en';
+
         setCoreLanguage(newLang);
         setLang(newLang);
         try {
@@ -28,14 +30,17 @@ export function AccessRequired() {
         const text = `To: ${OWNER_EMAIL}\nSubject: Access Request - BG Tax Declaration\n\nHi, I would like to request access.\n\nName: ${user?.displayName ?? ''}\nEmail: ${
             user?.email ?? ''
         }`;
+
         navigator.clipboard.writeText(text).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }).catch(() => {
             // Fallback: select the email text so user can copy manually
             const el = document.querySelector<HTMLElement>('[data-email]');
+
             if (el) {
                 const range = document.createRange();
+
                 range.selectNodeContents(el);
                 window.getSelection()?.removeAllRanges();
                 window.getSelection()?.addRange(range);
@@ -98,7 +103,9 @@ export function AccessRequired() {
                             }`}
                             onClick={() => {
                                 setTimeout(() => {
-                                    if (document.hasFocus()) setShowFallback(true);
+                                    if (document.hasFocus()) {
+                                        setShowFallback(true);
+                                    }
                                 }, 1000);
                             }}
                             style={{

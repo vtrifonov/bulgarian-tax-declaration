@@ -1,15 +1,16 @@
 import {
-    useRef,
-    useState,
-} from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAppStore } from '../store/app-state';
-import {
     importFullExcel,
     importHoldingsFromCsv,
     importHoldingsFromExcel,
     t,
 } from '@bg-tax/core';
+import {
+    useRef,
+    useState,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAppStore } from '../store/app-state';
 
 type ImportOption = 'none' | 'excel' | 'excel-full' | 'fresh';
 
@@ -18,6 +19,7 @@ export function YearSetup() {
     const { taxYear, baseCurrency, setTaxYear, setBaseCurrency, importHoldings, reset, clearImportedFiles } = useAppStore();
     const hasData = () => {
         const s = useAppStore.getState();
+
         return s.holdings.length > 0 || s.sales.length > 0 || s.dividends.length > 0 || s.stockYield.length > 0 || s.brokerInterest.length > 0;
     };
     const [importOption, setImportOption] = useState<ImportOption>('fresh');
@@ -38,14 +40,20 @@ export function YearSetup() {
         try {
             if (importOption === 'excel') {
                 let holdings;
+
                 if (file.name.endsWith('.csv')) {
                     const text = await file.text();
+
                     holdings = importHoldingsFromCsv(text);
                 } else {
                     const buffer = await file.arrayBuffer();
+
                     holdings = await importHoldingsFromExcel(buffer);
                 }
-                for (const h of holdings) h.source = { type: 'Initial import', file: file.name };
+
+                for (const h of holdings) {
+                    h.source = { type: 'Initial import', file: file.name };
+                }
                 importHoldings(holdings);
                 setImportStatus(`Imported ${holdings.length} holdings`);
             } else if (importOption === 'excel-full') {
@@ -53,32 +61,48 @@ export function YearSetup() {
                 const data = await importFullExcel(buffer);
                 const { importSales, importDividends, importStockYield, importBrokerInterest } = useAppStore.getState();
                 const parts: string[] = [];
+
                 if (data.holdings.length) {
-                    for (const h of data.holdings) h.source = { type: 'Initial import', file: file.name };
+                    for (const h of data.holdings) {
+                        h.source = { type: 'Initial import', file: file.name };
+                    }
                     importHoldings(data.holdings);
                     parts.push(`${data.holdings.length} притежания`);
                 }
+
                 if (data.sales.length) {
-                    for (const s of data.sales) s.source = { type: 'Initial import', file: file.name };
+                    for (const s of data.sales) {
+                        s.source = { type: 'Initial import', file: file.name };
+                    }
                     importSales(data.sales);
                     parts.push(`${data.sales.length} продажби`);
                 }
+
                 if (data.dividends.length) {
-                    for (const d of data.dividends) d.source = { type: 'Initial import', file: file.name };
+                    for (const d of data.dividends) {
+                        d.source = { type: 'Initial import', file: file.name };
+                    }
                     importDividends(data.dividends);
                     parts.push(`${data.dividends.length} дивиденти`);
                 }
+
                 if (data.stockYield.length) {
-                    for (const sy of data.stockYield) sy.source = { type: 'Initial import', file: file.name };
+                    for (const sy of data.stockYield) {
+                        sy.source = { type: 'Initial import', file: file.name };
+                    }
                     importStockYield(data.stockYield);
                     parts.push(`${data.stockYield.length} ${t('tab.stockYield').toLowerCase()}`);
                 }
+
                 if (data.brokerInterest.length) {
                     for (const bi of data.brokerInterest) {
-                        for (const e of bi.entries) e.source = { type: 'Initial import', file: file.name };
+                        for (const e of bi.entries) {
+                            e.source = { type: 'Initial import', file: file.name };
+                        }
                     }
                     importBrokerInterest(data.brokerInterest);
                     const interestCount = data.brokerInterest.reduce((sum, bi) => sum + bi.entries.length, 0);
+
                     parts.push(`${interestCount} лихви (${data.brokerInterest.map(bi => bi.broker).join(', ')})`);
                 }
                 setImportStatus(parts.length > 0 ? `Imported: ${parts.join(', ')}` : 'No data found in file');
@@ -88,7 +112,9 @@ export function YearSetup() {
         }
 
         // Reset file input
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     };
 
     const options: { value: ImportOption; label: string; description: string; accept?: string }[] = [
@@ -196,7 +222,10 @@ export function YearSetup() {
                             accept={options.find(o => o.value === importOption)?.accept}
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) handleFileImport(file);
+
+                                if (file) {
+                                    void handleFileImport(file);
+                                }
                             }}
                             style={{ display: 'none' }}
                         />

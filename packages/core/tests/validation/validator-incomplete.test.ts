@@ -3,8 +3,9 @@ import {
     expect,
     it,
 } from 'vitest';
-import { validate } from '../../src/validation/validator';
+
 import type { AppState } from '../../src/types/index';
+import { validate } from '../../src/validation/validator';
 
 describe('checkIncompleteRows', () => {
     const createBaseState = (): AppState => ({
@@ -23,6 +24,7 @@ describe('checkIncompleteRows', () => {
     describe('Holdings', () => {
         it('warns on missing symbol', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -36,6 +38,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('symbol'),
@@ -46,6 +49,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing date', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -59,6 +63,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date'),
@@ -69,6 +74,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -82,6 +88,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('currency'),
@@ -92,6 +99,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero quantity and zero unitPrice', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -105,6 +113,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('quantity/price'),
@@ -115,6 +124,7 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when quantity is zero but unitPrice is set', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -128,11 +138,13 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Holdings');
+
             expect(warnings).toHaveLength(0);
         });
 
         it('does not warn when complete', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -146,6 +158,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Holdings');
+
             expect(warnings).toHaveLength(0);
         });
     });
@@ -153,6 +166,7 @@ describe('checkIncompleteRows', () => {
     describe('Sales', () => {
         it('warns on missing symbol', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -170,6 +184,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('symbol'),
@@ -180,6 +195,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing dateAcquired', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -197,6 +213,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date acquired'),
@@ -207,6 +224,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing dateSold', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -224,6 +242,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date sold'),
@@ -234,6 +253,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -251,6 +271,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('currency'),
@@ -261,6 +282,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero quantity', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -278,6 +300,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('quantity'),
@@ -288,6 +311,7 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when complete', () => {
             const state = createBaseState();
+
             state.sales = [
                 {
                     id: 's1',
@@ -305,6 +329,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Sales');
+
             expect(warnings).toHaveLength(0);
         });
     });
@@ -312,6 +337,7 @@ describe('checkIncompleteRows', () => {
     describe('Dividends', () => {
         it('warns on missing symbol', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: '', // missing
@@ -325,6 +351,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('symbol'),
@@ -335,6 +362,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing date', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: 'AAPL',
@@ -348,6 +376,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date'),
@@ -358,6 +387,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: 'AAPL',
@@ -371,6 +401,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('currency'),
@@ -381,6 +412,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero grossAmount and zero withholdingTax', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: 'AAPL',
@@ -394,6 +426,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('amounts'),
@@ -404,6 +437,7 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when grossAmount is zero but withholdingTax is set', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: 'AAPL',
@@ -417,11 +451,13 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Dividends');
+
             expect(warnings).toHaveLength(0);
         });
 
         it('does not warn when complete', () => {
             const state = createBaseState();
+
             state.dividends = [
                 {
                     symbol: 'AAPL',
@@ -435,6 +471,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Dividends');
+
             expect(warnings).toHaveLength(0);
         });
     });
@@ -442,6 +479,7 @@ describe('checkIncompleteRows', () => {
     describe('Broker Interest', () => {
         it('warns on missing date', () => {
             const state = createBaseState();
+
             state.brokerInterest = [{
                 broker: 'IB',
                 currency: 'USD',
@@ -450,6 +488,7 @@ describe('checkIncompleteRows', () => {
                 ],
             }];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date'),
@@ -460,6 +499,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
+
             state.brokerInterest = [{
                 broker: 'IB',
                 currency: 'USD',
@@ -468,6 +508,7 @@ describe('checkIncompleteRows', () => {
                 ],
             }];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('currency'),
@@ -478,6 +519,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero amount', () => {
             const state = createBaseState();
+
             state.brokerInterest = [{
                 broker: 'IB',
                 currency: 'USD',
@@ -486,6 +528,7 @@ describe('checkIncompleteRows', () => {
                 ],
             }];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('amount'),
@@ -496,6 +539,7 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when complete', () => {
             const state = createBaseState();
+
             state.brokerInterest = [{
                 broker: 'IB',
                 currency: 'USD',
@@ -504,6 +548,7 @@ describe('checkIncompleteRows', () => {
                 ],
             }];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'IB Interest');
+
             expect(warnings).toHaveLength(0);
         });
     });
@@ -511,6 +556,7 @@ describe('checkIncompleteRows', () => {
     describe('Stock Yield', () => {
         it('warns on missing date', () => {
             const state = createBaseState();
+
             state.stockYield = [
                 {
                     date: '', // missing
@@ -520,6 +566,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('date'),
@@ -530,6 +577,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing symbol', () => {
             const state = createBaseState();
+
             state.stockYield = [
                 {
                     date: '2024-03-15',
@@ -539,6 +587,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('symbol'),
@@ -549,6 +598,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on missing currency', () => {
             const state = createBaseState();
+
             state.stockYield = [
                 {
                     date: '2024-03-15',
@@ -558,6 +608,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('currency'),
@@ -568,6 +619,7 @@ describe('checkIncompleteRows', () => {
 
         it('warns on zero amount', () => {
             const state = createBaseState();
+
             state.stockYield = [
                 {
                     date: '2024-03-15',
@@ -577,6 +629,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state);
+
             expect(warnings).toContainEqual(expect.objectContaining({
                 type: 'incomplete-row',
                 message: expect.stringContaining('amount'),
@@ -587,6 +640,7 @@ describe('checkIncompleteRows', () => {
 
         it('does not warn when complete', () => {
             const state = createBaseState();
+
             state.stockYield = [
                 {
                     date: '2024-03-15',
@@ -596,6 +650,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Stock Yield');
+
             expect(warnings).toHaveLength(0);
         });
     });
@@ -603,6 +658,7 @@ describe('checkIncompleteRows', () => {
     describe('Multiple incomplete rows', () => {
         it('reports all incomplete rows across different types', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -632,6 +688,7 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row');
+
             expect(warnings.length).toBeGreaterThanOrEqual(2);
             expect(warnings).toContainEqual(expect.objectContaining({ tab: 'Holdings' }));
             expect(warnings).toContainEqual(expect.objectContaining({ tab: 'Sales' }));
@@ -639,6 +696,7 @@ describe('checkIncompleteRows', () => {
 
         it('reports multiple incomplete fields in single row', () => {
             const state = createBaseState();
+
             state.holdings = [
                 {
                     id: 'h1',
@@ -652,8 +710,10 @@ describe('checkIncompleteRows', () => {
                 },
             ];
             const warnings = validate(state).filter(w => w.type === 'incomplete-row' && w.tab === 'Holdings');
+
             expect(warnings).toHaveLength(1);
             const msg = warnings[0].message;
+
             expect(msg).toContain('symbol');
             expect(msg).toContain('date');
             expect(msg).toContain('currency');

@@ -78,10 +78,15 @@ export const bg = {
     'button.export': 'Експорт Excel',
     'button.reset': 'Изчисти данните',
     'button.addHolding': 'Добави притежание',
+    'button.removeExecuted': 'Премахни изпълнени',
+    'button.removeExecutedDesc': 'Премахни притежания, които са напълно консумирани от FIFO съпоставянето',
+    'button.markNotSold': 'Маркирай като непродадено — възстанови притежанието',
     'button.addSale': 'Добави продажба',
     'button.addDividend': 'Добави дивидент',
     'button.addInterest': 'Добави лихва',
     'button.delete': 'Изтрий',
+    'button.edit': 'Редактирай ред',
+    'button.split': 'Раздели ред',
     'confirm.deleteRow': 'Сигурни ли сте, че искате да изтриете този ред?',
     'button.addRow': 'Добави ред',
     'button.showAll': 'Покажи всички',
@@ -98,6 +103,9 @@ export const bg = {
     'label.validationWarnings': 'Предупреждения',
     'label.allDismissed': 'Всички предупреждения са скрити',
     'label.totalTax': 'Общ дължим данък',
+
+    // Warnings
+    'warning.consumedHoldings': 'Имате {count} притежания маркирани като продадени. Премахнете ги от раздел „Притежания" преди експорт.',
 
     // Import page labels
     'import.fresh': 'Започни отначало',
@@ -148,6 +156,7 @@ export const bg = {
     'col.amountBase': 'Сума',
     'col.qty': 'Кол.',
     'col.source': 'Източник',
+    'col.consumedBy': 'Консумирано от',
 
     // Summary labels
     'summary.total': 'Общо',

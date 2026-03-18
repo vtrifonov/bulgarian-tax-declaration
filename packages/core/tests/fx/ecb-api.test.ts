@@ -5,6 +5,7 @@ import {
     it,
     vi,
 } from 'vitest';
+
 import {
     fetchEcbRates,
     fetchYearRates,
@@ -40,6 +41,7 @@ describe('fetchEcbRates', () => {
 
     it('parses ECB XML into date→rate map', async () => {
         const rates = await fetchEcbRates('USD', '2025-01-02', '2025-01-03');
+
         expect(rates['2025-01-02']).toBe(1.0353);
         expect(rates['2025-01-03']).toBe(1.0345);
     });
@@ -71,6 +73,7 @@ describe('fetchEcbRates', () => {
             }),
         );
         const rates = await fetchEcbRates('USD', '2025-01-02', '2025-01-03');
+
         expect(Object.keys(rates)).toHaveLength(0);
     });
 });
@@ -88,6 +91,7 @@ describe('fetchYearRates', () => {
 
     it('fetches 4 quarterly requests and combines rates', async () => {
         const rates = await fetchYearRates('USD', 2025);
+
         expect(rates['2025-01-02']).toBe(1.0353);
         expect(rates['2025-01-03']).toBe(1.0345);
     });

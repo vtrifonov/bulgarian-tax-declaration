@@ -43,8 +43,11 @@ export function AutocompleteInput({
 
     // Scroll highlighted item into view
     useEffect(() => {
-        if (!listRef.current) return;
+        if (!listRef.current) {
+            return;
+        }
         const item = listRef.current.children[highlightIdx] as HTMLElement | undefined;
+
         item?.scrollIntoView({ block: 'nearest' });
     }, [highlightIdx]);
 
@@ -55,7 +58,9 @@ export function AutocompleteInput({
                 setOpen(false);
             }
         };
+
         document.addEventListener('mousedown', handler);
+
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
@@ -70,30 +75,38 @@ export function AutocompleteInput({
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1));
+
                 return;
             }
+
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setHighlightIdx((prev) => Math.max(prev - 1, 0));
+
                 return;
             }
+
             if (e.key === 'Tab' || e.key === 'Enter') {
                 // Select highlighted option, then let Tab propagate to move focus
                 if (filtered[highlightIdx]) {
                     selectOption(filtered[highlightIdx]);
                 }
+
                 if (e.key === 'Enter') {
                     e.preventDefault(); // Don't save the row on Enter in autocomplete
                 }
+
                 // For Tab: don't preventDefault — let it move focus naturally
                 return;
             }
         }
+
         if (e.key === 'Escape') {
             if (open) {
                 e.preventDefault();
                 e.stopPropagation();
                 setOpen(false);
+
                 return;
             }
         }

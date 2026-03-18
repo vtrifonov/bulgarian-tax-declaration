@@ -17,6 +17,22 @@ export function populateSaleFxRates(
     baseCurrency: 'BGN' | 'EUR' = 'BGN',
 ): Sale[] {
     return sales.map(s => {
+        // Same currency as base → rate is 1
+        if (s.currency === baseCurrency) {
+            return { ...s, fxRateBuy: 1, fxRateSell: 1 };
+        }
+
+        // EUR↔BGN uses fixed rate
+        if (s.currency === 'EUR' && baseCurrency === 'BGN') {
+            return { ...s, fxRateBuy: BGN_TO_EUR, fxRateSell: BGN_TO_EUR };
+        }
+
+        if (s.currency === 'BGN' && baseCurrency === 'EUR') {
+            const rate = 1 / BGN_TO_EUR;
+
+            return { ...s, fxRateBuy: rate, fxRateSell: rate };
+        }
+
         const buyEcbRate = getRate(s.currency, s.dateAcquired);
         const sellEcbRate = getRate(s.currency, s.dateSold);
 
@@ -24,13 +40,13 @@ export function populateSaleFxRates(
             ? baseCurrency === 'BGN'
                 ? BGN_TO_EUR / buyEcbRate
                 : 1 / buyEcbRate
-            : 0;
+            : null;
 
         const fxRateSell = sellEcbRate !== undefined
             ? baseCurrency === 'BGN'
                 ? BGN_TO_EUR / sellEcbRate
                 : 1 / sellEcbRate
-            : 0;
+            : null;
 
         return {
             ...s,
