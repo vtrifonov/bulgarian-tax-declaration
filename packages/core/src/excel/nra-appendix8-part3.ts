@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 import { calcDividendRowTax } from '../fx/convert.js';
 import type { Dividend } from '../types/index.js';

@@ -7,6 +7,13 @@ export default defineConfig({
     server: {
         port: 5115,
         strictPort: true,
+        proxy: {
+            '/api/openfigi': {
+                target: 'https://api.openfigi.com',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/api\/openfigi/, ''),
+            },
+        },
     },
     build: {
         chunkSizeWarningLimit: 1500,

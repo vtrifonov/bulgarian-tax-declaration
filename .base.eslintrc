@@ -11,15 +11,19 @@
         "serviceWorker.ts",
         "node_modules/**",
         "coverage/**",
+        "dist/**",
+        "**/*.d.ts",
         "**/*.js",
-        "**/*.json"
+        "**/*.json",
+        "vite.config.ts",
+        "vitest.config.ts"
     ],
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
         "ecmaFeatures": {
             "modules": true
         },
-        "project": true,
+        "project": "./tsconfig.eslint.json",
         "sourceType": "module"
     },
     "env": {
@@ -28,7 +32,8 @@
     "plugins": [
         "@typescript-eslint",
         "import",
-        "jest"
+        "jest",
+        "react-hooks"
     ],
     "rules": {
         "@typescript-eslint/no-floating-promises": "error",

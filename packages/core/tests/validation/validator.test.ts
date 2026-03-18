@@ -3,8 +3,9 @@ import {
     expect,
     it,
 } from 'vitest';
-import { validate } from '../../src/validation/validator.js';
+
 import type { AppState } from '../../src/types/index.js';
+import { validate } from '../../src/validation/validator.js';
 
 describe('validate', () => {
     it('warns on unmatched WHT', () => {
@@ -15,6 +16,7 @@ describe('validate', () => {
             ],
         };
         const warnings = validate(state as AppState);
+
         expect(warnings.some(w => w.type === 'unmatched-wht')).toBe(true);
     });
 
@@ -28,6 +30,7 @@ describe('validate', () => {
             fxRates: {}, // No rates
         };
         const warnings = validate(state as AppState);
+
         expect(warnings.some(w => w.type === 'missing-fx')).toBe(true);
     });
 
@@ -39,6 +42,7 @@ describe('validate', () => {
             ],
         };
         const warnings = validate(state as AppState);
+
         expect(warnings.some(w => w.type === 'year-mismatch')).toBe(true);
     });
 
@@ -52,6 +56,7 @@ describe('validate', () => {
             fxRates: { USD: { '2025-03-15': 1.0353 } },
         };
         const warnings = validate(state as AppState);
+
         expect(warnings).toHaveLength(0);
     });
 
@@ -66,6 +71,7 @@ describe('validate', () => {
             fxRates: {}, // Missing JPY rate
         };
         const warnings = validate(state as AppState);
+
         expect(warnings.length).toBeGreaterThanOrEqual(2);
         expect(warnings.some(w => w.type === 'year-mismatch')).toBe(true);
         expect(warnings.some(w => w.type === 'missing-fx')).toBe(true);
@@ -81,6 +87,7 @@ describe('validate', () => {
             fxRates: {}, // Empty, but EUR should not require a rate check
         };
         const warnings = validate(state as AppState);
+
         expect(warnings.some(w => w.type === 'missing-fx')).toBe(false);
     });
 
@@ -98,6 +105,7 @@ describe('validate', () => {
             fxRates: {},
         };
         const warnings = validate(state);
+
         expect(warnings).toHaveLength(0);
     });
 });

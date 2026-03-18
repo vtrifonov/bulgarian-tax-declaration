@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { signInWithPopup } from 'firebase/auth';
 import { t } from '@bg-tax/core';
+import { signInWithPopup } from 'firebase/auth';
+import { useState } from 'react';
+
 import {
     auth,
     googleProvider,

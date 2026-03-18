@@ -1,38 +1,47 @@
 import {
-    useMemo,
-    useState,
-} from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import {
-    calcDividendRowTax,
+    FxService,
     getFxRate,
+    InMemoryFxCache,
     t,
     toBaseCurrencyStr,
     validate,
 } from '@bg-tax/core';
-import { useAppStore } from '../store/app-state';
-import { DataTable } from '../components/DataTable';
 import type {
-    BrokerInterest,
     Dividend,
     Holding,
     InterestEntry,
     Sale,
-    StockYieldEntry,
     ValidationWarning,
 } from '@bg-tax/core';
+import type { ColumnDef } from '@tanstack/react-table';
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+
+import { DataTable } from '../components/DataTable';
+import { useAppStore } from '../store/app-state';
 
 type TabType = 'holdings' | 'sales' | 'dividends' | 'brokerInterest' | 'fxRates';
 
 /** Show up to 8 decimals, trimming trailing zeros */
 function formatQuantity(n: number): string {
-    if (n === 0) return '0';
+    if (n === 0) {
+        return '0';
+    }
     const s = n.toFixed(8);
     // Remove trailing zeros but keep at least 2 decimals
     const trimmed = s.replace(/0+$/, '');
     const dotIdx = trimmed.indexOf('.');
-    if (dotIdx === -1) return trimmed;
+
+    if (dotIdx === -1) {
+        return trimmed;
+    }
     const decimals = trimmed.length - dotIdx - 1;
+
     return decimals < 2 ? n.toFixed(2) : trimmed;
 }
 
@@ -53,12 +62,20 @@ function createEditableColumn<T extends Record<string, any>>(
         header,
         cell: (info) => {
             const raw = info.getValue();
-            if (options?.format) return options.format(raw);
+
+            if (options?.format) {
+                return options.format(raw);
+            }
+
             // Format ISO dates as DD.MM.YYYY for display
             if (options?.inputType === 'date' && typeof raw === 'string') {
                 const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+
+                if (m) {
+                    return `${m[3]}.${m[2]}.${m[1]}`;
+                }
             }
+
             return String(raw ?? '');
         },
         meta: {
@@ -76,10 +93,12 @@ function createRowNumColumn<T>(): ColumnDef<T> {
     return {
         id: '#',
         header: '#',
+        accessorFn: (_row, index) => index,
         cell: (info) => info.row.index + 1,
         meta: { editable: false, align: 'center' },
         size: 45,
         enableResizing: false,
+        sortingFn: 'basic',
     };
 }
 
@@ -88,7 +107,35 @@ function useConversionHelpers(fxRates: Record<string, Record<string, number>>, b
     return useMemo(() => ({
         toBaseCcy: (amount: number, currency: string, date: string) => toBaseCurrencyStr(amount, currency, date, baseCurrency, fxRates),
         fxRate: (currency: string, date: string) => getFxRate(currency, date, baseCurrency, fxRates),
+        /** Numeric FX rate for a currency on a date, or null if unavailable */
+        numericFxRate: (currency: string, date: string): number | null => {
+            const str = getFxRate(currency, date, baseCurrency, fxRates);
+
+            if (str === '—') {
+                return null;
+            }
+            const n = parseFloat(str);
+
+            return isNaN(n) ? null : n;
+        },
     }), [fxRates, baseCurrency]);
+}
+
+/** Whether an FX rate lookup requires a date (i.e. needs ECB rates, not a fixed/identity rate) */
+function needsDateForFx(currency: string, baseCurrency: string): boolean {
+    if (currency === baseCurrency) {
+        return false;
+    }
+
+    if (currency === 'EUR' && baseCurrency === 'BGN') {
+        return false;
+    }
+
+    if (currency === 'BGN' && baseCurrency === 'EUR') {
+        return false;
+    }
+
+    return true;
 }
 
 export function Workspace() {
@@ -98,7 +145,7 @@ export function Workspace() {
     const [showWarnings, setShowWarnings] = useState(false);
     const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
     const [warningFilter, setWarningFilter] = useState<string>('all');
-    const [editNewRow, setEditNewRow] = useState<{ index: number; nonce: number } | undefined>(undefined);
+    const [editNewRow, setEditNewRow] = useState<{ index: number; nonce: number; focusColumn?: string } | undefined>(undefined);
 
     const {
         holdings,
@@ -112,6 +159,8 @@ export function Workspace() {
         language,
         updateHolding,
         deleteHolding,
+        moveHolding,
+        insertHolding,
         addHolding,
         updateSale,
         deleteSale,
@@ -119,15 +168,127 @@ export function Workspace() {
         updateDividend,
         deleteDividend,
         addDividend,
-        updateStockYield,
-        deleteStockYield,
-        addStockYield,
         updateBrokerInterest,
         deleteBrokerInterest,
-        addBrokerInterest,
+        setFxRates,
+        importHoldings,
+        tableSorting,
+        setTableSorting,
     } = useAppStore();
 
-    const { toBaseCcy, fxRate: fxRateDisplay } = useConversionHelpers(fxRates, baseCurrency);
+    const { toBaseCcy, fxRate: fxRateDisplay, numericFxRate } = useConversionHelpers(fxRates, baseCurrency);
+
+    /** Fetch FX rate for a currency+date on-demand if not already cached, then update the sale */
+    const fetchAndSetFxRate = useCallback(async (
+        currency: string,
+        date: string,
+        rowIndex: number,
+        field: 'fxRateBuy' | 'fxRateSell',
+    ) => {
+        if (!date || currency === baseCurrency || currency === 'EUR' || currency === 'BGN') {
+            return;
+        }
+        const year = parseInt(date.substring(0, 4));
+
+        if (isNaN(year)) {
+            return;
+        }
+
+        const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+
+        try {
+            const rates = await fxService.fetchRates([currency], year);
+
+            if (Object.keys(rates).length > 0) {
+                setFxRates(rates);
+                // Re-read store to get merged rates and compute numeric rate
+                const merged = { ...useAppStore.getState().fxRates };
+
+                for (const [ccy, dateRates] of Object.entries(rates)) {
+                    merged[ccy] = { ...merged[ccy], ...dateRates };
+                }
+                const rateStr = getFxRate(currency, date, baseCurrency, merged);
+
+                if (rateStr !== '—') {
+                    const rate = parseFloat(rateStr);
+
+                    if (!isNaN(rate)) {
+                        const sale = useAppStore.getState().sales[rowIndex];
+
+                        if (sale) {
+                            updateSale(rowIndex, { ...sale, [field]: rate });
+                        }
+                    }
+                }
+            }
+        } catch { /* silently fail */ }
+    }, [baseCurrency, setFxRates, updateSale]);
+
+    // Track which currency+year combos have been fetched or are in-flight
+    const fxFetchedRef = useRef<Set<string>>(new Set());
+
+    /** Fetch FX rates for a currency+year if not already cached in the store */
+    const ensureFxRates = useCallback(async (currency: string, date: string) => {
+        if (!date || !needsDateForFx(currency, baseCurrency)) {
+            return;
+        }
+        const year = parseInt(date.substring(0, 4), 10);
+
+        if (isNaN(year)) {
+            return;
+        }
+        const key = `${currency}:${year}`;
+
+        if (fxFetchedRef.current.has(key)) {
+            return;
+        }
+        // Check store for existing rates in this year
+        const currentRates = useAppStore.getState().fxRates[currency];
+
+        if (currentRates && Object.keys(currentRates).some(d => d.startsWith(String(year)))) {
+            fxFetchedRef.current.add(key);
+
+            return;
+        }
+        fxFetchedRef.current.add(key); // Mark in-flight to prevent duplicates
+        try {
+            const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+            const rates = await fxService.fetchRates([currency], year);
+
+            if (Object.keys(rates).length > 0) {
+                setFxRates(rates);
+            }
+        } catch { /* silently fail */ }
+    }, [baseCurrency, setFxRates]);
+
+    /** Scan all data for missing FX rates and fetch them */
+    const fetchAllMissingFxRates = useCallback(() => {
+        const { holdings: h, sales: s, dividends: d, brokerInterest: bi } = useAppStore.getState();
+
+        for (const row of h) {
+            void ensureFxRates(row.currency, row.dateAcquired);
+        }
+
+        for (const row of s) {
+            void ensureFxRates(row.currency, row.dateAcquired);
+            void ensureFxRates(row.currency, row.dateSold);
+        }
+
+        for (const row of d) {
+            void ensureFxRates(row.currency, row.date);
+        }
+
+        for (const group of bi) {
+            for (const e of group.entries) {
+                void ensureFxRates(e.currency, e.date);
+            }
+        }
+    }, [ensureFxRates]);
+
+    // On mount, fetch any missing FX rates for existing data
+    useEffect(() => {
+        fetchAllMissingFxRates();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Compute validation warnings
     const warnings: ValidationWarning[] = useMemo(() => {
@@ -143,6 +304,7 @@ export function Workspace() {
             fxRates,
             manualEntries: [],
         };
+
         return validate(appState);
     }, [taxYear, baseCurrency, language, holdings, sales, dividends, stockYield, brokerInterest, fxRates]);
 
@@ -151,7 +313,9 @@ export function Workspace() {
         const warningsByTab = warnings.reduce(
             (acc, warning) => {
                 const normalizedTab = warning.tab.toLowerCase();
+
                 acc[normalizedTab] = (acc[normalizedTab] || 0) + 1;
+
                 return acc;
             },
             {} as Record<string, number>,
@@ -163,9 +327,11 @@ export function Workspace() {
             { id: 'sales', labelKey: 'tab.sales', count: sales.length, warningCount: warningsByTab['sales'] || 0 },
             { id: 'dividends', labelKey: 'tab.dividends', count: dividends.length, warningCount: warningsByTab['dividends'] || 0 },
         ];
+
         // Show only if data exists (populated from IB/Revolut import)
         if (brokerInterest.length > 0) {
             const totalEntries = brokerInterest.reduce((sum, bi) => sum + bi.entries.length, 0);
+
             tabs.push({
                 id: 'brokerInterest',
                 labelKey: 'tab.brokerInterest',
@@ -174,9 +340,11 @@ export function Workspace() {
                 tooltip: 'Broker interest income from IB, Revolut, and other sources',
             });
         }
+
         if (Object.keys(fxRates).length > 0) {
             tabs.push({ id: 'fxRates', labelKey: 'tab.fxRates', count: Object.keys(fxRates).length, warningCount: warningsByTab['fx rates'] || 0 });
         }
+
         return tabs;
     };
 
@@ -226,9 +394,25 @@ export function Workspace() {
     // Symbol → country lookup from existing data (first match wins)
     const symbolCountryMap = useMemo(() => {
         const map = new Map<string, string>();
-        for (const h of holdings) if (h.symbol && h.country && !map.has(h.symbol)) map.set(h.symbol, h.country);
-        for (const s of sales) if (s.symbol && s.country && !map.has(s.symbol)) map.set(s.symbol, s.country);
-        for (const d of dividends) if (d.symbol && d.country && !map.has(d.symbol)) map.set(d.symbol, d.country);
+
+        for (const h of holdings) {
+            if (h.symbol && h.country && !map.has(h.symbol)) {
+                map.set(h.symbol, h.country);
+            }
+        }
+
+        for (const s of sales) {
+            if (s.symbol && s.country && !map.has(s.symbol)) {
+                map.set(s.symbol, s.country);
+            }
+        }
+
+        for (const d of dividends) {
+            if (d.symbol && d.country && !map.has(d.symbol)) {
+                map.set(d.symbol, d.country);
+            }
+        }
+
         return map;
     }, [holdings, sales, dividends]);
 
@@ -236,8 +420,12 @@ export function Workspace() {
     const handleAutoFill = (columnId: string, selectedValue: string): Record<string, string> | undefined => {
         if (columnId === 'symbol') {
             const country = symbolCountryMap.get(selectedValue);
-            if (country) return { country };
+
+            if (country) {
+                return { country };
+            }
         }
+
         return undefined;
     };
 
@@ -249,6 +437,7 @@ export function Workspace() {
             selectOptions: brokerOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], broker: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -257,6 +446,7 @@ export function Workspace() {
             selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], symbol: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -265,6 +455,7 @@ export function Workspace() {
             selectOptions: countryOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], country: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -272,6 +463,7 @@ export function Workspace() {
             inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], dateAcquired: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -281,6 +473,7 @@ export function Workspace() {
             format: (v) => formatQuantity(v as number),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], quantity: parseFloat(value) || 0 };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -289,6 +482,7 @@ export function Workspace() {
             selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], currency: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -298,6 +492,7 @@ export function Workspace() {
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], unitPrice: parseFloat(value) || 0 };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -311,7 +506,13 @@ export function Workspace() {
         {
             id: 'fxRate',
             header: t('col.fxRate'),
-            accessorFn: (row: Holding) => fxRateDisplay(row.currency, row.dateAcquired),
+            accessorFn: (row: Holding) => {
+                if (!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) {
+                    return '—';
+                }
+
+                return fxRateDisplay(row.currency, row.dateAcquired);
+            },
             cell: (info) => info.getValue(),
             meta: { align: 'right' as const, editable: false },
         },
@@ -319,6 +520,10 @@ export function Workspace() {
             id: 'totalBase',
             header: `${t('col.totalBase')} (${baseCurrency})`,
             accessorFn: (row: Holding) => {
+                if (!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) {
+                    return '—';
+                }
+
                 return toBaseCcy(row.quantity * row.unitPrice, row.currency, row.dateAcquired);
             },
             cell: (info) => info.getValue(),
@@ -327,6 +532,7 @@ export function Workspace() {
         createEditableColumn<Holding>('notes', t('col.notes'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], notes: value };
+
                 updateHolding(rowIndex, updated);
             },
         }),
@@ -336,9 +542,70 @@ export function Workspace() {
             accessorFn: (row: Holding) => row.source?.type ?? '',
             cell: (info) => {
                 const row = info.row.original;
+
                 return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
             },
             meta: { editable: false },
+        },
+        {
+            id: 'consumedBy',
+            header: t('col.consumedBy'),
+            accessorFn: (row: Holding) => {
+                if (!row.consumedBySaleIds?.length) {
+                    return '';
+                }
+
+                // Show matching sale indices (1-based) for readability
+                return row.consumedBySaleIds.map(saleId => {
+                    const idx = sales.findIndex(s => s.id === saleId);
+
+                    return idx >= 0 ? `#${idx + 1}` : saleId.slice(0, 6);
+                }).join(', ');
+            },
+            cell: (info) => {
+                const row = info.row.original;
+                const val = info.getValue() as string;
+
+                if (!val) {
+                    return null;
+                }
+
+                return (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span title={row.consumedBySaleIds?.join('\n')}>{val}</span>
+                        <button
+                            className='btn btn-sm'
+                            style={{ padding: '0 4px', fontSize: '0.75rem', lineHeight: 1 }}
+                            title={t('button.markNotSold')}
+                            onClick={() => {
+                                const idx = info.row.index;
+
+                                updateHolding(idx, {
+                                    ...row,
+                                    consumedByFifo: undefined,
+                                    consumedBySaleIds: undefined,
+                                });
+                            }}
+                        >
+                            ↩
+                        </button>
+                    </span>
+                );
+            },
+            meta: {
+                editable: true,
+                editInitialValue: (row: Holding) => {
+                    if (!row.consumedBySaleIds?.length) {
+                        return '';
+                    }
+
+                    return row.consumedBySaleIds.map(saleId => {
+                        const idx = sales.findIndex(s => s.id === saleId);
+
+                        return idx >= 0 ? String(idx + 1) : '';
+                    }).filter(Boolean).join(', ');
+                },
+            },
         },
         {
             id: 'delete',
@@ -356,6 +623,7 @@ export function Workspace() {
             selectOptions: brokerOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], broker: value };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -364,6 +632,7 @@ export function Workspace() {
             selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], symbol: value };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -372,21 +641,36 @@ export function Workspace() {
             selectOptions: countryOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], country: value };
+
                 updateSale(rowIndex, updated);
             },
         }),
         createEditableColumn<Sale>('dateAcquired', t('col.dateAcquired'), {
             inputType: 'date',
             onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], dateAcquired: value };
+                const sale = sales[rowIndex];
+                const newFxRate = numericFxRate(sale.currency, value);
+                const updated = { ...sale, dateAcquired: value, fxRateBuy: newFxRate ?? sale.fxRateBuy };
+
                 updateSale(rowIndex, updated);
+
+                if (newFxRate === null) {
+                    void fetchAndSetFxRate(sale.currency, value, rowIndex, 'fxRateBuy');
+                }
             },
         }),
         createEditableColumn<Sale>('dateSold', t('col.dateSold'), {
             inputType: 'date',
             onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], dateSold: value };
+                const sale = sales[rowIndex];
+                const newFxRate = numericFxRate(sale.currency, value);
+                const updated = { ...sale, dateSold: value, fxRateSell: newFxRate ?? sale.fxRateSell };
+
                 updateSale(rowIndex, updated);
+
+                if (newFxRate === null) {
+                    void fetchAndSetFxRate(sale.currency, value, rowIndex, 'fxRateSell');
+                }
             },
         }),
         createEditableColumn<Sale>('quantity', t('col.qty'), {
@@ -395,6 +679,7 @@ export function Workspace() {
             format: (v) => formatQuantity(v as number),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], quantity: parseFloat(value) || 0 };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -402,7 +687,11 @@ export function Workspace() {
             inputType: 'select',
             selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], currency: value };
+                const sale = sales[rowIndex];
+                const fxRateBuy = numericFxRate(value, sale.dateAcquired) ?? sale.fxRateBuy;
+                const fxRateSell = numericFxRate(value, sale.dateSold) ?? sale.fxRateSell;
+                const updated = { ...sale, currency: value, fxRateBuy, fxRateSell };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -412,6 +701,7 @@ export function Workspace() {
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], buyPrice: parseFloat(value) || 0 };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -421,24 +711,29 @@ export function Workspace() {
             format: (v) => (v as number).toFixed(4),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], sellPrice: parseFloat(value) || 0 };
+
                 updateSale(rowIndex, updated);
             },
         }),
         createEditableColumn<Sale>('fxRateBuy', t('col.fxRateBuy'), {
             align: 'right',
             inputType: 'number',
-            format: (v) => (v as number).toFixed(6),
+            format: (v) => (v as number) > 0 ? (v as number).toFixed(6) : '—',
             onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], fxRateBuy: parseFloat(value) || 1 };
+                const parsed = parseFloat(value);
+                const updated = { ...sales[rowIndex], fxRateBuy: isNaN(parsed) ? sales[rowIndex].fxRateBuy : parsed };
+
                 updateSale(rowIndex, updated);
             },
         }),
         createEditableColumn<Sale>('fxRateSell', t('col.fxRateSell'), {
             align: 'right',
             inputType: 'number',
-            format: (v) => (v as number).toFixed(6),
+            format: (v) => (v as number) > 0 ? (v as number).toFixed(6) : '—',
             onSave: (rowIndex, value) => {
-                const updated = { ...sales[rowIndex], fxRateSell: parseFloat(value) || 1 };
+                const parsed = parseFloat(value);
+                const updated = { ...sales[rowIndex], fxRateSell: isNaN(parsed) ? sales[rowIndex].fxRateSell : parsed };
+
                 updateSale(rowIndex, updated);
             },
         }),
@@ -455,6 +750,10 @@ export function Workspace() {
             id: 'costBase',
             header: `${t('col.costBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
+                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+                    return '—';
+                }
+
                 return toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired);
             },
             cell: (info) => info.getValue(),
@@ -464,9 +763,16 @@ export function Workspace() {
             id: 'plBase',
             header: `${t('col.plBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
+                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null || row.fxRateSell == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+                    return '—';
+                }
                 const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
                 const cost = parseFloat(toBaseCcy(row.quantity * row.buyPrice, row.currency, row.dateAcquired));
-                if (isNaN(proceeds) || isNaN(cost)) return '—';
+
+                if (isNaN(proceeds) || isNaN(cost)) {
+                    return '—';
+                }
+
                 return (proceeds - cost).toFixed(2);
             },
             cell: (info) => info.getValue(),
@@ -478,6 +784,7 @@ export function Workspace() {
             accessorFn: (row: Sale) => row.source?.type ?? '',
             cell: (info) => {
                 const row = info.row.original;
+
                 return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
             },
             meta: { editable: false },
@@ -505,6 +812,7 @@ export function Workspace() {
             selectOptions: symbolOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], symbol: value };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -513,6 +821,7 @@ export function Workspace() {
             selectOptions: countryOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], country: value };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -520,6 +829,7 @@ export function Workspace() {
             inputType: 'date',
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], date: value };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -528,6 +838,7 @@ export function Workspace() {
             selectOptions: currencyOptions,
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], currency: value };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -537,6 +848,7 @@ export function Workspace() {
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], grossAmount: parseFloat(value) || 0 };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -546,6 +858,7 @@ export function Workspace() {
             format: (v) => (v as number).toFixed(2),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], withholdingTax: parseFloat(value) || 0 };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -580,6 +893,7 @@ export function Workspace() {
             accessorFn: (row: Dividend) => {
                 const grossStr = toBaseCcy(row.grossAmount, row.currency, row.date);
                 const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
+
                 return (grossBase * 0.05).toFixed(2);
             },
             cell: (info) => info.getValue(),
@@ -593,6 +907,7 @@ export function Workspace() {
                 const whtStr = toBaseCcy(row.withholdingTax, row.currency, row.date);
                 const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
                 const whtBase = whtStr !== '—' ? parseFloat(whtStr) : 0;
+
                 return Math.max(0, grossBase * 0.05 - whtBase).toFixed(2);
             },
             cell: (info) => info.getValue(),
@@ -601,6 +916,7 @@ export function Workspace() {
         createEditableColumn<Dividend>('notes', t('col.notes'), {
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], notes: value };
+
                 updateDividend(rowIndex, updated);
             },
         }),
@@ -610,6 +926,7 @@ export function Workspace() {
             accessorFn: (row: Dividend) => row.source?.type ?? '',
             cell: (info) => {
                 const row = info.row.original;
+
                 return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
             },
             meta: { editable: false },
@@ -630,13 +947,16 @@ export function Workspace() {
             onSave: (rowIndex, value) => {
                 // Find the broker and position within that broker's entries
                 let currentIdx = 0;
+
                 for (const bi of brokerInterest) {
                     if (currentIdx + bi.entries.length > rowIndex) {
                         const entryIdx = rowIndex - currentIdx;
                         const updated = { ...bi };
+
                         updated.entries = [...updated.entries];
                         updated.entries[entryIdx] = { ...updated.entries[entryIdx], date: value };
                         updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+
                         return;
                     }
                     currentIdx += bi.entries.length;
@@ -649,13 +969,16 @@ export function Workspace() {
             onSave: (rowIndex, value) => {
                 // Find the broker and position within that broker's entries
                 let currentIdx = 0;
+
                 for (const bi of brokerInterest) {
                     if (currentIdx + bi.entries.length > rowIndex) {
                         const entryIdx = rowIndex - currentIdx;
                         const updated = { ...bi };
+
                         updated.entries = [...updated.entries];
                         updated.entries[entryIdx] = { ...updated.entries[entryIdx], currency: value };
                         updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+
                         return;
                     }
                     currentIdx += bi.entries.length;
@@ -666,13 +989,16 @@ export function Workspace() {
             onSave: (rowIndex, value) => {
                 // Find the broker and position within that broker's entries
                 let currentIdx = 0;
+
                 for (const bi of brokerInterest) {
                     if (currentIdx + bi.entries.length > rowIndex) {
                         const entryIdx = rowIndex - currentIdx;
                         const updated = { ...bi };
+
                         updated.entries = [...updated.entries];
                         updated.entries[entryIdx] = { ...updated.entries[entryIdx], description: value };
                         updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+
                         return;
                     }
                     currentIdx += bi.entries.length;
@@ -686,13 +1012,16 @@ export function Workspace() {
             onSave: (rowIndex, value) => {
                 // Find the broker and position within that broker's entries
                 let currentIdx = 0;
+
                 for (const bi of brokerInterest) {
                     if (currentIdx + bi.entries.length > rowIndex) {
                         const entryIdx = rowIndex - currentIdx;
                         const updated = { ...bi };
+
                         updated.entries = [...updated.entries];
                         updated.entries[entryIdx] = { ...updated.entries[entryIdx], amount: parseFloat(value) || 0 };
                         updateBrokerInterest(brokerInterest.indexOf(bi), updated);
+
                         return;
                     }
                     currentIdx += bi.entries.length;
@@ -723,6 +1052,7 @@ export function Workspace() {
             accessorFn: (row: InterestEntry) => row.source?.type ?? '',
             cell: (info) => {
                 const row = info.row.original;
+
                 return <span title={row.source?.file ?? undefined}>{info.getValue() as string}</span>;
             },
             meta: { editable: false },
@@ -736,79 +1066,32 @@ export function Workspace() {
     ];
 
     // Stock Yield columns
-    const stockYieldColumns: ColumnDef<StockYieldEntry>[] = [
-        createRowNumColumn<StockYieldEntry>(),
-        createEditableColumn<StockYieldEntry>('date', t('col.date'), {
-            inputType: 'date',
-            onSave: (rowIndex, value) => {
-                const updated = { ...stockYield[rowIndex], date: value };
-                updateStockYield(rowIndex, updated);
-            },
-        }),
-        createEditableColumn<StockYieldEntry>('symbol', t('col.symbol'), {
-            inputType: 'select',
-            selectOptions: symbolOptions,
-            onSave: (rowIndex, value) => {
-                const updated = { ...stockYield[rowIndex], symbol: value };
-                updateStockYield(rowIndex, updated);
-            },
-        }),
-        createEditableColumn<StockYieldEntry>('currency', t('col.currency'), {
-            inputType: 'select',
-            selectOptions: currencyOptions,
-            onSave: (rowIndex, value) => {
-                const updated = { ...stockYield[rowIndex], currency: value };
-                updateStockYield(rowIndex, updated);
-            },
-        }),
-        createEditableColumn<StockYieldEntry>('amount', t('col.amount'), {
-            align: 'right',
-            inputType: 'number',
-            format: (v) => (v as number).toFixed(2),
-            onSave: (rowIndex, value) => {
-                const updated = { ...stockYield[rowIndex], amount: parseFloat(value) || 0 };
-                updateStockYield(rowIndex, updated);
-            },
-        }),
-        {
-            id: 'fxRate',
-            header: t('col.fxRate'),
-            accessorFn: (row: StockYieldEntry) => {
-                return fxRateDisplay(row.currency, row.date);
-            },
-            cell: (info) => info.getValue(),
-            meta: { align: 'right' as const, editable: false },
-        },
-        {
-            id: 'amountBase',
-            header: `${t('col.amountBase')} (${baseCurrency})`,
-            accessorFn: (row: StockYieldEntry) => {
-                return toBaseCcy(row.amount, row.currency, row.date);
-            },
-            cell: (info) => info.getValue(),
-            meta: { align: 'right' as const, editable: false },
-        },
-        {
-            id: 'delete',
-            header: '',
-            cell: () => null,
-            meta: { editable: false },
-        },
-    ];
-
     const renderHoldingsContent = () => {
-        // Calculate footer sums for holdings
+        // Calculate footer sums for holdings (exclude consumed)
         let totalQuantity = 0;
         let totalInCcy = 0;
         let totalInBase = 0;
 
-        holdings.forEach(holding => {
+        const consumedRows = new Set<number>();
+        const hasConsumed = holdings.some(h => h.consumedByFifo);
+
+        holdings.forEach((holding, i) => {
+            if (holding.consumedByFifo) {
+                consumedRows.add(i);
+
+                return;
+            }
             totalQuantity += holding.quantity;
             const cyyTotal = holding.quantity * holding.unitPrice;
+
             totalInCcy += cyyTotal;
-            const baseStr = toBaseCcy(cyyTotal, holding.currency, holding.dateAcquired);
-            const baseNum = baseStr !== '—' ? parseFloat(baseStr) : 0;
-            totalInBase += baseNum;
+
+            if (holding.dateAcquired || !needsDateForFx(holding.currency, baseCurrency)) {
+                const baseStr = toBaseCcy(cyyTotal, holding.currency, holding.dateAcquired);
+                const baseNum = baseStr !== '—' ? parseFloat(baseStr) : 0;
+
+                totalInBase += baseNum;
+            }
         });
 
         const footerRow: Record<string, string> = {
@@ -819,55 +1102,115 @@ export function Workspace() {
         };
 
         return (
-            <DataTable
-                columns={holdingsColumns}
-                data={holdings}
-                footerRow={footerRow}
-                warningRows={holdingsWarnings.rows}
-                warningMessages={holdingsWarnings.messages}
-                warningCount={holdingsWarnings.rows.size}
-                showWarningsOnly={showHoldingsWarningsOnly}
-                onToggleWarningsOnly={() => setShowHoldingsWarningsOnly(!showHoldingsWarningsOnly)}
-                editRowOnMount={editNewRow}
-                onAutoFill={handleAutoFill}
-                focusColumnOnEdit='symbol'
-                onSaveRow={(rowIndex, values) => {
-                    const original = holdings[rowIndex];
-                    if (!original) return;
-                    updateHolding(rowIndex, {
-                        ...original,
-                        broker: values.broker ?? original.broker,
-                        country: values.country ?? original.country,
-                        symbol: values.symbol ?? original.symbol,
-                        dateAcquired: values.dateAcquired ?? original.dateAcquired,
-                        quantity: values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity,
-                        currency: values.currency ?? original.currency,
-                        unitPrice: values.unitPrice !== undefined ? parseFloat(values.unitPrice) || 0 : original.unitPrice,
-                        notes: values.notes ?? original.notes,
-                    });
-                    setEditNewRow(undefined);
-                }}
-                onDeleteRow={(idx) => deleteHolding(idx)}
-                onAddRow={() => {
-                    const lastBroker = (holdings.length > 0 ? holdings[holdings.length - 1].broker : '')
-                        || (sales.length > 0 ? sales[sales.length - 1].broker : '');
-                    const newHolding: Holding = {
-                        id: `holding-${Date.now()}`,
-                        broker: lastBroker,
-                        country: '',
-                        symbol: '',
-                        dateAcquired: '',
-                        quantity: 0,
-                        currency: 'USD',
-                        unitPrice: 0,
-                        notes: '',
-                        source: { type: 'Manual' },
-                    };
-                    addHolding(newHolding);
-                    setEditNewRow({ index: holdings.length, nonce: Date.now() });
-                }}
-                addRowLabel={t('button.addHolding')}
-            />
+            <>
+                {hasConsumed && (
+                    <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                            className='btn btn-sm'
+                            onClick={() => importHoldings(holdings.filter(h => !h.consumedByFifo))}
+                            title={t('button.removeExecutedDesc')}
+                        >
+                            {t('button.removeExecuted')}
+                        </button>
+                    </div>
+                )}
+                <DataTable
+                    columns={holdingsColumns}
+                    data={holdings}
+                    footerRow={footerRow}
+                    onSortingChange={(s) => setTableSorting('holdings', s)}
+                    initialSorting={tableSorting.holdings}
+                    strikeThroughRows={consumedRows.size > 0 ? consumedRows : undefined}
+                    warningRows={holdingsWarnings.rows}
+                    warningMessages={holdingsWarnings.messages}
+                    warningCount={holdingsWarnings.rows.size}
+                    showWarningsOnly={showHoldingsWarningsOnly}
+                    onToggleWarningsOnly={() => setShowHoldingsWarningsOnly(!showHoldingsWarningsOnly)}
+                    editRowOnMount={editNewRow}
+                    onAutoFill={handleAutoFill}
+                    focusColumnOnEdit='symbol'
+                    onSaveRow={(rowIndex, values) => {
+                        const original = holdings[rowIndex];
+
+                        if (!original) {
+                            return;
+                        }
+                        // Parse consumedBy edit: "1, 3" → sale IDs
+                        let consumedByFifo = original.consumedByFifo;
+                        let consumedBySaleIds = original.consumedBySaleIds;
+                        let quantity = values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity;
+
+                        if (values.consumedBy !== undefined) {
+                            const nums = values.consumedBy.split(/[,\s]+/).map(s => parseInt(s.replace('#', ''), 10)).filter(n => !isNaN(n));
+                            const saleIds = nums.map(n => sales[n - 1]?.id).filter(Boolean) as string[];
+
+                            consumedByFifo = saleIds.length > 0 ? true : undefined;
+                            consumedBySaleIds = saleIds.length > 0 ? saleIds : undefined;
+
+                            if (saleIds.length > 0) {
+                                quantity = 0;
+                            }
+                        }
+                        const currency = values.currency ?? original.currency;
+                        const dateAcquired = values.dateAcquired ?? original.dateAcquired;
+
+                        updateHolding(rowIndex, {
+                            ...original,
+                            broker: values.broker ?? original.broker,
+                            country: values.country ?? original.country,
+                            symbol: values.symbol ?? original.symbol,
+                            dateAcquired,
+                            quantity,
+                            currency,
+                            unitPrice: values.unitPrice !== undefined ? parseFloat(values.unitPrice) || 0 : original.unitPrice,
+                            notes: values.notes ?? original.notes,
+                            consumedByFifo,
+                            consumedBySaleIds,
+                        });
+                        // Fetch FX rates if needed for the updated currency+date
+                        void ensureFxRates(currency, dateAcquired);
+                        setEditNewRow(undefined);
+                    }}
+                    onDeleteRow={(idx) => deleteHolding(idx)}
+                    onSplitRow={(rowIndex) => {
+                        const original = holdings[rowIndex];
+
+                        if (!original) {
+                            return;
+                        }
+                        const newHolding: Holding = {
+                            ...original,
+                            id: `holding-${Date.now()}`,
+                            quantity: 0,
+                            source: { type: 'Manual' },
+                        };
+
+                        insertHolding(rowIndex + 1, newHolding);
+                        setEditNewRow({ index: rowIndex + 1, nonce: Date.now(), focusColumn: 'quantity' });
+                    }}
+                    onMoveRow={moveHolding}
+                    onAddRow={() => {
+                        const lastBroker = (holdings.length > 0 ? holdings[holdings.length - 1].broker : '')
+                            || (sales.length > 0 ? sales[sales.length - 1].broker : '');
+                        const newHolding: Holding = {
+                            id: `holding-${Date.now()}`,
+                            broker: lastBroker,
+                            country: '',
+                            symbol: '',
+                            dateAcquired: '',
+                            quantity: 0,
+                            currency: 'USD',
+                            unitPrice: 0,
+                            notes: '',
+                            source: { type: 'Manual' },
+                        };
+
+                        addHolding(newHolding);
+                        setEditNewRow({ index: holdings.length, nonce: Date.now() });
+                    }}
+                    addRowLabel={t('button.addHolding')}
+                />
+            </>
         );
     };
 
@@ -880,6 +1223,11 @@ export function Workspace() {
         let totalQuantity = 0;
 
         sales.forEach(sale => {
+            // Skip incomplete sales (missing buy date or FX rates)
+            if (!sale.dateAcquired || sale.fxRateBuy == null || sale.fxRateSell == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+                return;
+            }
+
             const proceedsStr = toBaseCcy(sale.quantity * sale.sellPrice, sale.currency, sale.dateSold);
             const costStr = toBaseCcy(sale.quantity * sale.buyPrice, sale.currency, sale.dateAcquired);
 
@@ -891,8 +1239,9 @@ export function Workspace() {
             totalProceeds += proceeds;
             totalCost += cost;
             totalProfit += profit;
-            totalTax += profit > 0 ? profit * 0.1 : 0;
         });
+
+        totalTax = totalProfit > 0 ? totalProfit * 0.1 : 0;
 
         const footerRow: Record<string, string> = {
             broker: t('summary.total'),
@@ -941,6 +1290,8 @@ export function Workspace() {
                     columns={salesColumns}
                     data={sales}
                     footerRow={footerRow}
+                    onSortingChange={(s) => setTableSorting('sales', s)}
+                    initialSorting={tableSorting.sales}
                     warningRows={salesWarnings.rows}
                     warningMessages={salesWarnings.messages}
                     warningCount={salesWarnings.rows.size}
@@ -951,21 +1302,77 @@ export function Workspace() {
                     focusColumnOnEdit='symbol'
                     onSaveRow={(rowIndex, values) => {
                         const original = sales[rowIndex];
-                        if (!original) return;
+
+                        if (!original) {
+                            return;
+                        }
+                        const currency = values.currency ?? original.currency;
+                        const dateAcquired = values.dateAcquired ?? original.dateAcquired;
+                        const dateSold = values.dateSold ?? original.dateSold;
+
+                        // Recalculate FX rates if date or currency changed
+                        const dateOrCcyChanged = currency !== original.currency
+                            || dateAcquired !== original.dateAcquired
+                            || dateSold !== original.dateSold;
+
+                        let fxRateBuy = original.fxRateBuy;
+                        let fxRateSell = original.fxRateSell;
+                        let needFetchBuy = false;
+                        let needFetchSell = false;
+
+                        // Check if user manually changed FX rate values
+                        const parsedFxBuy = values.fxRateBuy !== undefined ? parseFloat(values.fxRateBuy) : NaN;
+                        const parsedFxSell = values.fxRateSell !== undefined ? parseFloat(values.fxRateSell) : NaN;
+                        const fxBuyManuallyChanged = !isNaN(parsedFxBuy) && parsedFxBuy !== original.fxRateBuy;
+                        const fxSellManuallyChanged = !isNaN(parsedFxSell) && parsedFxSell !== original.fxRateSell;
+
+                        if (fxBuyManuallyChanged) {
+                            fxRateBuy = parsedFxBuy;
+                        } else if (dateOrCcyChanged) {
+                            const rate = numericFxRate(currency, dateAcquired);
+
+                            if (rate !== null) {
+                                fxRateBuy = rate;
+                            } else {
+                                needFetchBuy = true;
+                            }
+                        }
+
+                        if (fxSellManuallyChanged) {
+                            fxRateSell = parsedFxSell;
+                        } else if (dateOrCcyChanged) {
+                            const rate = numericFxRate(currency, dateSold);
+
+                            if (rate !== null) {
+                                fxRateSell = rate;
+                            } else {
+                                needFetchSell = true;
+                            }
+                        }
+
                         updateSale(rowIndex, {
                             ...original,
                             broker: values.broker ?? original.broker,
                             country: values.country ?? original.country,
                             symbol: values.symbol ?? original.symbol,
-                            dateAcquired: values.dateAcquired ?? original.dateAcquired,
-                            dateSold: values.dateSold ?? original.dateSold,
+                            dateAcquired,
+                            dateSold,
                             quantity: values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity,
-                            currency: values.currency ?? original.currency,
+                            currency,
                             buyPrice: values.buyPrice !== undefined ? parseFloat(values.buyPrice) || 0 : original.buyPrice,
                             sellPrice: values.sellPrice !== undefined ? parseFloat(values.sellPrice) || 0 : original.sellPrice,
-                            fxRateBuy: values.fxRateBuy !== undefined ? parseFloat(values.fxRateBuy) || 1 : original.fxRateBuy,
-                            fxRateSell: values.fxRateSell !== undefined ? parseFloat(values.fxRateSell) || 1 : original.fxRateSell,
+                            fxRateBuy,
+                            fxRateSell,
                         });
+
+                        // Fetch missing FX rates on-demand from ECB
+                        if (needFetchBuy) {
+                            void fetchAndSetFxRate(currency, dateAcquired, rowIndex, 'fxRateBuy');
+                        }
+
+                        if (needFetchSell) {
+                            void fetchAndSetFxRate(currency, dateSold, rowIndex, 'fxRateSell');
+                        }
                         setEditNewRow(undefined);
                     }}
                     onDeleteRow={(idx) => deleteSale(idx)}
@@ -987,6 +1394,7 @@ export function Workspace() {
                             fxRateSell: 1,
                             source: { type: 'Manual' },
                         };
+
                         addSale(newSale);
                         setEditNewRow({ index: sales.length, nonce: Date.now() });
                     }}
@@ -1001,30 +1409,40 @@ export function Workspace() {
         const tabWarnings = warnings.filter(w => w.tab === tabName && w.rowIndex !== undefined);
         const rows = new Set<number>();
         const messages = new Map<number, string[]>();
+
         for (const w of tabWarnings) {
             rows.add(w.rowIndex!);
             const msgs = messages.get(w.rowIndex!) ?? [];
+
             msgs.push(w.message);
             messages.set(w.rowIndex!, msgs);
         }
+
         return { rows, messages };
     };
 
     const holdingsWarnings = useMemo(() => buildWarningData('Holdings'), [warnings]);
     const salesWarnings = useMemo(() => buildWarningData('Sales'), [warnings]);
     const brokerInterestWarnings = useMemo(() => buildWarningData('Broker Interest'), [warnings]);
-    const stockYieldWarnings = useMemo(() => buildWarningData('Stock Yield'), [warnings]);
 
     const [showHoldingsWarningsOnly, setShowHoldingsWarningsOnly] = useState(false);
     const [showSalesWarningsOnly, setShowSalesWarningsOnly] = useState(false);
 
     const sortedDividends = useMemo(() => {
         const indexed = dividends.map((d, origIdx) => ({ d, origIdx }));
+
         indexed.sort((a, b) => {
-            if (!a.d.symbol) return 1;
-            if (!b.d.symbol) return -1;
+            if (!a.d.symbol) {
+                return 1;
+            }
+
+            if (!b.d.symbol) {
+                return -1;
+            }
+
             return a.d.symbol.localeCompare(b.d.symbol) || a.d.date.localeCompare(b.d.date);
         });
+
         return indexed;
     }, [dividends]);
 
@@ -1039,19 +1457,23 @@ export function Workspace() {
 
         // Map original indices to sorted indices (O(n), no indexOf)
         const originalToSorted = new Map<number, number>();
+
         sortedDividends.forEach((item, sortedIdx) => {
             originalToSorted.set(item.origIdx, sortedIdx);
         });
 
         for (const w of divWarnings) {
             const sortedIdx = originalToSorted.get(w.rowIndex!);
+
             if (sortedIdx !== undefined) {
                 rows.add(sortedIdx);
                 const msgs = messages.get(sortedIdx) ?? [];
+
                 msgs.push(w.message);
                 messages.set(sortedIdx, msgs);
             }
         }
+
         return { rows, messages };
     }, [warnings, sortedDividends, dividends]);
 
@@ -1069,9 +1491,11 @@ export function Workspace() {
             const whtStr = toBaseCcy(dividend.withholdingTax, dividend.currency, dividend.date);
             const grossBase = grossStr !== '—' ? parseFloat(grossStr) : 0;
             const whtBase = whtStr !== '—' ? parseFloat(whtStr) : 0;
+
             totalGrossBase += grossBase;
             totalWhtBase += whtBase;
             const tax5pct = grossBase * 0.05;
+
             totalTax5pct += tax5pct;
             // BG Tax Due = max(0, Tax 5% - WHT)
             totalBgTaxDue += Math.max(0, tax5pct - whtBase);
@@ -1127,6 +1551,8 @@ export function Workspace() {
                     columns={dividendsColumns}
                     data={sortedDividendData}
                     footerRow={footerRow}
+                    onSortingChange={(s) => setTableSorting('dividends', s)}
+                    initialSorting={tableSorting.dividends}
                     onAutoFill={handleAutoFill}
                     warningRows={dividendWarningRows.rows}
                     warningMessages={dividendWarningRows.messages}
@@ -1136,23 +1562,33 @@ export function Workspace() {
                     editRowOnMount={editNewRow}
                     onSaveRow={(sortedIdx, values) => {
                         const item = sortedDividends[sortedIdx];
-                        if (!item) return;
+
+                        if (!item) {
+                            return;
+                        }
                         const d = item.d;
+                        const currency = values.currency ?? d.currency;
+                        const date = values.date ?? d.date;
+
                         updateDividend(item.origIdx, {
                             ...d,
                             symbol: values.symbol ?? d.symbol,
                             country: values.country ?? d.country,
-                            date: values.date ?? d.date,
-                            currency: values.currency ?? d.currency,
+                            date,
+                            currency,
                             grossAmount: values.grossAmount !== undefined ? parseFloat(values.grossAmount) || 0 : d.grossAmount,
                             withholdingTax: values.withholdingTax !== undefined ? parseFloat(values.withholdingTax) || 0 : d.withholdingTax,
                             notes: values.notes ?? d.notes,
                         });
+                        void ensureFxRates(currency, date);
                         setEditNewRow(undefined);
                     }}
                     onDeleteRow={(sortedIdx) => {
                         const item = sortedDividends[sortedIdx];
-                        if (!item) return;
+
+                        if (!item) {
+                            return;
+                        }
                         deleteDividend(item.origIdx);
                     }}
                     onAddRow={() => {
@@ -1168,6 +1604,7 @@ export function Workspace() {
                             notes: '',
                             source: { type: 'Manual' },
                         };
+
                         addDividend(newDividend);
                         setEditNewRow({ index: dividends.length, nonce: Date.now() });
                     }}
@@ -1176,41 +1613,6 @@ export function Workspace() {
             </div>
         );
     };
-
-    const renderStockYieldContent = () => (
-        <DataTable
-            columns={stockYieldColumns}
-            data={stockYield}
-            warningRows={stockYieldWarnings.rows}
-            warningMessages={stockYieldWarnings.messages}
-            warningCount={stockYieldWarnings.rows.size}
-            editRowOnMount={editNewRow}
-            onSaveRow={(rowIndex, values) => {
-                const original = stockYield[rowIndex];
-                if (!original) return;
-                updateStockYield(rowIndex, {
-                    ...original,
-                    date: values.date ?? original.date,
-                    symbol: values.symbol ?? original.symbol,
-                    currency: values.currency ?? original.currency,
-                    amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : original.amount,
-                });
-                setEditNewRow(undefined);
-            }}
-            onDeleteRow={(idx) => deleteStockYield(idx)}
-            onAddRow={() => {
-                const newEntry: StockYieldEntry = {
-                    date: '',
-                    symbol: '',
-                    currency: 'USD',
-                    amount: 0,
-                };
-                addStockYield(newEntry);
-                setEditNewRow({ index: stockYield.length, nonce: Date.now() });
-            }}
-            addRowLabel='Add Stock Yield Entry'
-        />
-    );
 
     const renderBrokerInterestContent = () => {
         if (brokerInterest.length === 0) {
@@ -1224,9 +1626,11 @@ export function Workspace() {
         // Calculate totals for active sub-tab
         const netInterest = activeBi.entries.reduce((sum: number, e) => sum + e.amount, 0);
         let netInterestBase = 0;
+
         activeBi.entries.forEach(entry => {
             const amountStr = toBaseCcy(entry.amount, entry.currency, entry.date);
             const amount = amountStr !== '—' ? parseFloat(amountStr) : 0;
+
             netInterestBase += amount;
         });
         const tax = netInterestBase * 0.1;
@@ -1294,12 +1698,15 @@ export function Workspace() {
                     columns={brokerInterestColumns}
                     data={activeBi.entries}
                     footerRow={footerRow}
+                    onSortingChange={(s) => setTableSorting('interest', s)}
+                    initialSorting={tableSorting.interest}
                     warningRows={brokerInterestWarnings.rows}
                     warningMessages={brokerInterestWarnings.messages}
                     warningCount={brokerInterestWarnings.rows.size}
                     editRowOnMount={editNewRow}
                     onSaveRow={(rowIndex, values) => {
                         const updated = { ...activeBi };
+
                         updated.entries = [...updated.entries];
                         updated.entries[rowIndex] = {
                             ...updated.entries[rowIndex],
@@ -1309,11 +1716,17 @@ export function Workspace() {
                             amount: values.amount !== undefined ? parseFloat(values.amount) || 0 : updated.entries[rowIndex].amount,
                         };
                         updateBrokerInterest(subTabIdx, updated);
+                        void ensureFxRates(
+                            values.currency ?? updated.entries[rowIndex].currency,
+                            values.date ?? updated.entries[rowIndex].date,
+                        );
                         setEditNewRow(undefined);
                     }}
                     onDeleteRow={(idx) => {
                         const updated = { ...activeBi };
+
                         updated.entries = updated.entries.filter((_, i) => i !== idx);
+
                         if (updated.entries.length === 0) {
                             deleteBrokerInterest(subTabIdx);
                             setActiveInterestSubTab(Math.max(0, Math.min(subTabIdx - 1, brokerInterest.length - 2)));
@@ -1330,6 +1743,7 @@ export function Workspace() {
                             source: { type: 'Manual' },
                         };
                         const updated = { ...activeBi };
+
                         updated.entries = [...updated.entries, newEntry];
                         updateBrokerInterest(subTabIdx, updated);
                         setEditNewRow({ index: activeBi.entries.length, nonce: Date.now() });
@@ -1423,8 +1837,15 @@ export function Workspace() {
             {warnings.length > 0 && (() => {
                 const visibleWarnings = warnings.filter(w => {
                     const key = `${w.type}:${w.message}`;
-                    if (dismissedWarnings.has(key)) return false;
-                    if (warningFilter !== 'all' && w.type !== warningFilter) return false;
+
+                    if (dismissedWarnings.has(key)) {
+                        return false;
+                    }
+
+                    if (warningFilter !== 'all' && w.type !== warningFilter) {
+                        return false;
+                    }
+
                     return true;
                 });
                 const warningTypes = [...new Set(warnings.map(w => w.type))];
@@ -1492,6 +1913,7 @@ export function Workspace() {
                                     {warningTypes.map(type => {
                                         const typeWarnings = warnings.filter(w => w.type === type && !dismissedWarnings.has(`${w.type}:${w.message}`));
                                         const count = typeWarnings.length;
+
                                         return (
                                             <span key={type} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                                                 <button
@@ -1513,7 +1935,11 @@ export function Workspace() {
                                                         onClick={() =>
                                                             setDismissedWarnings(prev => {
                                                                 const next = new Set(prev);
-                                                                for (const w of typeWarnings) next.add(`${w.type}:${w.message}`);
+
+                                                                for (const w of typeWarnings) {
+                                                                    next.add(`${w.type}:${w.message}`);
+                                                                }
+
                                                                 return next;
                                                             })}
                                                         title={`Dismiss all ${type.replace(/-/g, ' ')} warnings`}

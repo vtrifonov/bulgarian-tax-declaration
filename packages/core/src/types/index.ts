@@ -14,6 +14,10 @@ export interface Holding {
     unitPrice: number;
     notes?: string;
     source?: DataSource;
+    /** Marked true when FIFO matching fully consumed this lot */
+    consumedByFifo?: boolean;
+    /** IDs of the sale(s) that consumed this lot */
+    consumedBySaleIds?: string[];
 }
 
 export interface Sale {
@@ -27,8 +31,8 @@ export interface Sale {
     currency: string;
     buyPrice: number;
     sellPrice: number;
-    fxRateBuy: number;
-    fxRateSell: number;
+    fxRateBuy: number | null;
+    fxRateSell: number | null;
     source?: DataSource;
 }
 
@@ -116,6 +120,8 @@ export interface IBParsedData {
     openPositions: IBOpenPosition[];
     /** Maps every symbol alias to the primary symbol used in Open Positions */
     symbolAliases: Record<string, string>;
+    /** Maps primary symbol → listing exchange (e.g. "NASDAQ", "IBIS", "SEHK") */
+    symbolExchanges: Record<string, string>;
 }
 
 export interface Trade {
@@ -126,6 +132,7 @@ export interface Trade {
     price: number;
     proceeds: number;
     commission: number;
+    basis?: number; // IB's total cost basis for the position
 }
 
 export interface IBDividend {

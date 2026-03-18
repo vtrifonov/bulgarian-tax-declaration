@@ -418,15 +418,27 @@ it('returns false for malformed CSV (no crash)', () => {
 4. Verify test passes
 5. Run full test suite
 
-## Before Push Checklist
+## Ready Checklist
 
 Run these before every push:
 
+1. **Check if tests need updating or adding.** If you changed behavior, added a feature, or fixed a bug — ensure corresponding tests exist and cover the changes. Add new tests where missing.
+2. **Run the code simplifier** on recently modified code. Review for reuse opportunities, unnecessary complexity, and code quality issues. Use the `/simplify` skill.
+3. **Verify code practices are followed.** Check that changed code follows the conventions in this file (naming, error handling, patterns, test style, etc.).
+4. **Check if README.md and AGENTS.md need updating.** If you added features, changed commands, modified architecture, or altered workflows — update the relevant documentation.
+5. Run the verification commands:
+
 ```bash
 pnpm --filter @bg-tax/core test   # All tests pass
+pnpm --filter @bg-tax/ui test     # All UI tests pass
 pnpm format                        # Format code with dprint
+pnpm format:check                  # Verify no unformatted files remain
+pnpm lint:fix                      # Auto-fix lint issues
+pnpm lint                          # Verify zero lint errors in source
 pnpm spell                         # Spellcheck with cspell
 ```
+
+**Fix all errors, not just new ones.** If the linter or formatter reports preexisting issues in files you didn't touch, fix them too. The goal is a clean `pnpm lint` and `pnpm format:check` with zero errors before every push.
 
 If cspell flags a legitimate word, add it to `cspell-dict.txt`. Keep entries **lowercase and alphabetically sorted**. Bulgarian words are handled by `@cspell/dict-bg-bg` (configured in `cspell.json`) — only add Bulgarian words to the project dict if they are missing from the standard dictionary.
 

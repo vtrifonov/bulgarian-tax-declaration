@@ -1,12 +1,4 @@
 import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-} from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAppStore } from '../store/app-state';
-import {
     calcDividendTax,
     FifoEngine,
     FxService,
@@ -15,6 +7,7 @@ import {
     parseIBCsv,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
+    populateSaleFxRates,
     providers,
     resolveCountries,
     t,
@@ -25,8 +18,38 @@ import type {
     IBParsedData,
     Trade,
 } from '@bg-tax/core';
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { useAppStore } from '../store/app-state';
 import type { ImportedFile } from '../store/app-state';
+
+/** Get a fetch function that bypasses CORS — Tauri HTTP plugin in app, Vite proxy in browser */
+function getCorsFetch(): typeof fetch {
+    const isTauri = '__TAURI_INTERNALS__' in window;
+
+    if (isTauri) {
+        // Lazy wrapper that dynamically imports Tauri HTTP plugin on first call
+        return (async (url: RequestInfo | URL, init?: RequestInit) => {
+            const mod = await import('@tauri-apps/plugin-http');
+
+            return mod.fetch(url, init);
+        }) as typeof fetch;
+    }
+
+    // In browser dev mode, proxy OpenFIGI through Vite to avoid CORS
+    return ((url: RequestInfo | URL, init?: RequestInit) => {
+        const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+        const proxied = urlStr.replace('https://api.openfigi.com', '/api/openfigi');
+
+        return fetch(proxied, init);
+    }) as typeof fetch;
+}
 
 function detectFileType(content: string, filename: string): ImportedFile['type'] | null {
     // IB Activity statement
@@ -75,16 +98,20 @@ function splitOpenPositions(
     const sellQtyBySymbol = new Map<string, number>();
 
     for (const t of trades) {
-        if (!t.dateTime.startsWith(yearPrefix)) continue;
+        if (!t.dateTime.startsWith(yearPrefix)) {
+            continue;
+        }
 
         const sym = resolveSymbol(t.symbol);
 
         if (t.quantity > 0) {
             const buys = buysBySymbol.get(sym) ?? [];
+
             buys.push(t);
             buysBySymbol.set(sym, buys);
         } else {
             const current = sellQtyBySymbol.get(sym) ?? 0;
+
             sellQtyBySymbol.set(sym, current + Math.abs(t.quantity));
         }
     }
@@ -111,12 +138,14 @@ function splitOpenPositions(
             const sortedBuysForCost = [...buys].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
             let remainingSellsForCost = sellsFromThisYear;
             let survivedThisYearCost = 0;
+
             for (const buy of sortedBuysForCost) {
                 if (remainingSellsForCost >= buy.quantity) {
                     remainingSellsForCost -= buy.quantity;
                     continue;
                 }
                 const survived = buy.quantity - remainingSellsForCost;
+
                 remainingSellsForCost = 0;
                 survivedThisYearCost += survived * buy.price;
             }
@@ -148,6 +177,7 @@ function splitOpenPositions(
                     continue; // fully consumed by sell
                 }
                 const survivedQty = buy.quantity - remainingSellQty;
+
                 remainingSellQty = 0;
 
                 holdings.push({
@@ -175,7 +205,14 @@ export function Import() {
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragOver, setIsDragOver] = useState(false);
-    const [fetchingFx, setFetchingFx] = useState(false);
+    const [fxProgress, setFxProgress] = useState<
+        {
+            active: boolean;
+            completed: number;
+            total: number;
+            current: string;
+        } | null
+    >(null);
 
     const {
         importHoldings,
@@ -205,33 +242,47 @@ export function Import() {
         function addYear(dateStr: string | undefined): void {
             if (dateStr) {
                 const yr = parseInt(dateStr.substring(0, 4));
-                if (!isNaN(yr)) years.add(yr);
+
+                if (!isNaN(yr)) {
+                    years.add(yr);
+                }
             }
         }
 
         // Collect all currencies and years from holdings, sales, dividends, etc.
         for (const h of state.holdings) {
-            if (h.currency) currencies.add(h.currency);
+            if (h.currency) {
+                currencies.add(h.currency);
+            }
             addYear(h.dateAcquired);
         }
 
         for (const s of state.sales) {
-            if (s.currency) currencies.add(s.currency);
+            if (s.currency) {
+                currencies.add(s.currency);
+            }
             addYear(s.dateAcquired);
             addYear(s.dateSold);
         }
 
         for (const d of state.dividends) {
-            if (d.currency) currencies.add(d.currency);
+            if (d.currency) {
+                currencies.add(d.currency);
+            }
             addYear(d.date);
         }
 
         for (const s of state.stockYield) {
-            if (s.currency) currencies.add(s.currency);
+            if (s.currency) {
+                currencies.add(s.currency);
+            }
         }
 
         for (const bi of state.brokerInterest) {
-            if (bi.currency) currencies.add(bi.currency);
+            if (bi.currency) {
+                currencies.add(bi.currency);
+            }
+
             for (const entry of bi.entries) {
                 addYear(entry.date);
             }
@@ -239,53 +290,98 @@ export function Import() {
 
         // Also fetch prior year for holiday/weekend fallback (e.g. Jan 1 needs Dec 31 rate)
         const yearsList = [...years];
+
         for (const yr of yearsList) {
-            if (yr > 2020) years.add(yr - 1);
+            if (yr > 2020) {
+                years.add(yr - 1);
+            }
         }
 
         const needed = [...currencies].filter(c => c !== 'BGN' && c !== 'EUR');
-        if (needed.length === 0) return;
+
+        if (needed.length === 0) {
+            return;
+        }
 
         // Check if we need to fetch any missing year+currency combo
         const yearsArr = [...years].filter(y => y >= 1999 && y <= taxYear + 1).sort();
         let hasMissing = false;
+
         for (const ccy of needed) {
             for (const yr of yearsArr) {
                 const dateToCheck = `${yr}-06-15`;
+
                 if (!state.fxRates[ccy]?.[dateToCheck]) {
                     hasMissing = true;
                     break;
                 }
             }
-            if (hasMissing) break;
-        }
-        if (!hasMissing) return;
 
-        setFetchingFx(true);
+            if (hasMissing) {
+                break;
+            }
+        }
+
+        if (!hasMissing) {
+            return;
+        }
+
         const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
-        // Fetch all needed years in parallel
-        Promise.allSettled(
-            yearsArr.map(yr => fxService.fetchRates(needed, yr)),
-        ).then(results => {
+        const tasks: { currency: string; year: number }[] = [];
+
+        for (const ccy of needed) {
+            for (const yr of yearsArr) {
+                tasks.push({ currency: ccy, year: yr });
+            }
+        }
+        setFxProgress({ active: true, completed: 0, total: tasks.length, current: '' });
+
+        void (async () => {
             try {
                 const merged: Record<string, Record<string, number>> = {};
-                for (const result of results) {
-                    if (result.status === 'fulfilled') {
-                        for (const [ccy, dateRates] of Object.entries(result.value)) {
+
+                for (let i = 0; i < tasks.length; i++) {
+                    const { currency, year } = tasks[i];
+
+                    setFxProgress(p => p && { ...p, completed: i, current: `${currency} ${year}` });
+                    try {
+                        const rates = await fxService.fetchRates([currency], year);
+
+                        for (const [ccy, dateRates] of Object.entries(rates)) {
                             merged[ccy] = { ...merged[ccy], ...dateRates };
                         }
+                    } catch { /* skip failed */ }
+                }
+                setFxProgress(p => p && { ...p, completed: tasks.length, current: '' });
+
+                if (Object.keys(merged).length > 0) {
+                    setFxRates(merged);
+
+                    // Populate FX rates on existing sales
+                    const currentState = useAppStore.getState();
+
+                    if (currentState.sales.length > 0) {
+                        const allRates: Record<string, Record<string, number>> = {};
+
+                        for (const ccy in currentState.fxRates) {
+                            allRates[ccy] = { ...currentState.fxRates[ccy] };
+                        }
+
+                        for (const ccy in merged) {
+                            allRates[ccy] = { ...allRates[ccy], ...merged[ccy] };
+                        }
+                        const getRate = (currency: string, date: string) => allRates[currency]?.[date];
+                        const updated = populateSaleFxRates(currentState.sales, getRate, baseCurrency);
+
+                        importSales(updated);
                     }
                 }
-                if (Object.keys(merged).length > 0) setFxRates(merged);
             } catch (err) {
-                console.error('FX rate merge failed:', err);
+                console.error('FX fetch failed:', err);
             } finally {
-                setFetchingFx(false);
+                setFxProgress(null);
             }
-        }).catch(err => {
-            console.error('FX fetch failed:', err);
-            setFetchingFx(false);
-        });
+        })();
     }, [importedFiles.length, baseCurrency, taxYear]); // Re-run after file import or settings change
 
     const processFile = useCallback(async (file: File) => {
@@ -299,6 +395,7 @@ export function Import() {
                 status: 'error',
                 message: 'Unrecognized file format. Expected IB activity statement, Revolut savings CSV, or Revolut investments CSV.',
             });
+
             return;
         }
 
@@ -308,8 +405,10 @@ export function Import() {
 
                 // Check for duplicate IB holdings
                 const duplicateHoldings: Set<string> = new Set();
+
                 for (const trade of parsed.trades) {
                     const tradeDate = trade.dateTime.split(' ')[0]; // Extract YYYY-MM-DD from "YYYY-MM-DD HH:MM:SS"
+
                     for (const existingHolding of useAppStore.getState().holdings) {
                         if (
                             existingHolding.broker === 'IB'
@@ -328,31 +427,52 @@ export function Import() {
 
                 // Collect all symbols and resolve countries (async — uses OpenFIGI fallback for unknowns)
                 const allSymbols: { symbol: string; currency: string }[] = [];
-                for (const t of parsed.trades) allSymbols.push({ symbol: t.symbol, currency: t.currency });
-                for (const d of allDividends) allSymbols.push({ symbol: d.symbol, currency: d.currency });
-                for (const p of parsed.openPositions) allSymbols.push({ symbol: p.symbol, currency: p.currency });
+
+                for (const t of parsed.trades) {
+                    allSymbols.push({ symbol: t.symbol, currency: t.currency });
+                }
+
+                for (const d of allDividends) {
+                    allSymbols.push({ symbol: d.symbol, currency: d.currency });
+                }
+
+                for (const p of parsed.openPositions) {
+                    allSymbols.push({ symbol: p.symbol, currency: p.currency });
+                }
+
                 // Also resolve countries for existing holdings (from prior-year import)
                 for (const h of useAppStore.getState().holdings) {
-                    if (!h.country && h.symbol) allSymbols.push({ symbol: h.symbol, currency: h.currency });
+                    if (!h.country && h.symbol) {
+                        allSymbols.push({ symbol: h.symbol, currency: h.currency });
+                    }
                 }
-                const countryMap = await resolveCountries(allSymbols);
+                const countryMap = await resolveCountries(allSymbols, getCorsFetch(), parsed.symbolExchanges);
 
                 // Calculate BG tax for dividends
                 for (const d of allDividends) {
                     d.country = countryMap[d.symbol] ?? '';
                     const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
+
                     d.bgTaxDue = bgTaxDue;
                     d.whtCredit = whtCredit;
                     d.source = { type: 'IB', file: file.name };
                 }
                 importDividends(allDividends);
-                for (const s of parsed.stockYield) s.source = { type: 'IB', file: file.name };
+
+                for (const s of parsed.stockYield) {
+                    s.source = { type: 'IB', file: file.name };
+                }
                 importStockYield(parsed.stockYield);
-                for (const i of parsed.interest) i.source = { type: 'IB', file: file.name };
+
+                for (const i of parsed.interest) {
+                    i.source = { type: 'IB', file: file.name };
+                }
                 // Group IB interest by currency
                 const ibByCurrency = new Map<string, typeof parsed.interest>();
+
                 for (const entry of parsed.interest) {
                     const ccy = entry.currency || 'USD';
+
                     if (!ibByCurrency.has(ccy)) {
                         ibByCurrency.set(ccy, []);
                     }
@@ -363,22 +483,29 @@ export function Import() {
                     currency,
                     entries,
                 }));
+
                 if (ibInterestList.length > 0) {
                     const existingInterest = useAppStore.getState().brokerInterest.filter(bi => bi.broker !== 'IB');
+
                     importBrokerInterest([...existingInterest, ...ibInterestList]);
                 }
 
                 // FIFO: process all trades (buys + sells) against existing holdings
                 const fifo = new FifoEngine([...useAppStore.getState().holdings]);
-                const { holdings: fifoHoldings, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
+                const { holdings: fifoHoldings, consumedHoldings: fifoConsumed, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
 
-                for (const s of newSales) if (!s.source) s.source = { type: 'IB', file: file.name };
+                for (const s of newSales) {
+                    if (!s.source) {
+                        s.source = { type: 'IB', file: file.name };
+                    }
+                }
                 importSales(newSales);
 
                 // Use Open Positions as authoritative year-end holdings (if available)
                 // If prior-year holdings exist, only add this year's buy lots (skip pre-existing)
                 const hasPriorHoldings = useAppStore.getState().holdings.some(h => h.source?.type !== 'IB');
                 let finalHoldings: Holding[];
+
                 if (parsed.openPositions.length > 0) {
                     finalHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
                         broker: 'IB',
@@ -390,30 +517,46 @@ export function Import() {
                     });
                 } else {
                     finalHoldings = fifoHoldings;
-                    for (const h of finalHoldings) if (!h.source) h.source = { type: 'IB', file: file.name };
+
+                    for (const h of finalHoldings) {
+                        if (!h.source) {
+                            h.source = { type: 'IB', file: file.name };
+                        }
+                    }
                 }
                 // Merge: keep non-IB holdings (with symbol + country normalization), replace IB holdings
                 const existingNonIb = useAppStore.getState().holdings.filter(h => h.source?.type !== 'IB');
+
                 for (const h of existingNonIb) {
                     // Normalize "CSPX/SXR8" style symbols from prior-year imports
                     if (h.symbol.includes('/')) {
                         const parts = h.symbol.split('/');
+
                         for (const part of parts) {
                             const resolved = parsed.symbolAliases[part.trim()];
+
                             if (resolved) {
                                 h.symbol = resolved;
                                 break;
                             }
+
                             if (parsed.openPositions.some(p => p.symbol === part.trim())) {
                                 h.symbol = part.trim();
                                 break;
                             }
                         }
                     }
+
                     // Fill missing country from resolved map
-                    if (!h.country) h.country = countryMap[h.symbol] ?? '';
+                    if (!h.country) {
+                        h.country = countryMap[h.symbol] ?? '';
+                    }
                 }
-                importHoldings([...existingNonIb, ...finalHoldings]);
+                // Include consumed holdings (marked by FIFO engine) so user can see what was matched
+                const consumedIds = new Set(fifoConsumed.map(h => h.id));
+                const remainingNonIb = existingNonIb.filter(h => !consumedIds.has(h.id));
+
+                importHoldings([...remainingNonIb, ...fifoConsumed, ...finalHoldings]);
 
                 const buys = parsed.trades.filter(t => t.quantity > 0).length;
                 const sells = parsed.trades.filter(t => t.quantity < 0).length;
@@ -438,12 +581,14 @@ export function Import() {
                         status: 'error',
                         message: 'No trades found in this file.',
                     });
+
                     return;
                 }
 
                 // Resolve countries (async — uses OpenFIGI fallback for unknowns)
                 const countryMap = await resolveCountries(
                     trades.map(t => ({ symbol: t.ticker, currency: t.currency })),
+                    getCorsFetch(),
                 );
 
                 // Convert trades to the format FifoEngine expects
@@ -458,11 +603,20 @@ export function Import() {
                 }));
 
                 const fifo = new FifoEngine([...useAppStore.getState().holdings]);
-                const { holdings: newHoldings, sales: newSales, warnings } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
+                const { holdings: newHoldings, consumedHoldings: revConsumed, sales: newSales, warnings } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
 
-                for (const h of newHoldings) if (!h.source) h.source = { type: 'Revolut', file: file.name };
-                for (const s of newSales) if (!s.source) s.source = { type: 'Revolut', file: file.name };
-                importHoldings(newHoldings);
+                for (const h of newHoldings) {
+                    if (!h.source) {
+                        h.source = { type: 'Revolut', file: file.name };
+                    }
+                }
+
+                for (const s of newSales) {
+                    if (!s.source) {
+                        s.source = { type: 'Revolut', file: file.name };
+                    }
+                }
+                importHoldings([...revConsumed, ...newHoldings]);
                 importSales(newSales);
 
                 const buys = trades.filter(t => t.type.includes('BUY')).length;
@@ -489,6 +643,7 @@ export function Import() {
                         status: 'error',
                         message: `This file appears to already be imported (${revolut.currency} already exists). Skipping to prevent duplicates.`,
                     });
+
                     return;
                 }
 
@@ -500,6 +655,7 @@ export function Import() {
                     currency: revolut.currency,
                     entries: revolut.entries,
                 };
+
                 importBrokerInterest([...existing, brokerInterestEntry]);
 
                 const netInterest = revolut.entries.reduce((sum, e) => sum + e.amount, 0);
@@ -524,7 +680,7 @@ export function Import() {
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
             if (file.name.endsWith('.csv')) {
-                processFile(file);
+                void processFile(file);
             } else {
                 addImportedFile({
                     name: file.name,
@@ -540,6 +696,7 @@ export function Import() {
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
+
         if (e.dataTransfer.files.length > 0) {
             processFiles(e.dataTransfer.files);
         }
@@ -626,7 +783,7 @@ export function Import() {
                     </div>
 
                     {/* FX Rate loading indicator */}
-                    {fetchingFx && (
+                    {fxProgress?.active && (
                         <div
                             style={{
                                 padding: '0.75rem 1rem',
@@ -647,22 +804,26 @@ export function Import() {
                                         animation: 'spin 0.8s linear infinite',
                                     }}
                                 />
-                                {t('import.fetchingFx')}
+                                <span>
+                                    {t('import.fetchingFx')}
+                                    {fxProgress.current && `: ${fxProgress.current}`}
+                                    {` (${fxProgress.completed}/${fxProgress.total})`}
+                                </span>
                             </div>
                             <div style={{ height: '4px', backgroundColor: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
                                 <div
                                     style={{
                                         height: '100%',
+                                        width: `${fxProgress.total > 0 ? (fxProgress.completed / fxProgress.total) * 100 : 0}%`,
                                         backgroundColor: 'var(--accent)',
                                         borderRadius: '2px',
-                                        animation: 'progress 2s ease-in-out infinite',
+                                        transition: 'width 0.3s ease',
                                     }}
                                 />
                             </div>
                             <style>
                                 {`
                         @keyframes spin { to { transform: rotate(360deg); } }
-                        @keyframes progress { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
                     `}
                             </style>
                         </div>
@@ -671,11 +832,38 @@ export function Import() {
                     {/* Current session data summary */}
                     {(holdings.length > 0 || sales.length > 0 || dividends.length > 0 || stockYield.length > 0 || brokerInterest.length > 0) && (() => {
                         const sourceFiles = new Set<string>();
-                        for (const h of holdings) if (h.source?.file) sourceFiles.add(h.source.file);
-                        for (const s of sales) if (s.source?.file) sourceFiles.add(s.source.file);
-                        for (const d of dividends) if (d.source?.file) sourceFiles.add(d.source.file);
-                        for (const sy of stockYield) if (sy.source?.file) sourceFiles.add(sy.source.file);
-                        for (const bi of brokerInterest) for (const e of bi.entries) if (e.source?.file) sourceFiles.add(e.source.file);
+
+                        for (const h of holdings) {
+                            if (h.source?.file) {
+                                sourceFiles.add(h.source.file);
+                            }
+                        }
+
+                        for (const s of sales) {
+                            if (s.source?.file) {
+                                sourceFiles.add(s.source.file);
+                            }
+                        }
+
+                        for (const d of dividends) {
+                            if (d.source?.file) {
+                                sourceFiles.add(d.source.file);
+                            }
+                        }
+
+                        for (const sy of stockYield) {
+                            if (sy.source?.file) {
+                                sourceFiles.add(sy.source.file);
+                            }
+                        }
+
+                        for (const bi of brokerInterest) {
+                            for (const e of bi.entries) {
+                                if (e.source?.file) {
+                                    sourceFiles.add(e.source.file);
+                                }
+                            }
+                        }
 
                         return (
                             <div
@@ -746,7 +934,7 @@ export function Import() {
                     )}
 
                     <button
-                        disabled={fetchingFx}
+                        disabled={!!fxProgress?.active}
                         onClick={() => navigate('/workspace')}
                         style={{
                             padding: '0.75rem 2rem',
@@ -756,10 +944,10 @@ export function Import() {
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',
-                            opacity: fetchingFx ? 0.7 : 1,
+                            opacity: fxProgress?.active ? 0.7 : 1,
                         }}
                     >
-                        {fetchingFx ? 'Fetching FX rates...' : t('button.continue')}
+                        {fxProgress?.active ? t('import.fetchingFx') : t('button.continue')}
                     </button>
                 </div>
 

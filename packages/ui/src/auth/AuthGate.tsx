@@ -1,15 +1,18 @@
-import type { ReactNode } from 'react';
 import { t } from '@bg-tax/core';
+import type { ReactNode } from 'react';
+
+import { AccessRequired } from './AccessRequired';
 import { useAuth } from './AuthProvider';
 import { LoginScreen } from './LoginScreen';
-import { AccessRequired } from './AccessRequired';
 
 const isTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TAURI_INTERNALS__' in window);
 
 export function AuthGate({ children }: { children: ReactNode }) {
     const { user, loading, allowed, error, retryAccess } = useAuth();
 
-    if (isTauri) return <>{children}</>;
+    if (isTauri) {
+        return <>{children}</>;
+    }
 
     if (loading) {
         return (

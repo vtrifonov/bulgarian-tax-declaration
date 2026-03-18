@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 import { importHoldingsFromExcel } from './excel-import.js';
 import type {
@@ -87,6 +87,21 @@ export async function importFullExcel(buffer: ArrayBuffer): Promise<FullExcelImp
     const stockYield = readStockYieldSheet(wb);
     const brokerInterest = readBrokerInterestSheets(wb);
 
+    // Resolve consumedBy sale numbers to sale IDs
+    for (const h of holdings) {
+        const raw = (h as { _consumedByNums?: string })._consumedByNums;
+
+        if (raw) {
+            const nums = raw.split(/[,\s]+/).map(s => parseInt(s.replace('#', ''), 10)).filter(n => !isNaN(n));
+            const saleIds = nums.map(n => sales[n - 1]?.id).filter(Boolean);
+
+            if (saleIds.length > 0) {
+                h.consumedBySaleIds = saleIds;
+            }
+            delete (h as { _consumedByNums?: string })._consumedByNums;
+        }
+    }
+
     return { holdings, sales, dividends, stockYield, brokerInterest };
 }
 
@@ -121,8 +136,8 @@ function readSalesSheet(wb: ExcelJS.Workbook): Sale[] {
             currency: cellStr(row.getCell(7)),
             buyPrice: cellNum(row.getCell(8)),
             sellPrice: cellNum(row.getCell(9)),
-            fxRateBuy: cellNum(row.getCell(10)),
-            fxRateSell: cellNum(row.getCell(11)),
+            fxRateBuy: cellNum(row.getCell(10)) || null,
+            fxRateSell: cellNum(row.getCell(11)) || null,
         });
     });
 

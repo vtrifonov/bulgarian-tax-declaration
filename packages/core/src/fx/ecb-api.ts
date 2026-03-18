@@ -12,6 +12,14 @@
  * @param endDate - End date in YYYY-MM-DD format
  * @returns Record mapping date strings to rates
  */
+class RetryableError extends Error {
+    readonly retryable = true;
+    constructor(message: string) {
+        super(message);
+        this.name = 'RetryableError';
+    }
+}
+
 export async function fetchEcbRates(
     currency: string,
     startDate: string,
@@ -22,15 +30,44 @@ export async function fetchEcbRates(
     }
     const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}`;
 
-    const resp = await fetch(url);
+    const maxRetries = 3;
+    const timeoutMs = 15_000;
 
-    if (!resp.ok) {
-        throw new Error(`ECB API error ${resp.status}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const resp = await fetch(url, { signal: controller.signal });
+
+            if (resp.status === 429 || resp.status >= 500) {
+                // Retryable server error — throw to trigger retry
+                throw new RetryableError(`ECB API error ${resp.status}`);
+            }
+
+            if (!resp.ok) {
+                // Client error (4xx) — don't retry
+                throw new Error(`ECB API error ${resp.status}`);
+            }
+
+            const xml = await resp.text();
+
+            return parseEcbXml(xml);
+        } catch (err: unknown) {
+            const isRetryable = err instanceof RetryableError
+                || (err instanceof DOMException && err.name === 'AbortError');
+
+            if (!isRetryable || attempt === maxRetries) {
+                throw err;
+            }
+            // Exponential backoff: 1s, 2s, 4s
+            await new Promise(r => setTimeout(r, 1000 * (2 ** attempt)));
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
-    const xml = await resp.text();
-
-    return parseEcbXml(xml);
+    throw new Error('ECB fetch failed after retries');
 }
 
 /** Parse ECB XML response — handles multi-line Obs elements */

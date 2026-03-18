@@ -6,20 +6,32 @@ export type BaseCurrency = 'BGN' | 'EUR';
 /** Find the nearest previous date that has an FX rate (for weekends/holidays).
  *  When date is empty, returns the latest available rate. */
 function findNearestPreviousRate(rates: Record<string, number> | undefined, date: string): number | undefined {
-    if (!rates) return undefined;
+    if (!rates) {
+        return undefined;
+    }
 
     const sortedDates = Object.keys(rates).sort();
-    if (sortedDates.length === 0) return undefined;
+
+    if (sortedDates.length === 0) {
+        return undefined;
+    }
 
     // Empty date → use latest available rate
-    if (!date) return rates[sortedDates[sortedDates.length - 1]];
+    if (!date) {
+        return rates[sortedDates[sortedDates.length - 1]];
+    }
 
     // Find the last date <= target date
     let best: string | undefined;
+
     for (const d of sortedDates) {
         if (d <= date) {
             best = d;
         } else {
+            // If no previous date found, use the nearest future date
+            if (!best) {
+                best = d;
+            }
             break;
         }
     }

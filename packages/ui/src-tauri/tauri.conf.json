@@ -17,7 +17,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://data-api.ecb.europa.eu https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://data-api.ecb.europa.eu https://api.openfigi.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com"
     }
   },
   "bundle": {

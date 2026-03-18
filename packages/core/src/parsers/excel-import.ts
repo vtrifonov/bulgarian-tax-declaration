@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 import type { Holding } from '../types/index.js';
 const randomUUID = () => crypto.randomUUID();
@@ -14,6 +14,7 @@ const HEADER_PATTERNS: [RegExp, string][] = [
     [/^валута$|^currency$/i, 'currency'], // Exact match only — avoids matching "Ед. цена във валута"
     [/цена|price/i, 'unitPrice'],
     [/бележки|коментари|notes|comments/i, 'notes'],
+    [/продадено\s*чрез|consumed\s*by/i, 'consumedBy'],
 ];
 
 function matchHeader(value: string): string | null {
@@ -155,12 +156,15 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
 
         const symbol = colMap.symbol ? cellStr(row.getCell(colMap.symbol)) : '';
         const quantity = colMap.quantity ? cellNum(row.getCell(colMap.quantity)) : 0;
+        const consumedByRaw = colMap.consumedBy ? cellStr(row.getCell(colMap.consumedBy)) : '';
+        const hasConsumedBy = consumedByRaw.trim().length > 0;
 
-        if (!symbol || quantity <= 0) {
+        // Allow quantity 0 for consumed holdings (marked with consumedBy column)
+        if (!symbol || (quantity <= 0 && !hasConsumedBy)) {
             return;
         }
 
-        holdings.push({
+        const holding: Holding = {
             id: randomUUID(),
             broker: colMap.broker ? cellStr(row.getCell(colMap.broker)) : '',
             country: colMap.country ? cellStr(row.getCell(colMap.country)) : '',
@@ -170,7 +174,15 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
             currency: colMap.currency ? cellStr(row.getCell(colMap.currency)) : '',
             unitPrice: colMap.unitPrice ? cellNum(row.getCell(colMap.unitPrice)) : 0,
             notes: colMap.notes ? cellStr(row.getCell(colMap.notes)) || undefined : undefined,
-        });
+        };
+
+        if (hasConsumedBy) {
+            holding.consumedByFifo = true;
+            // Store raw sale numbers temporarily — resolved to IDs by importFullExcel
+            (holding as Holding & { _consumedByNums?: string })._consumedByNums = consumedByRaw;
+        }
+
+        holdings.push(holding);
     });
 
     return holdings;
@@ -249,8 +261,10 @@ export function importHoldingsFromCsv(content: string): Holding[] {
         const symbol = colMap.symbol !== undefined ? (fields[colMap.symbol] ?? '') : '';
         const quantityStr = colMap.quantity !== undefined ? (fields[colMap.quantity] ?? '') : '';
         const quantity = parseFloat(quantityStr) || 0;
+        const consumedByRaw = colMap.consumedBy !== undefined ? (fields[colMap.consumedBy] ?? '') : '';
+        const hasConsumedBy = consumedByRaw.trim().length > 0;
 
-        if (!symbol || quantity <= 0) {
+        if (!symbol || (quantity <= 0 && !hasConsumedBy)) {
             continue;
         }
 
@@ -258,7 +272,7 @@ export function importHoldingsFromCsv(content: string): Holding[] {
         // Normalize date: strip time part if present
         const dateAcquired = dateRaw.split('T')[0];
 
-        holdings.push({
+        const holding: Holding = {
             id: randomUUID(),
             broker: colMap.broker !== undefined ? (fields[colMap.broker] ?? '') : '',
             country: colMap.country !== undefined ? (fields[colMap.country] ?? '') : '',
@@ -268,7 +282,14 @@ export function importHoldingsFromCsv(content: string): Holding[] {
             currency: colMap.currency !== undefined ? (fields[colMap.currency] ?? '') : '',
             unitPrice: colMap.unitPrice !== undefined ? (parseFloat(fields[colMap.unitPrice]) || 0) : 0,
             notes: colMap.notes !== undefined ? (fields[colMap.notes] || undefined) : undefined,
-        });
+        };
+
+        if (hasConsumedBy) {
+            holding.consumedByFifo = true;
+            (holding as Holding & { _consumedByNums?: string })._consumedByNums = consumedByRaw;
+        }
+
+        holdings.push(holding);
     }
 
     return holdings;

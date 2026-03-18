@@ -3,10 +3,10 @@ import {
     expect,
     it,
 } from 'vitest';
+
 import { FifoEngine } from '../../src/fifo/engine.js';
 import type {
     Holding,
-    Sale,
     Trade,
 } from '../../src/types/index.js';
 
@@ -31,6 +31,7 @@ describe('FifoEngine', () => {
 
         // Remaining holdings: lot 2 with 25 shares
         const aaplHoldings = holdings.filter(h => h.symbol === 'AAPL');
+
         expect(aaplHoldings).toHaveLength(1);
         expect(aaplHoldings[0].quantity).toBe(25);
     });
@@ -87,6 +88,7 @@ describe('FifoEngine', () => {
         ];
 
         const result = engine.processTrades(trades, 'IB', { GHOST: 'САЩ' });
+
         expect(result.warnings).toContainEqual(
             expect.objectContaining({ type: 'negative-holdings', message: expect.stringContaining('GHOST') }),
         );
@@ -97,6 +99,67 @@ describe('FifoEngine', () => {
         expect(result.sales[0].sellPrice).toBe(50);
         expect(result.sales[0].dateAcquired).toBe('');
         expect(result.sales[0].buyPrice).toBe(0);
+    });
+
+    it('uses abs(basis)/abs(quantity) as buyPrice for unmatched sells', () => {
+        const engine = new FifoEngine([]);
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'COST', dateTime: '2025-06-01, 10:00:00', quantity: -10, price: 50.00, proceeds: 500, commission: -1, basis: -400 },
+        ];
+
+        const result = engine.processTrades(trades, 'IB', { COST: 'САЩ' });
+
+        expect(result.sales).toHaveLength(1);
+        expect(result.sales[0].buyPrice).toBe(40); // abs(-400) / abs(-10) = 40
+    });
+
+    it('falls back to basisPerShare when lot unitPrice is 0 (transfers)', () => {
+        const existingHoldings: Holding[] = [
+            { id: '1', broker: 'IB', country: 'САЩ', symbol: 'XFER', dateAcquired: '2024-01-01', quantity: 50, currency: 'USD', unitPrice: 0 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'XFER', dateTime: '2025-03-15, 10:00:00', quantity: -50, price: 100.00, proceeds: 5000, commission: -1, basis: -4000 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'IB', { XFER: 'САЩ' });
+
+        expect(result.sales).toHaveLength(1);
+        // unitPrice=0, so falls back to abs(-4000)/abs(-50) = 80
+        expect(result.sales[0].buyPrice).toBe(80);
+    });
+
+    it('tracks consumedHoldings for fully consumed lots', () => {
+        const existingHoldings: Holding[] = [
+            { id: '1', broker: 'IB', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2024-01-15', quantity: 10, currency: 'USD', unitPrice: 150 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'AAPL', dateTime: '2025-06-01, 10:00:00', quantity: -10, price: 200, proceeds: 2000, commission: -1 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'IB', { AAPL: 'САЩ' });
+
+        expect(result.consumedHoldings).toHaveLength(1);
+        expect(result.consumedHoldings[0].symbol).toBe('AAPL');
+        expect(result.consumedHoldings[0].consumedByFifo).toBe(true);
+        expect(result.consumedHoldings[0].consumedBySaleIds).toHaveLength(1);
+        expect(result.holdings.filter(h => h.symbol === 'AAPL')).toHaveLength(0);
+    });
+
+    it('does not mark partially consumed lots as consumed', () => {
+        const existingHoldings: Holding[] = [
+            { id: '1', broker: 'IB', country: 'САЩ', symbol: 'MSFT', dateAcquired: '2024-01-01', quantity: 100, currency: 'USD', unitPrice: 300 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'MSFT', dateTime: '2025-06-01, 10:00:00', quantity: -30, price: 400, proceeds: 12000, commission: -1 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'IB', { MSFT: 'САЩ' });
+
+        expect(result.consumedHoldings).toHaveLength(0);
+        expect(result.holdings.find(h => h.symbol === 'MSFT')?.quantity).toBe(70);
     });
 
     it('handles multiple buys then multiple sells consuming across lots', () => {
@@ -123,6 +186,7 @@ describe('FifoEngine', () => {
 
         // Remaining holdings
         const remaining = result.holdings.filter(h => h.symbol === 'STOCK');
+
         expect(remaining).toHaveLength(1);
         expect(remaining[0].quantity).toBe(10);
         expect(remaining[0].unitPrice).toBe(150.00);
@@ -145,8 +209,10 @@ describe('FifoEngine', () => {
 
         // AAPL should be gone, MSFT should remain
         const aaplHoldings = result.holdings.filter(h => h.symbol === 'AAPL');
+
         expect(aaplHoldings).toHaveLength(0);
         const msftHoldings = result.holdings.filter(h => h.symbol === 'MSFT');
+
         expect(msftHoldings).toHaveLength(1);
         expect(msftHoldings[0].quantity).toBe(30);
     });
@@ -204,9 +270,11 @@ describe('FifoEngine', () => {
         // Holdings: AAPL with 0 left (5-2-3), MSFT with 5 across 2 lots (3 at 200, 2 at 220)
         const aaplHoldings = result.holdings.filter(h => h.symbol === 'AAPL');
         const msftHoldings = result.holdings.filter(h => h.symbol === 'MSFT');
+
         expect(aaplHoldings).toHaveLength(0);
         expect(msftHoldings).toHaveLength(2);
         const totalMsftQty = msftHoldings.reduce((sum, h) => sum + h.quantity, 0);
+
         expect(totalMsftQty).toBe(5);
     });
 });

@@ -78,10 +78,15 @@ export const en = {
     'button.export': 'Export Excel',
     'button.reset': 'Reset All Data',
     'button.addHolding': 'Add Holding',
+    'button.removeExecuted': 'Remove Executed',
+    'button.removeExecutedDesc': 'Remove holdings that were fully consumed by FIFO matching',
+    'button.markNotSold': 'Mark as not sold — restore this holding',
     'button.addSale': 'Add Sale',
     'button.addDividend': 'Add Dividend',
     'button.addInterest': 'Add Interest Entry',
     'button.delete': 'Delete',
+    'button.edit': 'Edit row',
+    'button.split': 'Split row',
     'confirm.deleteRow': 'Are you sure you want to delete this row?',
     'button.addRow': 'Add Row',
     'button.showAll': 'Show all',
@@ -98,6 +103,9 @@ export const en = {
     'label.validationWarnings': 'Validation Warnings',
     'label.allDismissed': 'All warnings dismissed',
     'label.totalTax': 'Total Tax Due',
+
+    // Warnings
+    'warning.consumedHoldings': 'You have {count} holding(s) marked as sold. Remove them from the Holdings tab before exporting.',
 
     // Import page labels
     'import.fresh': 'Start fresh',
@@ -148,6 +156,7 @@ export const en = {
     'col.amountBase': 'Amount',
     'col.qty': 'Qty',
     'col.source': 'Source',
+    'col.consumedBy': 'Consumed By',
 
     // Summary labels
     'summary.total': 'Total',

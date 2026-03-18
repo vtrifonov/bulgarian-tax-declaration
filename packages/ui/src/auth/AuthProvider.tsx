@@ -1,3 +1,10 @@
+import { t } from '@bg-tax/core';
+import type { User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+    doc,
+    getDoc,
+} from 'firebase/firestore';
 import {
     createContext,
     useContext,
@@ -5,13 +12,7 @@ import {
     useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged } from 'firebase/auth';
-import {
-    doc,
-    getDoc,
-} from 'firebase/firestore';
-import { t } from '@bg-tax/core';
+
 import {
     auth,
     db,
@@ -48,13 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAccess = async (firebaseUser: User) => {
         try {
             setError(null);
+
             if (!firebaseUser.email) {
                 setError(t('auth.error.noEmail'));
                 setAllowed(null);
+
                 return;
             }
             const docRef = doc(db, 'allowedUsers', firebaseUser.email);
             const docSnap = await getDoc(docRef);
+
             setAllowed(docSnap.exists());
         } catch (err) {
             console.error('Access check failed:', err);
@@ -66,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             setUser(firebaseUser);
+
             if (firebaseUser) {
                 setLoading(true);
                 setAllowed(null);
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             setLoading(false);
         });
+
         return unsubscribe;
     }, []);
 
@@ -89,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (user) {
             setLoading(true);
             setAllowed(null);
-            checkAccess(user).then(() => setLoading(false));
+            void checkAccess(user).then(() => setLoading(false));
         }
     };
 

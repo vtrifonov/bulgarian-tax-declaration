@@ -3,8 +3,9 @@ import {
     expect,
     it,
 } from 'vitest';
-import { mapToDeclaration } from '../../src/declaration/mapper.js';
+
 import formConfig2025 from '../../src/declaration/form-config/2025.json';
+import { mapToDeclaration } from '../../src/declaration/mapper.js';
 
 describe('mapToDeclaration', () => {
     it('maps tax results to declaration sections', () => {

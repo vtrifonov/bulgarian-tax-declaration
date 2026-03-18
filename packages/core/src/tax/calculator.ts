@@ -47,6 +47,11 @@ export class TaxCalculator {
         let totalCost = 0;
 
         for (const sale of sales) {
+            // Skip incomplete sales (missing buy date or FX rates)
+            if (!sale.dateAcquired || sale.fxRateBuy === undefined || sale.fxRateBuy === null || sale.fxRateSell === undefined || sale.fxRateSell === null) {
+                continue;
+            }
+
             const proceeds = sale.quantity * sale.sellPrice * sale.fxRateSell;
             const cost = sale.quantity * sale.buyPrice * sale.fxRateBuy;
 

@@ -1,8 +1,4 @@
 import {
-    useMemo,
-    useState,
-} from 'react';
-import {
     calcDividendRowTax,
     generateExcel,
     generateNraAppendix8,
@@ -11,19 +7,41 @@ import {
     TaxCalculator,
     toBaseCurrency,
 } from '@bg-tax/core';
-import { useAppStore } from '../store/app-state';
+import {
+    useMemo,
+    useState,
+} from 'react';
+
+import {
+    applySorting,
+    useAppStore,
+} from '../store/app-state';
 
 export function Declaration() {
     const {
-        holdings,
-        sales,
-        dividends,
+        holdings: unsortedHoldings,
+        sales: unsortedSales,
+        dividends: unsortedDividends,
         stockYield,
         brokerInterest,
         fxRates,
         baseCurrency,
         taxYear,
+        tableSorting,
     } = useAppStore();
+
+    const holdings = useMemo(
+        () => applySorting(unsortedHoldings, tableSorting.holdings ?? []),
+        [unsortedHoldings, tableSorting.holdings],
+    );
+    const sales = useMemo(
+        () => applySorting(unsortedSales, tableSorting.sales ?? []),
+        [unsortedSales, tableSorting.sales],
+    );
+    const dividends = useMemo(
+        () => applySorting(unsortedDividends, tableSorting.dividends ?? []),
+        [unsortedDividends, tableSorting.dividends],
+    );
 
     // Calculate tax results
     const calculator = new TaxCalculator(baseCurrency);
@@ -37,10 +55,12 @@ export function Declaration() {
     // Calculate broker interest tax (all brokers)
     let brokerInterestTotalGross = 0;
     let brokerInterestTotalTax = 0;
+
     for (const bi of brokerInterest) {
         if (bi.entries.length > 0) {
             const entrySum = bi.entries.reduce((sum, e) => sum + e.amount, 0);
             const entryBase = toBaseCurrency(entrySum, bi.currency, `${taxYear}-06-30`, 'BGN', fxRates);
+
             if (!isNaN(entryBase)) {
                 brokerInterestTotalGross += entryBase;
                 brokerInterestTotalTax += entryBase * 0.1;
@@ -63,6 +83,7 @@ export function Declaration() {
             .map(h => {
                 const totalCcy = h.quantity * h.unitPrice;
                 const totalBgn = toBaseCurrency(totalCcy, h.currency, h.dateAcquired, 'BGN', fxRates);
+
                 return {
                     symbol: h.symbol,
                     country: h.country,
@@ -72,12 +93,12 @@ export function Declaration() {
                     totalCcy,
                     totalBgn: isNaN(totalBgn) ? totalCcy : totalBgn,
                 };
-            })
-            .sort((a, b) => a.symbol.localeCompare(b.symbol));
+            });
     }, [holdings, fxRates]);
 
     const formatDate = (iso: string): string => {
         const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
         return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
     };
 
@@ -85,6 +106,7 @@ export function Declaration() {
     const salesTable2 = useMemo(() => {
         const toBgn = (amount: number, ccy: string, date: string) => {
             const v = toBaseCurrency(amount, ccy, date, 'BGN', fxRates);
+
             return isNaN(v) ? amount : v;
         };
 
@@ -94,14 +116,21 @@ export function Declaration() {
         let totalLosses = 0;
 
         for (const s of sales) {
-            if (!s.symbol || s.quantity === 0) continue;
+            if (!s.symbol || s.quantity === 0) {
+                continue;
+            }
             const proceeds = toBgn(s.quantity * s.sellPrice, s.currency, s.dateSold);
             const cost = toBgn(s.quantity * s.buyPrice, s.currency, s.dateAcquired);
+
             totalProceeds += proceeds;
             totalCost += cost;
             const pl = proceeds - cost;
-            if (pl > 0) totalGains += pl;
-            else totalLosses += Math.abs(pl);
+
+            if (pl > 0) {
+                totalGains += pl;
+            } else {
+                totalLosses += Math.abs(pl);
+            }
         }
 
         const row5 = Math.max(0, totalGains - totalLosses); // difference (0 if negative)
@@ -125,6 +154,7 @@ export function Declaration() {
                     'BGN',
                     fxRates,
                 );
+
                 return {
                     symbol: d.symbol,
                     country: d.country,
@@ -153,8 +183,11 @@ export function Declaration() {
     const rowBorder: React.CSSProperties = { borderBottom: '1px solid var(--border)' };
 
     const renderSection = (key: string, title: string, subtitle: string, show: boolean, content: () => React.ReactNode) => {
-        if (!show) return null;
+        if (!show) {
+            return null;
+        }
         const isCollapsed = collapsed[key] ?? false;
+
         return (
             <div key={key} style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', marginBottom: '1rem', overflow: 'hidden' }}>
                 <div
@@ -221,6 +254,7 @@ export function Declaration() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const filename = `Данъчна_${taxYear}.xlsx`;
+
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
@@ -253,6 +287,7 @@ export function Declaration() {
             const filename = `Приложение_8_Част_I_${taxYear}.xlsx`;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
+
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
@@ -269,11 +304,11 @@ export function Declaration() {
         }
     };
 
-    const [nra3Exporting, setNra3Exporting] = useState(false);
-    const [nra3Success, setNra3Success] = useState<string | null>(null);
-    const [nra3Error, setNra3Error] = useState<string | null>(null);
+    const [_nra3Exporting, setNra3Exporting] = useState(false);
+    const [_nra3Success, setNra3Success] = useState<string | null>(null);
+    const [_nra3Error, setNra3Error] = useState<string | null>(null);
 
-    const handleExportNraPart3 = async () => {
+    const _handleExportNraPart3 = async () => {
         setNra3Exporting(true);
         setNra3Success(null);
         setNra3Error(null);
@@ -285,6 +320,7 @@ export function Declaration() {
             const filename = `Приложение_8_Част_III_${taxYear}.xlsx`;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
+
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
@@ -354,6 +390,26 @@ export function Declaration() {
             <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
                 Данъчна година {taxYear} • Базова валута {baseCurrency}
             </p>
+
+            {holdings.filter(h => h.consumedByFifo).length > 0 && (
+                <div
+                    style={{
+                        padding: '0.75rem 1rem',
+                        marginBottom: '1.5rem',
+                        backgroundColor: 'rgba(255, 193, 7, 0.12)',
+                        border: '1px solid rgba(255, 193, 7, 0.4)',
+                        borderRadius: '4px',
+                        color: 'var(--text)',
+                        fontSize: '0.9rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                    }}
+                >
+                    <span style={{ fontSize: '1.1rem' }}>⚠</span>
+                    {t('warning.consumedHoldings').replace('{count}', String(holdings.filter(h => h.consumedByFifo).length))}
+                </div>
+            )}
 
             {renderSection('p5t2', 'Приложение 5, Таблица 2', 'Доходи от продажба или замяна на финансови активи (код 508)', sales.length > 0, () => (
                 <>
