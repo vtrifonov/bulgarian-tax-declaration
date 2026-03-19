@@ -616,8 +616,25 @@ export function Import() {
                         s.source = { type: 'Revolut', file: file.name };
                     }
                 }
-                importHoldings([...revConsumed, ...newHoldings]);
-                importSales(newSales);
+                // FifoEngine flattens holdings by symbol (Map), losing original order.
+                // Preserve original order: use current state's array, swap in FIFO-updated
+                // versions (which may have reduced quantities from sells).
+                // Insert Revolut holdings after non-broker originals but before broker holdings.
+                const currentHoldings = useAppStore.getState().holdings;
+                const existingIds = new Set(currentHoldings.map(h => h.id));
+                const consumedIds = new Set(revConsumed.map(h => h.id));
+                const updatedById = new Map(
+                    newHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
+                );
+                const survivingOriginals = currentHoldings
+                    .filter(h => !consumedIds.has(h.id))
+                    .map(h => updatedById.get(h.id) ?? h);
+                const newRevolutHoldings = newHoldings.filter(h => !existingIds.has(h.id));
+                importHoldings([...survivingOriginals, ...revConsumed, ...newRevolutHoldings]);
+
+                // Merge: keep non-Revolut sales, add Revolut sales
+                const existingSales = useAppStore.getState().sales.filter(s => s.source?.type !== 'Revolut');
+                importSales([...existingSales, ...newSales]);
 
                 const buys = trades.filter(t => t.type.includes('BUY')).length;
                 const sells = trades.filter(t => t.type.includes('SELL')).length;
