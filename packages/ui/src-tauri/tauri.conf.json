@@ -30,9 +30,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "../../../scripts/nra-fill-form.mjs"
+    ],
     "macOS": {
       "signingIdentity": "-"
     }
   },
-  "plugins": {}
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
 }

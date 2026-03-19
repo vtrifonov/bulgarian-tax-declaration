@@ -8,3 +8,5 @@ target/
 coverage/
 .serena/
 docs/superpowers/
+/.superpowers/
+packages/ui/src-tauri/gen/

@@ -6,11 +6,42 @@
     "core:default",
     "dialog:default",
     "fs:default",
+    "fs:allow-temp-write",
     {
       "identifier": "http:default",
       "allow": [
         { "url": "https://api.openfigi.com/*" }
       ]
-    }
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "npx",
+          "cmd": "npx",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    },
+    "shell:allow-stdin-write",
+    "shell:allow-open"
   ]
 }

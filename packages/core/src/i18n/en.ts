@@ -219,4 +219,17 @@ export const en = {
     'button.downloadTemplate': 'Download template (CSV)',
     'confirm.resetAll': 'This will clear all imported data. Are you sure?',
     'privacy.notice': 'Your tax data is stored only locally. Nothing is sent to any server.',
+
+    // NRA form filler
+    'nra.fill.button': 'Fill NRA Form',
+    'nra.fill.launching': 'Launching browser...',
+    'nra.fill.waiting': 'Waiting for form...',
+    'nra.fill.fillNow': 'Fill Now',
+    'nra.fill.progress': 'Filling... ({current}/{total})',
+    'nra.fill.countryPrompt': 'Select country in browser',
+    'nra.fill.done': 'Filled ({count} rows)',
+    'nra.fill.error': 'Error',
+    'nra.fill.nodeRequired': 'Node.js (>= 20) not found. Install from https://nodejs.org/en/download',
+    'nra.fill.noDividends': 'No dividends to fill',
+    'nra.fill.installingChromium': 'Installing Chromium...',
 };
