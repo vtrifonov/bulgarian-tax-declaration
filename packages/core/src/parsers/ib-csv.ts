@@ -52,6 +52,9 @@ export function parseIBCsv(csv: string): IBParsedData {
     const instrumentAliases: Array<{ symbols: string[]; primarySymbol: string }> = [];
     const symbolExchanges: Record<string, string> = {};
     const columnMaps: Record<string, ColMap> = {};
+    let brokerName: string | undefined;
+    const cashBalances: { currency: string; amountStartOfYear: number; amountEndOfYear: number }[] = [];
+    const isinMap: Record<string, string> = {};
 
     for (const fields of lines) {
         const section = fields[0];
@@ -73,13 +76,47 @@ export function parseIBCsv(csv: string): IBParsedData {
             continue;
         }
 
-        if (section === 'Financial Instrument Information' && col(fields, colMap, 'Asset Category') === 'Stocks') {
+        if (section === 'Statement' && rowType === 'Data') {
+            const fieldName = col(fields, colMap, 'Field Name');
+
+            if (fieldName === 'BrokerName') {
+                brokerName = col(fields, colMap, 'Field Value');
+            }
+        } else if (section === 'Cash Report' && rowType === 'Data') {
+            const summary = col(fields, colMap, 'Currency Summary');
+            const currency = col(fields, colMap, 'Currency');
+
+            if (currency === 'Base Currency Summary') {
+                continue;
+            }
+
+            if (summary === 'Starting Cash' || summary === 'Ending Cash') {
+                const amount = parseFloat(col(fields, colMap, 'Total'));
+
+                if (isNaN(amount)) {
+                    continue;
+                }
+                let entry = cashBalances.find(b => b.currency === currency);
+
+                if (!entry) {
+                    entry = { currency, amountStartOfYear: 0, amountEndOfYear: 0 };
+                    cashBalances.push(entry);
+                }
+
+                if (summary === 'Starting Cash') {
+                    entry.amountStartOfYear = amount;
+                } else {
+                    entry.amountEndOfYear = amount;
+                }
+            }
+        } else if (section === 'Financial Instrument Information' && col(fields, colMap, 'Asset Category') === 'Stocks') {
             // field "Symbol" = "CSPX, SXR8" or "ZPRG, GLDV" or just "AAPL" or "ISPAd"
             // field "Underlying" = underlying/primary symbol (e.g. "ISPA" for "ISPAd")
             // field "Listing Exch" = listing exchange (e.g. "NASDAQ", "IBIS", "SEHK")
             const rawSymbols = col(fields, colMap, 'Symbol');
             const primarySymbol = col(fields, colMap, 'Underlying') || rawSymbols;
             const exchange = col(fields, colMap, 'Listing Exch');
+            const securityId = col(fields, colMap, 'Security ID');
             const symbols = rawSymbols.split(',').map(s => s.trim()).filter(Boolean);
 
             if (symbols.length > 1 || (symbols.length === 1 && symbols[0] !== primarySymbol)) {
@@ -89,6 +126,13 @@ export function parseIBCsv(csv: string): IBParsedData {
             // Map primary symbol to exchange
             if (primarySymbol && exchange) {
                 symbolExchanges[primarySymbol] = exchange;
+            }
+
+            // Extract ISIN mapping for SPB-8
+            if (securityId) {
+                for (const sym of symbols) {
+                    isinMap[sym] = securityId;
+                }
             }
         } else if (section === 'Open Positions' && col(fields, colMap, 'DataDiscriminator') === 'Summary' && col(fields, colMap, 'Asset Category') === 'Stocks') {
             const pos = parseOpenPosition(fields, colMap);
@@ -181,7 +225,19 @@ export function parseIBCsv(csv: string): IBParsedData {
 
     const dividends = combineDividends(rawDividends);
 
-    return { trades, dividends, withholdingTax, stockYield, interest, openPositions, symbolAliases, symbolExchanges };
+    return {
+        trades,
+        dividends,
+        withholdingTax,
+        stockYield,
+        interest,
+        openPositions,
+        symbolAliases,
+        symbolExchanges,
+        brokerName: brokerName || undefined,
+        cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
+        isinMap: Object.keys(isinMap).length > 0 ? isinMap : undefined,
+    };
 }
 
 /** Check if field is a currency code (data row), not a Total/SubTotal line */

@@ -500,6 +500,7 @@ export function DataTable<TData extends Record<string, any>>({
 
             return () => clearTimeout(timer);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-run when editingRowIndex changes
     }, [editingRowIndex]);
 
     return (

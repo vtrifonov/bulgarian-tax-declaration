@@ -62,6 +62,11 @@ function detectFileType(content: string, filename: string): ImportedFile['type']
         return 'revolut';
     }
 
+    // Revolut account statement (current account with balance column)
+    if (content.startsWith('Type,Product,Started Date') && content.includes('Balance')) {
+        return 'revolut-account';
+    }
+
     // Revolut Investments yearly statement
     if (content.startsWith('Date,Ticker,Type')) {
         return 'revolut-investments';
@@ -99,6 +104,7 @@ export function Import() {
         brokerInterest,
         importedFiles,
         addImportedFile,
+        setForeignAccounts,
     } = useAppStore();
 
     // Auto-fetch FX rates when new currencies are detected — includes prior-year dates
@@ -431,7 +437,35 @@ export function Import() {
                 const consumedIds = new Set(fifoConsumed.map(h => h.id));
                 const remainingNonIb = existingNonIb.filter(h => !consumedIds.has(h.id));
 
-                importHoldings([...remainingNonIb, ...fifoConsumed, ...finalHoldings]);
+                // Apply ISIN map to all holdings (for SPB-8)
+                const allHoldings = [...remainingNonIb, ...fifoConsumed, ...finalHoldings];
+
+                if (parsed.isinMap) {
+                    for (const h of allHoldings) {
+                        if (!h.isin && parsed.isinMap[h.symbol]) {
+                            h.isin = parsed.isinMap[h.symbol];
+                        }
+                    }
+                }
+                importHoldings(allHoldings);
+
+                // Store foreign account balances from IB Cash Report (for SPB-8)
+                if (parsed.cashBalances && parsed.cashBalances.length > 0) {
+                    const ibCountry = parsed.brokerName?.includes('Ireland') ? 'IE' : 'US';
+                    const ibAccounts = parsed.cashBalances.map(b => ({
+                        broker: parsed.brokerName ?? 'Interactive Brokers',
+                        type: '03' as const,
+                        maturity: 'L' as const,
+                        country: ibCountry,
+                        currency: b.currency,
+                        amountStartOfYear: b.amountStartOfYear,
+                        amountEndOfYear: b.amountEndOfYear,
+                    }));
+
+                    const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
+
+                    setForeignAccounts([...currentAccounts.filter(a => a.broker !== (parsed.brokerName ?? 'Interactive Brokers')), ...ibAccounts]);
+                }
 
                 const buys = parsed.trades.filter(t => t.quantity > 0).length;
                 const sells = parsed.trades.filter(t => t.quantity < 0).length;
@@ -529,6 +563,21 @@ export function Import() {
                     status: 'success',
                     message: `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings${warnMsg}`,
                 });
+            } else if (fileType === 'revolut-account') {
+                const { parseRevolutAccountStatement } = await import('@bg-tax/core');
+                const account = parseRevolutAccountStatement(content);
+                // Read latest state directly to avoid stale closure when multiple files imported
+                const existing = useAppStore.getState().foreignAccounts ?? [];
+                // Replace any existing Revolut account with same currency
+                const filtered = existing.filter(a => !(a.broker === 'Revolut' && a.currency === account.currency));
+
+                setForeignAccounts([...filtered, account]);
+                addImportedFile({
+                    name: file.name,
+                    type: 'revolut-account',
+                    status: 'success',
+                    message: `${account.currency}: start ${account.amountStartOfYear.toFixed(2)}, end ${account.amountEndOfYear.toFixed(2)}`,
+                });
             } else {
                 const revolut: BrokerInterest = parseRevolutCsv(content);
                 const existing = useAppStore.getState().brokerInterest;
@@ -575,7 +624,7 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             });
         }
-    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear]);
+    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear, setForeignAccounts]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {

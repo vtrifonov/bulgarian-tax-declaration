@@ -10,7 +10,11 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://api.openfigi.com/*" }
+        { "url": "https://api.openfigi.com/*" },
+        { "url": "https://stooq.com/*" },
+        { "url": "https://query1.finance.yahoo.com/*" },
+        { "url": "https://data-api.ecb.europa.eu/*" },
+        { "url": "https://api.twelvedata.com/*" }
       ]
     },
     {

@@ -13,6 +13,7 @@ export interface Holding {
     currency: string;
     unitPrice: number;
     notes?: string;
+    isin?: string;
     source?: DataSource;
     /** Marked true when FIFO matching fully consumed this lot */
     consumedByFifo?: boolean;
@@ -83,6 +84,8 @@ export interface AppState {
     brokerInterest: BrokerInterest[];
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
     manualEntries: ManualEntry[];
+    foreignAccounts?: ForeignAccountBalance[];
+    spb8PersonalData?: Spb8PersonalData;
 }
 
 /** Validation warning — non-blocking */
@@ -122,6 +125,9 @@ export interface IBParsedData {
     symbolAliases: Record<string, string>;
     /** Maps primary symbol → listing exchange (e.g. "NASDAQ", "IBIS", "SEHK") */
     symbolExchanges: Record<string, string>;
+    brokerName?: string;
+    cashBalances?: { currency: string; amountStartOfYear: number; amountEndOfYear: number }[];
+    isinMap?: Record<string, string>;
 }
 
 export interface Trade {
@@ -149,6 +155,58 @@ export interface IBWithholdingTax {
     symbol: string;
     description: string;
     amount: number; // negative = tax paid
+}
+
+/** Foreign account balance for SPB-8 Section 03 */
+export interface ForeignAccountBalance {
+    broker: string;
+    type: '01' | '02' | '03';
+    maturity: 'L' | 'S';
+    country: string;
+    currency: string;
+    amountStartOfYear: number;
+    amountEndOfYear: number;
+    /** Computed: end-of-year value in BGN (for threshold display, not exported) */
+    amountEndOfYearBgn?: number;
+}
+
+/** Securities holding snapshot for SPB-8 Section 04 */
+export interface Spb8Security {
+    isin: string;
+    currency: string;
+    quantityStartOfYear: number;
+    quantityEndOfYear: number;
+    /** Market price per unit at year-end (user-provided for threshold calculation) */
+    priceEndOfYear?: number;
+    /** Computed: end-of-year value in base currency (for threshold display, not exported) */
+    amountEndOfYearBgn?: number;
+}
+
+/** Personal data for SPB-8 Section 1 (all optional) */
+export interface Spb8PersonalData {
+    name?: string;
+    egn?: string;
+    address?: {
+        city?: string;
+        postalCode?: string;
+        district?: string;
+        street?: string;
+        number?: string;
+        entrance?: string;
+    };
+    phone?: string;
+    email?: string;
+}
+
+/** Complete SPB-8 form data (computed, not stored) */
+export interface Spb8FormData {
+    year: number;
+    reportType: 'P' | 'R';
+    personalData: Spb8PersonalData;
+    accounts: ForeignAccountBalance[];
+    securities: Spb8Security[];
+    thresholdMet: boolean;
+    totalBgn: number;
 }
 
 /** Parse error — non-fatal, collected alongside parsed data */

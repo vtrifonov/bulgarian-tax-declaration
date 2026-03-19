@@ -93,6 +93,9 @@ importers:
       firebase:
         specifier: ^12.10.0
         version: 12.10.0
+      idb-keyval:
+        specifier: ^6.2.2
+        version: 6.2.2
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -2468,6 +2471,9 @@ packages:
 
   http-parser-js@0.5.10:
     resolution: {integrity: sha512-Pysuw9XpUq5dVc/2SMHpuTY01RFl8fttgcyunjL7eEMhGM3cI4eOmiCycJDVCo/7O7ClfQD3SaI6ftDzqOXYMA==}
+
+  idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
 
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
@@ -6274,6 +6280,8 @@ snapshots:
   html-escaper@2.0.2: {}
 
   http-parser-js@0.5.10: {}
+
+  idb-keyval@6.2.2: {}
 
   idb@7.1.1: {}
 

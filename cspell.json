@@ -8,7 +8,19 @@
     "**/dist",
     "**/build",
     "coverage",
-    "**/src-tauri/gen"
+    "**/src-tauri/gen",
+    "**/target",
+    "**/*.d.ts",
+    "**/*.svg",
+    "**/*.xls",
+    "**/*.xlsx",
+    "pnpm-lock.yaml",
+    "**/*.toml",
+    "**/*.plist",
+    "**/*.applescript",
+    "samples/**",
+    "templates/**",
+    "**/tests/fixtures/**"
   ],
   "import": ["@cspell/dict-bg-bg/cspell-ext.json"],
   "dictionaryDefinitions": [

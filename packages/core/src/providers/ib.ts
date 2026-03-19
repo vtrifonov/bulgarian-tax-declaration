@@ -36,6 +36,16 @@ export const ibProvider: BrokerProvider = {
                     interest: parsed.interest,
                     stockYield: parsed.stockYield,
                     openPositions: parsed.openPositions,
+                    foreignAccounts: parsed.cashBalances?.map(b => ({
+                        broker: parsed.brokerName ?? 'Interactive Brokers',
+                        type: '03' as const,
+                        maturity: 'L' as const,
+                        country: parsed.brokerName?.includes('Ireland') ? 'IE' : 'US',
+                        currency: b.currency,
+                        amountStartOfYear: b.amountStartOfYear,
+                        amountEndOfYear: b.amountEndOfYear,
+                    })),
+                    isinMap: parsed.isinMap,
                 };
             },
         },

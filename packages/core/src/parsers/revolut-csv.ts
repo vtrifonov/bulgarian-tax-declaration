@@ -107,7 +107,67 @@ function parseRevolutDate(raw: string): string {
     return `${year}-${month}-${day.padStart(2, '0')}`;
 }
 
-function parseCSVRow(row: string): string[] {
+const ISIN_REGEX = /[A-Z]{2}[A-Z0-9]{9}[0-9]/;
+
+export interface RevolutSavingsPosition {
+    isin: string;
+    currency: string;
+    quantityStartOfYear: number;
+    quantityEndOfYear: number;
+}
+
+export function parseRevolutSavingsPositions(csv: string): RevolutSavingsPosition {
+    const lines = csv.split('\n').filter(l => l.trim());
+
+    if (lines.length === 0) {
+        throw new Error('Empty CSV');
+    }
+
+    const currency = detectCurrency(lines[0]);
+    let isin = '';
+    let totalBought = 0;
+    let totalSold = 0;
+
+    // Lines are in reverse chronological order (newest first)
+    for (let i = 1; i < lines.length; i++) {
+        const fields = parseCSVRow(lines[i]);
+        const description = fields[1]?.trim() ?? '';
+
+        // Extract ISIN from first matching line
+        if (!isin) {
+            const match = description.match(ISIN_REGEX);
+
+            if (match) {
+                isin = match[0];
+            }
+        }
+
+        if (description.startsWith('BUY')) {
+            const qtyStr = fields[4]?.trim() ?? '';
+            const qty = parseFloat(qtyStr.replace(/,/g, ''));
+
+            if (!isNaN(qty)) {
+                totalBought += qty;
+            }
+        } else if (description.startsWith('SELL')) {
+            const qtyStr = fields[4]?.trim() ?? '';
+            const qty = parseFloat(qtyStr.replace(/,/g, ''));
+
+            if (!isNaN(qty)) {
+                totalSold += qty;
+            }
+        }
+    }
+
+    return {
+        isin,
+        currency,
+        quantityStartOfYear: 0,
+        quantityEndOfYear: totalBought - totalSold,
+    };
+}
+
+export function parseCSVRow(row: string): string[] {
     const fields: string[] = [];
     let current = '';
     let inQuotes = false;

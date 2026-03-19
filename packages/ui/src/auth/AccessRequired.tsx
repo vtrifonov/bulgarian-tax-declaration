@@ -23,7 +23,7 @@ export function AccessRequired() {
         setLang(newLang);
         try {
             localStorage.setItem('bg-tax-language', newLang);
-        } catch {}
+        } catch { /* localStorage may be unavailable */ }
     };
 
     const handleCopyEmail = () => {

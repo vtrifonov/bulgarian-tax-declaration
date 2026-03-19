@@ -84,6 +84,20 @@ export const EXCHANGE_COUNTRY: Record<string, string> = {
 /** Runtime cache for resolved symbols (persists for session) */
 const resolvedCache: Record<string, string> = {};
 
+/** Get the current resolved country cache (for persistence) */
+export function getCountryCache(): Record<string, string> {
+    return { ...resolvedCache };
+}
+
+/** Restore country cache from persisted data */
+export function restoreCountryCache(cache: Record<string, string>): void {
+    for (const [symbol, country] of Object.entries(cache)) {
+        if (country && !resolvedCache[symbol]) {
+            resolvedCache[symbol] = country;
+        }
+    }
+}
+
 /** Sync — checks hardcoded map only (for tests, non-async contexts) */
 export function resolveCountrySync(symbol: string): string {
     return COUNTRY_MAP[symbol] ?? resolvedCache[symbol] ?? '';

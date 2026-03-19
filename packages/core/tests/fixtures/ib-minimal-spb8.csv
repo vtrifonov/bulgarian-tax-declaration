@@ -1,0 +1,33 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Statement,Data,Title,Activity Statement
+Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,USD,AAPL,"2025-03-10, 14:30:00",50,165.00,166.50,-8250.00,-2.50,8252.50,0,75.00,O
+Trades,Data,Order,Stocks,USD,AAPL,"2025-09-15, 10:00:00",-20,245.00,245.00,4900.00,-1.50,-3675.00,1225.00,0,O
+Trades,Data,Order,Stocks,EUR,VWCE,"2025-06-20, 09:15:00",10,132.50,133.00,-1325.00,-1.00,1326.00,0,5.00,O
+Trades,SubTotal,,Stocks,USD,AAPL,,30,,,-3350.00,-4.00,4577.50,1225.00,75.00,
+Trades,SubTotal,,Stocks,EUR,VWCE,,10,,,-1325.00,-1.00,1326.00,0,5.00,
+Trades,Total,,Stocks,USD,,,,,,-3350.00,-4.00,4577.50,1225.00,75.00,
+Trades,Total,,Stocks,EUR,,,,,,-1325.00,-1.00,1326.00,0,5.00,
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code
+Open Positions,Data,Summary,Stocks,USD,AAPL,150,1,168.35,25252.50,270.00,40500.00,15247.50,
+Open Positions,Data,Summary,Stocks,EUR,VWCE,30,1,135.25,4057.50,148.90,4467.00,409.50,
+Open Positions,Data,Summary,Stocks,USD,NVDA,25,1,280.00,7000.00,312.00,7800.00,800.00,
+Open Positions,Total,,Stocks,USD,,,,,32252.50,,48300.00,16047.50,
+Open Positions,Total,,Stocks,EUR,,,,,4057.50,,4467.00,409.50,
+Cash Report,Header,Currency Summary,Currency,Total,Securities,Futures,
+Cash Report,Data,Starting Cash,EUR,200.00,200.00,0,
+Cash Report,Data,Trades (Sales),EUR,175.50,175.50,0,
+Cash Report,Data,Trades (Purchase),EUR,-1.50,-1.50,0,
+Cash Report,Data,Commissions,EUR,-0.50,-0.50,0,
+Cash Report,Data,Ending Cash,EUR,373.50,373.50,0,
+Cash Report,Data,Starting Cash,USD,9697.00,9697.00,0,
+Cash Report,Data,Trades (Sales),USD,4898.50,4898.50,0,
+Cash Report,Data,Trades (Purchase),USD,-8575.00,-8575.00,0,
+Cash Report,Data,Commissions,USD,-5.50,-5.50,0,
+Cash Report,Data,Ending Cash,USD,3014.00,3014.00,0,
+Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+Financial Instrument Information,Data,Stocks,AAPL,APPLE INC,265598,US0378331005,AAPL,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,VWCE,VANGUARD FTSE ALL-WORLD,54279899,IE00BK5BQT80,VWCE,SWX,1,COMMON,
+Financial Instrument Information,Data,Stocks,"NVDA, NV",NVIDIA CORP,756733,US67066G1040,NV,NASDAQ,1,COMMON,

@@ -2,6 +2,7 @@ import type {
     BrokerProvider,
     BrokerProviderResult,
 } from './types.js';
+import { parseRevolutAccountStatement } from '../parsers/revolut-account.js';
 import { parseRevolutCsv } from '../parsers/revolut-csv.js';
 import { parseRevolutInvestmentsCsv } from '../parsers/revolut-investments.js';
 import type { Trade } from '../types/index.js';
@@ -41,6 +42,23 @@ export const revolutProvider: BrokerProvider = {
                 }));
 
                 return { trades };
+            },
+        },
+        {
+            id: 'revolut-account',
+            detectFile(content: string): boolean {
+                try {
+                    const firstLine = content.split('\n')[0] ?? '';
+
+                    return firstLine.includes('Product') && firstLine.includes('Balance') && firstLine.includes('State');
+                } catch {
+                    return false;
+                }
+            },
+            parseFile(content: string): BrokerProviderResult {
+                const account = parseRevolutAccountStatement(content);
+
+                return { foreignAccounts: [account] };
             },
         },
     ],

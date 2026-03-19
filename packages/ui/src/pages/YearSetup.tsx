@@ -26,6 +26,8 @@ export function YearSetup() {
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [cacheCleared, setCacheCleared] = useState(false);
+    const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleYearChange = (year: number) => {
@@ -318,6 +320,107 @@ export function YearSetup() {
                 >
                     {t('button.reset')}
                 </button>
+
+                <div style={{ marginTop: '1.5rem' }}>
+                    <button
+                        onClick={() => setShowClearCacheConfirm(true)}
+                        style={{
+                            padding: '0.3rem 0.8rem',
+                            fontSize: '0.8rem',
+                            backgroundColor: 'transparent',
+                            color: 'var(--text-secondary)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                        }}
+                    >
+                        {t('spb8.clearCachedData')}
+                    </button>
+                    {cacheCleared && (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                            ✓
+                        </span>
+                    )}
+                </div>
+
+                {showClearCacheConfirm && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000,
+                        }}
+                    >
+                        <div
+                            style={{
+                                backgroundColor: 'var(--bg)',
+                                borderRadius: '8px',
+                                padding: '1.5rem',
+                                maxWidth: '450px',
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                            }}
+                        >
+                            <p style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>
+                                {t('spb8.clearCachedData')}
+                            </p>
+                            <ul style={{ margin: '0 0 1.5rem', paddingLeft: '1.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <li>{t('spb8.clearCache.fxRates')}</li>
+                                <li>{t('spb8.clearCache.prices')}</li>
+                                <li>{t('spb8.clearCache.countries')}</li>
+                            </ul>
+                            <p style={{ margin: '0 0 1.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                {t('spb8.clearCache.note')}
+                            </p>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={() => setShowClearCacheConfirm(false)}
+                                    style={{
+                                        padding: '0.5rem 1.5rem',
+                                        fontSize: '0.9rem',
+                                        backgroundColor: 'var(--bg-secondary)',
+                                        color: 'var(--text)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {t('button.cancel')}
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        const { del } = await import('idb-keyval');
+
+                                        await Promise.all([
+                                            del('bg-tax-year-end-prices'),
+                                            del('bg-tax-fx-rates'),
+                                            del('bg-tax-country-cache'),
+                                        ]);
+                                        useAppStore.getState().setFxRates({});
+                                        useAppStore.getState().setYearEndPrices({});
+                                        setShowClearCacheConfirm(false);
+                                        setCacheCleared(true);
+                                        setTimeout(() => setCacheCleared(false), 3000);
+                                    }}
+                                    style={{
+                                        padding: '0.5rem 1.5rem',
+                                        fontSize: '0.9rem',
+                                        backgroundColor: '#dc3545',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {t('spb8.clearCachedData')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {showResetConfirm && (
                     <div
