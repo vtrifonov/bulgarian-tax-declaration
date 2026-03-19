@@ -1,0 +1,9 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Underlying,Listing Exch,Multiplier,Type,Code
+Financial Instrument Information,Data,Stocks,AAPL,APPLE INC,265598,US0378331005,AAPL,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,NVDA,NVIDIA CORP,4815747,US67066G1040,NVDA,NASDAQ,1,COMMON,
+Financial Instrument Information,Data,Stocks,ASML,ASML HOLDING NV,117589399,NL0010273215,ASML,AEB,1,COMMON,
+Financial Instrument Information,Data,Stocks,"ISPAd, ISPA",ISHR STOXX GBL SELDIV100 DE,74991988,DE000A0F5UH1,ISPA,IBIS,1,ETF,
+Financial Instrument Information,Data,Stocks,BABA,ALIBABA GROUP HOLDING-SP ADR,166090175,US01609W1027,BABA,NYSE,1,ADR,

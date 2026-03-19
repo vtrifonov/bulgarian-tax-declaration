@@ -9,7 +9,7 @@ import {
 } from 'eslint/config';
 
 export default defineConfig([
-    globalIgnores(['dist']),
+    globalIgnores(['dist', 'src-tauri/target']),
     {
         files: ['**/*.{ts,tsx}'],
         extends: [
@@ -21,6 +21,9 @@ export default defineConfig([
         languageOptions: {
             ecmaVersion: 2020,
             globals: globals.browser,
+        },
+        rules: {
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
         },
     },
 ]);

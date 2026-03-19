@@ -46,12 +46,12 @@ function formatQuantity(n: number): string {
 }
 
 // Helper to create an editable column definition
-function createEditableColumn<T extends Record<string, any>>(
+function createEditableColumn<T extends Record<string, unknown>>(
     accessorKey: keyof T,
     header: string,
     options?: {
         align?: 'left' | 'right' | 'center';
-        format?: (value: any) => string;
+        format?: (value: unknown) => string;
         onSave?: (rowIndex: number, value: string) => void;
         inputType?: 'text' | 'number' | 'date' | 'select';
         selectOptions?: string[];
@@ -750,7 +750,7 @@ export function Workspace() {
             id: 'costBase',
             header: `${t('col.costBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
-                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null) {
                     return '—';
                 }
 
@@ -763,7 +763,7 @@ export function Workspace() {
             id: 'plBase',
             header: `${t('col.plBase')} (${baseCurrency})`,
             accessorFn: (row: Sale) => {
-                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null || row.fxRateSell == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+                if ((!row.dateAcquired && needsDateForFx(row.currency, baseCurrency)) || row.fxRateBuy == null || row.fxRateSell == null) {
                     return '—';
                 }
                 const proceeds = parseFloat(toBaseCcy(row.quantity * row.sellPrice, row.currency, row.dateSold));
@@ -1224,7 +1224,7 @@ export function Workspace() {
 
         sales.forEach(sale => {
             // Skip incomplete sales (missing buy date or FX rates)
-            if (!sale.dateAcquired || sale.fxRateBuy == null || sale.fxRateSell == null) { // eslint-disable-line eqeqeq -- intentional null|undefined check
+            if (!sale.dateAcquired || sale.fxRateBuy == null || sale.fxRateSell == null) {
                 return;
             }
 
@@ -1405,7 +1405,7 @@ export function Workspace() {
     };
 
     // Build warning rows/messages for a given tab name
-    const buildWarningData = (tabName: string) => {
+    const buildWarningData = useCallback((tabName: string) => {
         const tabWarnings = warnings.filter(w => w.tab === tabName && w.rowIndex !== undefined);
         const rows = new Set<number>();
         const messages = new Map<number, string[]>();
@@ -1419,11 +1419,11 @@ export function Workspace() {
         }
 
         return { rows, messages };
-    };
+    }, [warnings]);
 
-    const holdingsWarnings = useMemo(() => buildWarningData('Holdings'), [warnings]);
-    const salesWarnings = useMemo(() => buildWarningData('Sales'), [warnings]);
-    const brokerInterestWarnings = useMemo(() => buildWarningData('Broker Interest'), [warnings]);
+    const holdingsWarnings = buildWarningData('Holdings');
+    const salesWarnings = buildWarningData('Sales');
+    const brokerInterestWarnings = buildWarningData('Broker Interest');
 
     const [showHoldingsWarningsOnly, setShowHoldingsWarningsOnly] = useState(false);
     const [showSalesWarningsOnly, setShowSalesWarningsOnly] = useState(false);
@@ -1475,7 +1475,7 @@ export function Workspace() {
         }
 
         return { rows, messages };
-    }, [warnings, sortedDividends, dividends]);
+    }, [warnings, sortedDividends]);
 
     const renderDividendsContent = () => {
         // Calculate summary totals — sum each column as displayed

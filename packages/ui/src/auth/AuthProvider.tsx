@@ -36,6 +36,7 @@ const AuthContext = createContext<AuthState>({
     retryAccess: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook and provider are co-located by convention
 export function useAuth() {
     return useContext(AuthContext);
 }

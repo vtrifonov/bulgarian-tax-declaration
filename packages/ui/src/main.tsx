@@ -12,7 +12,7 @@ try {
     if (saved === 'en' || saved === 'bg') {
         setLanguage(saved);
     }
-} catch {}
+} catch { /* localStorage may be unavailable */ }
 
 createRoot(document.getElementById('root')!).render(
     (

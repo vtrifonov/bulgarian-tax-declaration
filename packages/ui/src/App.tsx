@@ -6,8 +6,10 @@ import {
 import type {
     BrokerInterest,
     Dividend,
+    ForeignAccountBalance,
     Holding,
     Sale,
+    Spb8PersonalData,
     StockYieldEntry,
 } from '@bg-tax/core';
 import { useEffect } from 'react';
@@ -30,6 +32,7 @@ import {
 } from './hooks/useAutoSave';
 import { Declaration } from './pages/Declaration';
 import { Import } from './pages/Import';
+import { Spb8 } from './pages/Spb8';
 import { Workspace } from './pages/Workspace';
 import { YearSetup } from './pages/YearSetup';
 import {
@@ -50,20 +53,35 @@ const isTauri = typeof window !== 'undefined' && ('__TAURI__' in window || '__TA
 
 function Layout() {
     const location = useLocation();
-    const { language, setLanguage } = useAppStore();
+    const language = useAppStore(s => s.language);
+    const setLanguage = useAppStore(s => s.setLanguage);
+    const holdings = useAppStore(s => s.holdings);
+    const foreignAccounts = useAppStore(s => s.foreignAccounts);
     const { user, signOut } = useAuth();
 
-    // Auto-save state to localStorage
+    // Auto-save state to IndexedDB
     useAutoSave();
 
     // Load saved state on startup
     useEffect(() => {
-        const saved = loadAutoSave();
+        // Skip auto-load if ?reset is in the URL (emergency escape hatch)
+        if (window.location.search.includes('reset') || window.location.hash.includes('reset')) {
+            localStorage.clear();
+            console.log('All data cleared via ?reset');
+            window.location.href = window.location.pathname;
 
-        if (saved) {
+            return;
+        }
+
+        void (async () => {
+            const saved = await loadAutoSave();
+
+            if (!saved) {
+                return;
+            }
+
             const store = useAppStore.getState();
 
-            // Restore settings first (affects validation and FX conversion)
             if (saved.taxYear) {
                 store.setTaxYear(saved.taxYear as number);
             }
@@ -73,7 +91,6 @@ function Layout() {
                 setCoreLanguage(saved.language as 'en' | 'bg');
             }
 
-            // Then restore data
             if (saved.holdings) {
                 store.importHoldings(saved.holdings as Holding[]);
             }
@@ -109,13 +126,34 @@ function Layout() {
                     store.setTableSorting(table, sorting);
                 }
             }
-        }
+
+            if (saved.foreignAccounts && Array.isArray(saved.foreignAccounts)) {
+                store.setForeignAccounts(saved.foreignAccounts as ForeignAccountBalance[]);
+            }
+
+            if (saved.spb8PersonalData) {
+                store.setSpb8PersonalData(saved.spb8PersonalData as Spb8PersonalData);
+            }
+
+            if (saved.yearEndPrices && typeof saved.yearEndPrices === 'object') {
+                store.setYearEndPrices(saved.yearEndPrices as Record<string, number>);
+            }
+        })();
     }, []);
 
     // Keyboard shortcuts
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             const mod = e.metaKey || e.ctrlKey;
+
+            // Cmd+Shift+Backspace or Cmd+Shift+K: clear all cached data (emergency reset)
+            if (mod && e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'k')) {
+                e.preventDefault();
+                localStorage.clear();
+                window.location.reload();
+
+                return;
+            }
 
             if (mod && e.key === 'e') {
                 e.preventDefault();
@@ -131,7 +169,7 @@ function Layout() {
                     language: 'en',
                     manualEntries: [],
                 }).then(buffer => {
-                    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const blob = new Blob([buffer.buffer as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
 
@@ -157,7 +195,7 @@ function Layout() {
         setCoreLanguage(newLanguage);
         try {
             localStorage.setItem('bg-tax-language', newLanguage);
-        } catch {}
+        } catch { /* localStorage may be unavailable */ }
     };
 
     return (
@@ -196,6 +234,24 @@ function Layout() {
                             {t(step.labelKey)}
                         </Link>
                     ))}
+
+                    {(holdings.length > 0 || (foreignAccounts?.length ?? 0) > 0) && (
+                        <Link
+                            to='/spb8'
+                            style={{
+                                padding: '0.5rem 1.5rem',
+                                backgroundColor: location.pathname === '/spb8' ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: location.pathname === '/spb8' ? 'white' : 'var(--text-secondary)',
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {t('nav.spb8')}
+                        </Link>
+                    )}
 
                     <button
                         onClick={handleLanguageToggle}
@@ -240,6 +296,7 @@ function Layout() {
                     <Route path='/import' element={<Import />} />
                     <Route path='/workspace' element={<Workspace />} />
                     <Route path='/declaration' element={<Declaration />} />
+                    <Route path='/spb8' element={<Spb8 />} />
                 </Routes>
             </main>
         </div>

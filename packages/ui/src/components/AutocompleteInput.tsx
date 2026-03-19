@@ -36,9 +36,9 @@ export function AutocompleteInput({
         ? options.filter((o) => o.toLowerCase().includes(value.toLowerCase()))
         : options;
 
-    // Reset highlight when filtered list changes
+    // Reset highlight when value changes
     useEffect(() => {
-        setHighlightIdx(0);
+        setHighlightIdx(0); // eslint-disable-line react-hooks/set-state-in-effect -- resetting derived state on input change
     }, [value]);
 
     // Scroll highlighted item into view

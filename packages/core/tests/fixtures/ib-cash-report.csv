@@ -1,0 +1,14 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,BrokerName,Interactive Brokers Ireland Limited
+Statement,Data,Period,"January 1, 2025 - December 31, 2025"
+Cash Report,Header,Currency Summary,Currency,Total,Securities,Futures,
+Cash Report,Data,Starting Cash,Base Currency Summary,9903.66,9903.66,0,
+Cash Report,Data,Ending Cash,Base Currency Summary,3797.29,3797.29,0,
+Cash Report,Data,Starting Cash,EUR,200,200,0,
+Cash Report,Data,Commissions,EUR,-36.99,0,0,
+Cash Report,Data,Ending Cash,EUR,373.51,373.51,0,
+Cash Report,Data,Ending Settled Cash,EUR,373.51,373.51,0,
+Cash Report,Data,Starting Cash,USD,9696.60,9696.60,0,
+Cash Report,Data,Commissions,USD,-12.69,0,0,
+Cash Report,Data,Ending Cash,USD,3358.57,3358.57,0,
+Cash Report,Data,Ending Settled Cash,USD,3358.57,3358.57,0,

@@ -1,6 +1,7 @@
 import type {
     BrokerInterest,
     Dividend,
+    ForeignAccountBalance,
     IBOpenPosition,
     InterestEntry,
     StockYieldEntry,
@@ -15,6 +16,8 @@ export interface BrokerProviderResult {
     savingsInterest?: BrokerInterest;
     openPositions?: IBOpenPosition[];
     warnings?: string[];
+    foreignAccounts?: ForeignAccountBalance[];
+    isinMap?: Record<string, string>;
 }
 
 export interface FileHandler {

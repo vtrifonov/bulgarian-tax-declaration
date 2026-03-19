@@ -43,6 +43,23 @@ jobs:
           working-directory: packages/core
           json-summary-path: coverage/coverage-summary.json
 
+  lint-format-spell:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm --filter @bg-tax/ui lint
+      - run: pnpm spell
+
   build:
     runs-on: ubuntu-latest
     permissions:

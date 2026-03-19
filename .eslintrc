@@ -130,7 +130,7 @@
             "error",
             "single",
             {
-                "allowTemplateLiterals": true
+                "allowTemplateLiterals": "always"
             }
         ],
         "@stylistic/semi-spacing": "error",

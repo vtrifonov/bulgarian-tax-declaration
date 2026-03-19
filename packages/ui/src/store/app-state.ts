@@ -1,15 +1,17 @@
 import type {
     BrokerInterest,
     Dividend,
+    ForeignAccountBalance,
     Holding,
     Sale,
+    Spb8PersonalData,
     StockYieldEntry,
 } from '@bg-tax/core';
 import { create } from 'zustand';
 
 export interface ImportedFile {
     name: string;
-    type: 'ib' | 'revolut' | 'revolut-investments';
+    type: 'ib' | 'revolut' | 'revolut-investments' | 'revolut-account';
     status: 'success' | 'error';
     message: string;
 }
@@ -69,6 +71,18 @@ export interface AppState {
     // FX Rates
     setFxRates: (rates: Record<string, Record<string, number>>) => void;
 
+    // SPB-8 state
+    foreignAccounts: ForeignAccountBalance[];
+    spb8PersonalData: Spb8PersonalData;
+    setForeignAccounts: (accounts: ForeignAccountBalance[]) => void;
+    addForeignAccount: (account: ForeignAccountBalance) => void;
+    updateForeignAccount: (index: number, account: ForeignAccountBalance) => void;
+    deleteForeignAccount: (index: number) => void;
+    setSpb8PersonalData: (data: Spb8PersonalData) => void;
+    /** Year-end market prices per ISIN (keyed by `${year}:${isin}`) */
+    yearEndPrices: Record<string, number>;
+    setYearEndPrices: (prices: Record<string, number>) => void;
+
     // Imported files log
     addImportedFile: (file: ImportedFile) => void;
     clearImportedFiles: () => void;
@@ -117,6 +131,9 @@ const initialState = {
     fxRates: {} as Record<string, Record<string, number>>,
     importedFiles: [] as ImportedFile[],
     tableSorting: {} as Record<string, { id: string; desc: boolean }[]>,
+    foreignAccounts: [] as ForeignAccountBalance[],
+    spb8PersonalData: {} as Spb8PersonalData,
+    yearEndPrices: {} as Record<string, number>,
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -240,10 +257,38 @@ export const useAppStore = create<AppState>((set) => ({
             return { fxRates: merged };
         }),
 
+    setForeignAccounts: (accounts: ForeignAccountBalance[]) => set({ foreignAccounts: accounts }),
+    addForeignAccount: (account: ForeignAccountBalance) =>
+        set((state) => ({
+            foreignAccounts: [...state.foreignAccounts, account],
+        })),
+    updateForeignAccount: (index: number, account: ForeignAccountBalance) =>
+        set((state) => {
+            const accounts = [...state.foreignAccounts];
+
+            accounts[index] = account;
+
+            return { foreignAccounts: accounts };
+        }),
+    deleteForeignAccount: (index: number) =>
+        set((state) => ({
+            foreignAccounts: state.foreignAccounts.filter((_, i) => i !== index),
+        })),
+    setSpb8PersonalData: (data: Spb8PersonalData) => set({ spb8PersonalData: data }),
+    setYearEndPrices: (prices: Record<string, number>) => set({ yearEndPrices: prices }),
+
     addImportedFile: (file: ImportedFile) => set((state) => ({ importedFiles: [...state.importedFiles, file] })),
     clearImportedFiles: () => set({ importedFiles: [] }),
 
     setTableSorting: (table: string, sorting: { id: string; desc: boolean }[]) => set((state) => ({ tableSorting: { ...state.tableSorting, [table]: sorting } })),
 
-    reset: () => set(initialState),
+    reset: () =>
+        set((state) => ({
+            ...initialState,
+            // Preserve data that should survive a reset (expensive to re-fetch)
+            fxRates: state.fxRates,
+            yearEndPrices: state.yearEndPrices,
+            foreignAccounts: state.foreignAccounts,
+            spb8PersonalData: state.spb8PersonalData,
+        })),
 }));

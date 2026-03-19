@@ -251,7 +251,7 @@ export function Declaration() {
             };
 
             const buffer = await generateExcel(stateAsAppState);
-            const blob = new Blob([buffer], {
+            const blob = new Blob([buffer.buffer as ArrayBuffer], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             });
             const url = URL.createObjectURL(blob);
@@ -284,7 +284,7 @@ export function Declaration() {
         setNraError(null);
         try {
             const buffer = await generateNraAppendix8(holdings, fxRates);
-            const blob = new Blob([buffer], {
+            const blob = new Blob([buffer.buffer as ArrayBuffer], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             });
             const filename = `Приложение_8_Част_I_${taxYear}.xlsx`;
@@ -317,7 +317,7 @@ export function Declaration() {
         setNra3Error(null);
         try {
             const buffer = await generateNraAppendix8Part3(dividends, fxRates);
-            const blob = new Blob([buffer], {
+            const blob = new Blob([buffer.buffer as ArrayBuffer], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             });
             const filename = `Приложение_8_Част_III_${taxYear}.xlsx`;
@@ -734,7 +734,7 @@ export function Declaration() {
                                                 }
                                                 try {
                                                     void navigator.clipboard.writeText(nraFiller.script);
-                                                } catch {}
+                                                } catch { /* clipboard may be unavailable */ }
                                                 // Show feedback
                                                 const btn = e.currentTarget;
 

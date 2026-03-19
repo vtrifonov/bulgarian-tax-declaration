@@ -1,4 +1,12 @@
 export type * from './types/index.js';
+
+export {
+    cacheIsin,
+    cacheIsinsFromMap,
+    ISIN_MAP,
+    resolveIsinSync,
+    validateIsin,
+} from './isin-map.js';
 export { gapFillRates } from './fx/gap-fill.js';
 export {
     fetchEcbRates,
@@ -15,8 +23,12 @@ export {
 export { InMemoryFxCache } from './fx/fx-cache.js';
 export type { FxCache } from './fx/fx-cache.js';
 export { parseIBCsv } from './parsers/ib-csv.js';
-export { parseRevolutCsv } from './parsers/revolut-csv.js';
+export {
+    parseRevolutCsv,
+    parseRevolutSavingsPositions,
+} from './parsers/revolut-csv.js';
 export { parseRevolutInvestmentsCsv } from './parsers/revolut-investments.js';
+export { parseRevolutAccountStatement } from './parsers/revolut-account.js';
 export { matchWhtToDividends } from './parsers/wht-matcher.js';
 export {
     importHoldingsFromCsv,
@@ -25,9 +37,11 @@ export {
 export { importFullExcel } from './parsers/excel-full-import.js';
 export type { FullExcelImport } from './parsers/excel-full-import.js';
 export {
+    getCountryCache,
     resolveCountries,
     resolveCountry,
     resolveCountrySync,
+    restoreCountryCache,
 } from './country-map.js';
 export { providers } from './providers/registry.js';
 export type {
@@ -81,3 +95,11 @@ export { generateNraAppendix8 } from './excel/nra-appendix8.js';
 export { generateNraAppendix8Part3 } from './excel/nra-appendix8-part3.js';
 export { buildNraFormRows } from './nra/form-data.js';
 export type { NraFormRow } from './nra/form-data.js';
+export {
+    assembleSpb8,
+    fxToBaseCurrency,
+} from './spb8/assemble.js';
+export { generateSpb8Excel } from './spb8/excel-generator.js';
+export { fetchYearEndPrices } from './spb8/price-service.js';
+export type { YearEndPrice } from './spb8/price-service.js';
+export { importPreviousSpb8 } from './spb8/import.js';

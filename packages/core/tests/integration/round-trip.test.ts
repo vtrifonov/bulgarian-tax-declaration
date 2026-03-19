@@ -10,14 +10,17 @@ import {
 
 import {
     type AppState,
+    assembleSpb8,
     type BrokerInterest,
     calcDividendTax,
     FifoEngine,
     generateExcel,
     generateNraAppendix8,
+    generateSpb8Excel,
     type Holding,
     importFullExcel,
     importHoldingsFromCsv,
+    importPreviousSpb8,
     type InterestEntry,
     matchWhtToDividends,
     parseIBCsv,
@@ -2514,6 +2517,340 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             expect(reimported.holdings).toHaveLength(finalHoldings.length);
             expect(reimported.sales).toHaveLength(allSales.length);
+        });
+    });
+
+    describe('SPB-8 Form Tests', () => {
+        it('extracts foreignAccounts from IB Cash Report', async () => {
+            const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
+            const parsed = parseIBCsv(ibCsv);
+
+            // Cash Report section should populate cashBalances
+            expect(parsed.cashBalances).toBeDefined();
+            expect(parsed.cashBalances).toHaveLength(2);
+
+            const usd = parsed.cashBalances!.find(b => b.currency === 'USD');
+            const eur = parsed.cashBalances!.find(b => b.currency === 'EUR');
+
+            expect(usd).toBeDefined();
+            expect(usd!.amountStartOfYear).toBeCloseTo(10500, 2);
+            expect(usd!.amountEndOfYear).toBeCloseTo(5050.90, 2);
+
+            expect(eur).toBeDefined();
+            expect(eur!.amountStartOfYear).toBeCloseTo(400, 2);
+            expect(eur!.amountEndOfYear).toBeCloseTo(-1887.60, 2);
+        });
+
+        it('parses Revolut account CSV statement', async () => {
+            const revolutCsv = readFileSync(join(SAMPLES, 'revolut-account.csv'), 'utf-8');
+
+            // Verify file loads and has proper format
+            const lines = revolutCsv.split('\n');
+
+            expect(lines[0]).toContain('Type,Product,Started Date,Completed Date');
+            expect(lines.length).toBeGreaterThan(5);
+
+            // Verify data rows
+            const dataLines = lines.slice(1).filter(l => l.trim() && l.includes('COMPLETED'));
+
+            expect(dataLines.length).toBeGreaterThan(20);
+
+            // Check that all transactions are in EUR
+            for (const line of dataLines) {
+                expect(line).toContain(',EUR,COMPLETED,');
+            }
+        });
+
+        it('assembles SPB-8 from AppState with multiple currencies', async () => {
+            // Create test holdings with ISINs
+            const testHoldings: Holding[] = [
+                {
+                    id: 'h1',
+                    broker: 'IB',
+                    country: 'САЩ',
+                    symbol: 'GOOG',
+                    dateAcquired: '2025-02-05',
+                    quantity: 10,
+                    currency: 'USD',
+                    unitPrice: 178.25,
+                    isin: 'US02079K1079',
+                },
+                {
+                    id: 'h2',
+                    broker: 'IB',
+                    country: 'САЩ',
+                    symbol: 'MSFT',
+                    dateAcquired: '2024-06-01',
+                    quantity: 5,
+                    currency: 'USD',
+                    unitPrice: 415.50,
+                    isin: 'US5949181045',
+                },
+                {
+                    id: 'h3',
+                    broker: 'IB',
+                    country: 'Нидерландия',
+                    symbol: 'ASML',
+                    dateAcquired: '2024-01-14',
+                    quantity: 5,
+                    currency: 'EUR',
+                    unitPrice: 921.40,
+                    isin: 'NL0010273215',
+                },
+            ];
+
+            // Create foreign accounts from cash balances
+            const foreignAccounts = [
+                {
+                    broker: 'Interactive Brokers',
+                    type: '03' as const,
+                    maturity: 'L' as const,
+                    country: 'IE',
+                    currency: 'USD',
+                    amountStartOfYear: 10500,
+                    amountEndOfYear: 5050.90,
+                },
+                {
+                    broker: 'Interactive Brokers',
+                    type: '03' as const,
+                    maturity: 'L' as const,
+                    country: 'IE',
+                    currency: 'EUR',
+                    amountStartOfYear: 400,
+                    amountEndOfYear: -1887.60,
+                },
+            ];
+
+            const appState: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: testHoldings,
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 }, EUR: { '2025-12-31': 1 / 1.95583 } },
+                manualEntries: [],
+                foreignAccounts,
+            };
+
+            const personalData = { name: 'Test Person', egn: '1234567890' };
+            const spb8 = assembleSpb8(appState, personalData, 'P');
+
+            // Verify form data
+            expect(spb8.year).toBe(2025);
+            expect(spb8.reportType).toBe('P');
+            expect(spb8.accounts).toHaveLength(2); // USD and EUR
+            expect(spb8.securities.length).toBe(3);
+
+            // Verify accounts by currency
+            const usdAccount = spb8.accounts.find(a => a.currency === 'USD');
+
+            expect(usdAccount).toBeDefined();
+            expect(usdAccount!.amountStartOfYear).toBeCloseTo(10500, 2);
+
+            // Verify securities by ISIN
+            const googSecurity = spb8.securities.find(s => s.isin === 'US02079K1079');
+
+            expect(googSecurity).toBeDefined();
+            expect(googSecurity!.quantityEndOfYear).toBe(10);
+            expect(googSecurity!.currency).toBe('USD');
+        });
+
+        it('generates SPB-8 Excel with correct structure', async () => {
+            // Create test holdings with ISINs
+            const testHoldings: Holding[] = [
+                {
+                    id: 'h1',
+                    broker: 'IB',
+                    country: 'САЩ',
+                    symbol: 'GOOG',
+                    dateAcquired: '2025-02-05',
+                    quantity: 10,
+                    currency: 'USD',
+                    unitPrice: 178.25,
+                    isin: 'US02079K1079',
+                },
+                {
+                    id: 'h2',
+                    broker: 'IB',
+                    country: 'САЩ',
+                    symbol: 'MSFT',
+                    dateAcquired: '2024-06-01',
+                    quantity: 5,
+                    currency: 'USD',
+                    unitPrice: 415.50,
+                    isin: 'US5949181045',
+                },
+            ];
+
+            const foreignAccounts = [
+                {
+                    broker: 'Interactive Brokers',
+                    type: '03' as const,
+                    maturity: 'L' as const,
+                    country: 'IE',
+                    currency: 'USD',
+                    amountStartOfYear: 10500,
+                    amountEndOfYear: 5050.90,
+                },
+            ];
+
+            const appState: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: testHoldings,
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 } },
+                manualEntries: [],
+                foreignAccounts,
+            };
+
+            const personalData = { name: 'Test Person', egn: '1234567890' };
+            const spb8 = assembleSpb8(appState, personalData, 'P');
+
+            // Generate Excel
+            const buf = await generateSpb8Excel(spb8);
+
+            expect(buf).toBeInstanceOf(Uint8Array);
+            expect(buf.length).toBeGreaterThan(0);
+
+            // Verify sheet structure
+            const wb = new ExcelJS.Workbook();
+
+            await wb.xlsx.load(buf.buffer as ArrayBuffer);
+            const sheet = wb.getWorksheet('СПБ-8');
+
+            expect(sheet).toBeDefined();
+
+            // Verify year is written
+            const yearCell = sheet!.getRow(5).getCell(11);
+
+            expect(yearCell.value).toBe(2025);
+
+            // Verify personal data is written
+            const nameCell = sheet!.getRow(12).getCell(7);
+
+            expect(String(nameCell.value)).toContain('Test');
+
+            const egnCell = sheet!.getRow(13).getCell(7);
+
+            expect(String(egnCell.value)).toContain('123456');
+
+            // Verify account rows exist
+            let accountRowFound = false;
+
+            sheet!.eachRow((row) => {
+                const cellVal = String(row.getCell(1).value ?? '');
+
+                if (cellVal.includes('03')) {
+                    accountRowFound = true;
+                }
+            });
+            expect(accountRowFound).toBe(true);
+
+            // Verify security rows exist with ISIN
+            let isinRowFound = false;
+
+            sheet!.eachRow((row) => {
+                if (row.getCell(9).value && typeof row.getCell(9).value === 'string') {
+                    const cellVal = String(row.getCell(9).value);
+
+                    if (cellVal.length === 12 && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(cellVal)) {
+                        isinRowFound = true;
+                    }
+                }
+            });
+            expect(isinRowFound).toBe(true);
+        });
+
+        it('round-trip: generate SPB-8 → import → verify quantities match', async () => {
+            // Create test holdings with ISINs
+            const testHoldings: Holding[] = [
+                {
+                    id: 'h1',
+                    broker: 'IB',
+                    country: 'САЩ',
+                    symbol: 'AAPL',
+                    dateAcquired: '2025-03-10',
+                    quantity: 150,
+                    currency: 'USD',
+                    unitPrice: 270.00,
+                    isin: 'US0378331005',
+                },
+                {
+                    id: 'h2',
+                    broker: 'IB',
+                    country: 'Ирландия',
+                    symbol: 'VWCE',
+                    dateAcquired: '2024-01-20',
+                    quantity: 30,
+                    currency: 'EUR',
+                    unitPrice: 148.90,
+                    isin: 'IE00BK5BQT80',
+                },
+            ];
+
+            const foreignAccounts = [
+                {
+                    broker: 'Interactive Brokers',
+                    type: '03' as const,
+                    maturity: 'L' as const,
+                    country: 'IE',
+                    currency: 'EUR',
+                    amountStartOfYear: 200,
+                    amountEndOfYear: 373.51,
+                },
+                {
+                    broker: 'Interactive Brokers',
+                    type: '03' as const,
+                    maturity: 'L' as const,
+                    country: 'IE',
+                    currency: 'USD',
+                    amountStartOfYear: 9696.60,
+                    amountEndOfYear: 3358.57,
+                },
+            ];
+
+            const appState: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: testHoldings,
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 }, EUR: { '2025-12-31': 1 / 1.95583 } },
+                manualEntries: [],
+                foreignAccounts,
+            };
+
+            const personalData = { name: 'Test Person', egn: '1234567890' };
+            const spb8 = assembleSpb8(appState, personalData, 'P');
+
+            // Generate Excel
+            const buf = await generateSpb8Excel(spb8);
+
+            // Import it back
+            const imported = await importPreviousSpb8(buf.buffer as ArrayBuffer);
+
+            // Verify securities match
+            expect(imported.securities.length).toBe(spb8.securities.length);
+
+            for (const original of spb8.securities) {
+                const reimported = imported.securities.find(s => s.isin === original.isin);
+
+                expect(reimported).toBeDefined();
+                expect(reimported!.quantityStartOfYear).toBe(original.quantityStartOfYear);
+                expect(reimported!.quantityEndOfYear).toBe(original.quantityEndOfYear);
+                // Note: currency is not stored in the SPB-8 Excel form, so we don't verify it
+            }
         });
     });
 });

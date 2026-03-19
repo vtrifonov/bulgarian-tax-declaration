@@ -360,6 +360,39 @@ Key points:
 - `trades` use negative quantity for sells
 - Country resolution is sync here (fast path). The UI calls async `resolveCountries()` after import to fill gaps via OpenFIGI API.
 
+## SPB-8 Architecture
+
+BNB Form SPB-8 reports foreign financial assets. Core modules in `packages/core/src/spb8/`:
+
+- **`assemble.ts`** — Pure function: groups holdings by ISIN, computes threshold (50,000 BGN)
+- **`excel-generator.ts`** — Generates .xlsx matching BNB template (22 columns, merged cells, Times New Roman)
+- **`import.ts`** — Reads previous SPB-8 .xlsx to extract start-of-year data
+- **`price-service.ts`** — Fetches year-end market prices: Stooq (primary) + Yahoo Finance (fallback). Derives exchange suffix from ISIN country prefix (no hardcoded ticker maps). Detects rate limiting from both providers.
+
+UI modules:
+- **`pages/Spb8.tsx`** — Full SPB-8 page: threshold banner, personal data form, accounts/securities tables, price fetch, export
+- **`crypto.ts`** — AES-GCM obfuscation for personal data (EGN, name) in localStorage. Uses hardcoded passphrase + PBKDF2 — prevents plaintext storage, not a defense against determined attacker with source access.
+
+## SPB-8 Support for Providers
+
+When adding a new provider, consider whether it can supply data for BNB Form SPB-8:
+
+### Foreign Account Balances (Section 03)
+If the broker provides cash balance data, return `foreignAccounts` in `BrokerProviderResult`:
+- `type`: Always `'03'` for bank/brokerage accounts
+- `maturity`: `'L'` for indefinite (brokerage), `'S'` for short-term (savings/current)
+- `country`: ISO 3166-1 alpha-2 of the **broker entity** (not the exchange)
+- `currency`: ISO 4217 code
+- `amountStartOfYear` / `amountEndOfYear`: In original currency (NOT thousands)
+
+### ISIN Mapping
+If the broker's data includes ISIN codes, return `isinMap` in `BrokerProviderResult`:
+- Key: ticker symbol (matching the symbols used in trades/holdings)
+- Value: 12-character ISIN code
+
+### Revolut Savings Pattern
+Revolut "savings" are money market fund shares (ISINs: IE0002RUHW32 GBP, IE000H9J0QX4 USD, IE000AZVL3K0 EUR). These are Section 04 securities, NOT Section 03 accounts.
+
 ## Error Handling Standard
 
 ### In `detectFile()`
@@ -482,7 +515,7 @@ pnpm spell                         # Spellcheck with cspell
 
 **Fix all errors, not just new ones.** If the linter or formatter reports preexisting issues in files you didn't touch, fix them too. The goal is a clean `pnpm lint` and `pnpm format:check` with zero errors before every push.
 
-If cspell flags a legitimate word, add it to `cspell-dict.txt`. Keep entries **lowercase and alphabetically sorted**. Bulgarian words are handled by `@cspell/dict-bg-bg` (configured in `cspell.json`) — only add Bulgarian words to the project dict if they are missing from the standard dictionary.
+If cspell flags a legitimate word, add it to `cspell-dict.txt`. Keep entries **lowercase and alphabetically sorted** using byte order (`LC_ALL=C sort -u cspell-dict.txt`). This puts Latin words first, then Cyrillic. Bulgarian words are handled by `@cspell/dict-bg-bg` (configured in `cspell.json`) — only add Bulgarian words to the project dict if they are missing from the standard dictionary.
 
 ## Public Status
 
