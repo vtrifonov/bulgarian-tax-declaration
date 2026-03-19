@@ -55,6 +55,10 @@ export {
     type FifoResult,
 } from './fifo/engine.js';
 export {
+    splitOpenPositions,
+    type SplitOpenPositionsOpts,
+} from './fifo/split-open-positions.js';
+export {
     populateDividendFxRates,
     populateSaleFxRates,
 } from './fifo/populate-fx.js';
