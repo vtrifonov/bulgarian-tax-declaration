@@ -25,11 +25,52 @@ import {
     parseRevolutInvestmentsCsv,
     populateSaleFxRates,
     resolveCountry,
+    splitOpenPositions,
     TaxCalculator,
     type Trade,
 } from '../../src/index.js';
 
 const SAMPLES = join(__dirname, '../../../../samples');
+
+/**
+ * OpenFIGI-resolved countries for sample symbols not in the static COUNTRY_MAP.
+ * In the UI these are resolved async via OpenFIGI; in tests we use this lookup.
+ */
+const FIGI_COUNTRIES: Record<string, string> = {
+    GOOG: 'САЩ',
+    AMZN: 'САЩ',
+    MSFT: 'САЩ',
+    META: 'САЩ',
+    AAPL: 'САЩ',
+    DAL: 'САЩ',
+    RIO: 'САЩ',
+    COIN: 'САЩ',
+    ASML: 'САЩ',
+    SAPd: 'Германия',
+    SAP: 'Германия',
+    '1810': 'Хонконг',
+    MONB: 'България',
+};
+
+/** Resolve country with OpenFIGI fallback for symbols not in static map */
+function resolveCountryWithFigi(symbol: string): string {
+    return resolveCountry(symbol) || FIGI_COUNTRIES[symbol] || '';
+}
+
+/** Build country map from symbol list with OpenFIGI fallback */
+function buildCountryMap(symbols: { symbol?: string; ticker?: string }[]): Record<string, string> {
+    const map: Record<string, string> = {};
+
+    for (const s of symbols) {
+        const sym = s.symbol ?? s.ticker ?? '';
+
+        if (sym) {
+            map[sym] = resolveCountryWithFigi(sym);
+        }
+    }
+
+    return map;
+}
 
 /** Group flat InterestEntry[] into BrokerInterest[] by currency */
 function groupInterestByCurrency(broker: string, entries: InterestEntry[]): BrokerInterest[] {
@@ -1795,105 +1836,28 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
             const allDividends = [...matched, ...unmatched];
 
-            // Symbols not in static COUNTRY_MAP — resolved via OpenFIGI in UI
-            const figi: Record<string, string> = {
-                GOOG: 'САЩ',
-                AMZN: 'САЩ',
-                MSFT: 'САЩ',
-                META: 'САЩ',
-                AAPL: 'САЩ',
-                DAL: 'САЩ',
-                RIO: 'САЩ',
-                COIN: 'САЩ',
-                ASML: 'САЩ',
-                SAPd: 'Германия',
-                SAP: 'Германия',
-                '1810': 'Хонконг',
-                MONB: 'България',
-            };
-
             for (const d of allDividends) {
-                d.country = resolveCountry(d.symbol) || figi[d.symbol] || '';
+                d.country = resolveCountryWithFigi(d.symbol);
                 const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
 
                 d.bgTaxDue = bgTaxDue;
                 d.whtCredit = whtCredit;
             }
 
-            const ibCountryMap: Record<string, string> = {};
-
-            for (const t of parsed.trades) {
-                ibCountryMap[t.symbol] = resolveCountry(t.symbol);
-            }
-
-            for (const p of parsed.openPositions) {
-                ibCountryMap[p.symbol] = resolveCountry(p.symbol);
-            }
-
-            for (const [sym, country] of Object.entries(figi)) {
-                ibCountryMap[sym] ||= country;
-            }
+            const ibCountryMap = buildCountryMap([
+                ...parsed.trades,
+                ...parsed.openPositions.map(p => ({ symbol: p.symbol })),
+            ]);
             const ibFifo = new FifoEngine([...initialHoldings]);
             const { consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(parsed.trades, 'IB', ibCountryMap);
 
-            // Use splitOpenPositions (same logic as UI) — inline the essential logic
-            const yearPrefix = '2025';
-            const ibHoldings: Holding[] = [];
-            const buysBySymbol = new Map<string, Trade[]>();
-            const sellQtyBySymbol = new Map<string, number>();
-
-            for (const t of parsed.trades) {
-                if (!t.dateTime.startsWith(yearPrefix)) {
-                    continue;
-                }
-                const sym = parsed.symbolAliases[t.symbol] ?? t.symbol;
-
-                if (t.quantity > 0) {
-                    const buys = buysBySymbol.get(sym) ?? [];
-
-                    buys.push(t);
-                    buysBySymbol.set(sym, buys);
-                } else {
-                    const current = sellQtyBySymbol.get(sym) ?? 0;
-
-                    sellQtyBySymbol.set(sym, current + Math.abs(t.quantity));
-                }
-            }
-
-            for (const pos of parsed.openPositions) {
-                const buys = buysBySymbol.get(pos.symbol) ?? [];
-                const sellQty = sellQtyBySymbol.get(pos.symbol) ?? 0;
-                const totalBoughtThisYear = buys.reduce((sum, t) => sum + t.quantity, 0);
-                const preExistingBeforeSells = pos.quantity + sellQty - totalBoughtThisYear;
-                const sellsFromPreExisting = Math.min(sellQty, Math.max(0, preExistingBeforeSells));
-                const sellsFromThisYear = sellQty - sellsFromPreExisting;
-                const survivedThisYearQty = totalBoughtThisYear - sellsFromThisYear;
-
-                if (survivedThisYearQty > 0 && buys.length > 0) {
-                    const sortedBuys = [...buys].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
-                    let remainingSellQty = sellsFromThisYear;
-
-                    for (const buy of sortedBuys) {
-                        if (remainingSellQty >= buy.quantity) {
-                            remainingSellQty -= buy.quantity;
-                            continue;
-                        }
-                        const survivedQty = buy.quantity - remainingSellQty;
-
-                        remainingSellQty = 0;
-                        ibHoldings.push({
-                            id: crypto.randomUUID(),
-                            broker: 'IB',
-                            country: ibCountryMap[buy.symbol] ?? '',
-                            symbol: buy.symbol,
-                            dateAcquired: buy.dateTime.split(',')[0],
-                            quantity: survivedQty,
-                            currency: pos.currency,
-                            unitPrice: buy.price,
-                        });
-                    }
-                }
-            }
+            const ibHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
+                broker: 'IB',
+                countryMap: ibCountryMap,
+                taxYear: 2025,
+                symbolAliases: parsed.symbolAliases,
+                skipPreExisting: true,
+            });
 
             // Merge IB: keep non-IB holdings, add consumed + IB holdings
             const consumedIds = new Set(ibConsumed.map(h => h.id));
@@ -1904,11 +1868,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             // 3. Parse Revolut investments
             const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
             const { trades: revTrades } = parseRevolutInvestmentsCsv(investCsv);
-            const revCountryMap: Record<string, string> = {};
-
-            for (const t of revTrades) {
-                revCountryMap[t.ticker] = resolveCountry(t.ticker) || figi[t.ticker] || '';
-            }
+            const revCountryMap = buildCountryMap(revTrades.map(t => ({ symbol: t.ticker })));
             const fifoTrades: Trade[] = revTrades.map(t => ({
                 symbol: t.ticker,
                 dateTime: t.date,
@@ -2156,8 +2116,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 expect(reBi, `${origBi.broker} ${origBi.currency} interest`).toBeDefined();
                 expect(reBi!.entries.length).toBe(origBi.entries.length);
 
-                const sortE = (e: { date: string; amount: number }[]) =>
-                    [...e].sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
+                const sortE = (e: { date: string; amount: number }[]) => [...e].sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
                 const origEntries = sortE(origBi.entries);
                 const reEntries = sortE(reBi!.entries);
 
@@ -2445,6 +2404,116 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             expect(totalInterestEntries(reimported.brokerInterest)).toBe(
                 eurInterest.entries.length + gbpInterest.entries.length,
             );
+        });
+    });
+
+    describe('Test 29: Revolut → IB import order (reverse of typical flow)', () => {
+        it('importing Revolut first then IB preserves all data correctly', async () => {
+            const holdingsCsv = readFileSync(join(SAMPLES, 'holdings.csv'), 'utf-8');
+            const initialHoldings = importHoldingsFromCsv(holdingsCsv);
+
+            expect(initialHoldings).toHaveLength(8);
+
+            // Step 1: Import Revolut investments first (seeded with initial holdings)
+            const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
+            const { trades: revTrades } = parseRevolutInvestmentsCsv(investCsv);
+            const revCountryMap = buildCountryMap(revTrades.map(t => ({ symbol: t.ticker })));
+            const fifoTrades: Trade[] = revTrades.map(t => ({
+                symbol: t.ticker,
+                dateTime: t.date,
+                quantity: t.type.includes('SELL') ? -t.quantity : t.quantity,
+                price: t.pricePerShare,
+                proceeds: t.type.includes('SELL') ? t.totalAmount : 0,
+                commission: 0,
+                currency: t.currency,
+            }));
+
+            const revFifo = new FifoEngine([...initialHoldings]);
+            const { holdings: revHoldings, consumedHoldings: revConsumed, sales: revSales } = revFifo.processTrades(fifoTrades, 'Revolut', revCountryMap);
+
+            // Preserve ordering (same logic as UI fix)
+            const existingIds = new Set(initialHoldings.map(h => h.id));
+            const consumedIds = new Set(revConsumed.map(h => h.id));
+            const updatedById = new Map(
+                revHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
+            );
+            const survivingOriginals = initialHoldings
+                .filter(h => !consumedIds.has(h.id))
+                .map(h => updatedById.get(h.id) ?? h);
+            const newRevolutHoldings = revHoldings.filter(h => !existingIds.has(h.id));
+            const afterRevolut = [...survivingOriginals, ...revConsumed, ...newRevolutHoldings];
+
+            // No sells in sample → 8 initial + 6 Revolut = 14
+            expect(afterRevolut).toHaveLength(14);
+            expect(revSales).toHaveLength(0);
+
+            // Step 2: Import IB activity on top of Revolut state
+            const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
+            const parsed = parseIBCsv(ibCsv);
+
+            const ibCountryMap = buildCountryMap([
+                ...parsed.trades,
+                ...parsed.openPositions.map(p => ({ symbol: p.symbol })),
+            ]);
+
+            // IB FIFO against current holdings (initial + Revolut)
+            const ibFifo = new FifoEngine([...afterRevolut]);
+            const { consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(parsed.trades, 'IB', ibCountryMap);
+
+            // IB should produce 3 sales (GOOG, AMZN, SAP)
+            expect(ibSales).toHaveLength(3);
+
+            // GOOG sell should consume from initial holdings (FIFO: oldest first)
+            const googSale = ibSales.find(s => s.symbol === 'GOOG')!;
+
+            expect(googSale).toBeDefined();
+            expect(googSale.quantity).toBe(8);
+
+            // IB holdings from Open Positions
+            const ibHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
+                broker: 'IB',
+                countryMap: ibCountryMap,
+                taxYear: 2025,
+                symbolAliases: parsed.symbolAliases,
+                skipPreExisting: true, // prior holdings already exist
+            });
+
+            // Merge IB: keep non-IB, add consumed + IB buys
+            const ibConsumedIds = new Set(ibConsumed.map(h => h.id));
+            const remainingNonIb = afterRevolut.filter(h => !ibConsumedIds.has(h.id));
+            const finalHoldings = [...remainingNonIb, ...ibConsumed, ...ibHoldings];
+
+            // Verify Revolut holdings survived (not consumed by IB sells)
+            // 6 new buys + 1 pre-existing (Revolut AAPL from initial holdings)
+            const revInFinal = finalHoldings.filter(h => h.broker === 'Revolut');
+
+            expect(revInFinal).toHaveLength(7);
+
+            // Verify all sales are IB (no Revolut sales in this scenario)
+            const allSales = [...revSales, ...ibSales];
+
+            for (const s of allSales) {
+                expect(s.broker).toBe('IB');
+            }
+
+            // Round-trip to verify data survives
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: finalHoldings,
+                sales: allSales,
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: {},
+                manualEntries: [],
+            };
+            const buffer = await generateExcel(state);
+            const reimported = await importFullExcel(buffer.buffer as ArrayBuffer);
+
+            expect(reimported.holdings).toHaveLength(finalHoldings.length);
+            expect(reimported.sales).toHaveLength(allSales.length);
         });
     });
 });
