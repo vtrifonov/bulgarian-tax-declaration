@@ -382,7 +382,7 @@ export function Import() {
                 setFxProgress(null);
             }
         })();
-    }, [importedFiles.length, baseCurrency, taxYear]); // Re-run after file import or settings change
+    }, [importedFiles.length, baseCurrency, taxYear, importSales, setFxRates]); // Re-run after file import or settings change
 
     const processFile = useCallback(async (file: File) => {
         const content = await file.text();
@@ -692,7 +692,7 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             });
         }
-    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest]);
+    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
@@ -707,7 +707,7 @@ export function Import() {
                 });
             }
         });
-    }, [processFile]);
+    }, [processFile, addImportedFile]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
