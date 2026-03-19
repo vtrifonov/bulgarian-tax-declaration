@@ -79,3 +79,5 @@ export { validate } from './validation/validator.js';
 export { generateExcel } from './excel/generator.js';
 export { generateNraAppendix8 } from './excel/nra-appendix8.js';
 export { generateNraAppendix8Part3 } from './excel/nra-appendix8-part3.js';
+export { buildNraFormRows } from './nra/form-data.js';
+export type { NraFormRow } from './nra/form-data.js';

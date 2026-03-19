@@ -12,6 +12,7 @@ import {
     useState,
 } from 'react';
 
+import { useNraFiller } from '../hooks/useNraFiller.js';
 import {
     applySorting,
     useAppStore,
@@ -29,6 +30,8 @@ export function Declaration() {
         taxYear,
         tableSorting,
     } = useAppStore();
+
+    const nraFiller = useNraFiller(unsortedDividends, fxRates, baseCurrency);
 
     const holdings = useMemo(
         () => applySorting(unsortedHoldings, tableSorting.holdings ?? []),
@@ -638,7 +641,148 @@ export function Declaration() {
                                 </tfoot>
                             </table>
                         </div>
-                        {/* NRA upload button hidden — no upload field on NRA portal yet */}
+                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                <button
+                                    onClick={() => nraFiller.startFilling()}
+                                    style={{
+                                        padding: '0.75rem 1.5rem',
+                                        backgroundColor: nraFiller.status === 'copied' ? '#28a745' : 'var(--accent)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    {nraFiller.status === 'copied'
+                                        ? `Скрипт (${nraFiller.rowCount} реда)`
+                                        : 'Генерирай скрипт'}
+                                </button>
+                                {nraFiller.canUseBrowser && (
+                                    <button
+                                        onClick={() => nraFiller.startBrowser()}
+                                        disabled={nraFiller.status === 'browser'}
+                                        style={{
+                                            padding: '0.75rem 1.5rem',
+                                            backgroundColor: nraFiller.status === 'browser' ? '#6c757d' : 'var(--accent)',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: nraFiller.status === 'browser' ? 'wait' : 'pointer',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 500,
+                                            opacity: nraFiller.status === 'browser' ? 0.7 : 1,
+                                        }}
+                                    >
+                                        {nraFiller.status === 'browser'
+                                            ? `Браузър (${nraFiller.rowCount} реда)...`
+                                            : 'Отвори браузър'}
+                                    </button>
+                                )}
+                            </div>
+                            {nraFiller.status === 'error' && (
+                                <div style={{ color: '#dc3545', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                                    {nraFiller.error}
+                                </div>
+                            )}
+                            {nraFiller.status === 'copied' && (
+                                <div style={{ marginTop: '0.75rem' }}>
+                                    <div
+                                        style={{
+                                            fontSize: '0.85rem',
+                                            color: 'var(--text-secondary)',
+                                            marginBottom: '0.75rem',
+                                            padding: '0.75rem',
+                                            backgroundColor: 'var(--bg-secondary, #f0f7ff)',
+                                            borderRadius: '6px',
+                                            border: '1px solid var(--border)',
+                                            lineHeight: 1.6,
+                                        }}
+                                    >
+                                        <strong>Вместо ръчно въвеждане на {nraFiller.rowCount} реда дивиденти</strong>, можете да изпълните скрипта по-долу в конзолата на браузъра,
+                                        който ще попълни формата автоматично.
+                                        <ol style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.25rem' }}>
+                                            <li>
+                                                Отворете портала на НАП и навигирайте до <strong>Приложение 8, Част III</strong>
+                                            </li>
+                                            <li>
+                                                Отворете конзолата на браузъра (<strong>Cmd+Option+J</strong> на Mac / <strong>F12</strong> на Windows → таб Console)
+                                            </li>
+                                            <li>
+                                                Ако конзолата покаже съобщение за paste, напишете{' '}
+                                                <code style={{ backgroundColor: 'var(--bg-tertiary, #e8e8e8)', padding: '1px 4px', borderRadius: '3px' }}>allow pasting</code>{' '}
+                                                и натиснете Enter
+                                            </li>
+                                            <li>Копирайте скрипта с бутона по-долу и го поставете в конзолата → Enter</li>
+                                            <li>Изчакайте попълването — ще видите синя лента с прогреса в горния десен ъгъл</li>
+                                        </ol>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <button
+                                            onClick={(e) => {
+                                                if (!nraFiller.script) {
+                                                    return;
+                                                }
+                                                // Try multiple copy methods
+                                                const textarea = document.querySelector('#nra-script-textarea') as HTMLTextAreaElement | null;
+
+                                                if (textarea) {
+                                                    textarea.select();
+                                                    document.execCommand('copy');
+                                                }
+                                                try {
+                                                    void navigator.clipboard.writeText(nraFiller.script);
+                                                } catch {}
+                                                // Show feedback
+                                                const btn = e.currentTarget;
+
+                                                btn.textContent = '\u2713 Копирано!';
+                                                btn.style.backgroundColor = '#28a745';
+                                                setTimeout(() => {
+                                                    btn.textContent = 'Копирай в клипборда';
+                                                    btn.style.backgroundColor = '';
+                                                }, 2000);
+                                            }}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                backgroundColor: 'var(--accent)',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.85rem',
+                                            }}
+                                        >
+                                            Копирай в клипборда
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        id='nra-script-textarea'
+                                        readOnly
+                                        value={nraFiller.script || ''}
+                                        onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                                        style={{
+                                            width: '100%',
+                                            height: '80px',
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            padding: '0.5rem',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '4px',
+                                            backgroundColor: 'var(--bg-secondary, #f5f5f5)',
+                                            resize: 'vertical',
+                                        }}
+                                    />
+                                </div>
+                            )}
+                            {nraFiller.status === 'browser' && (
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                                    Влезте в портала на НАП и отидете до Приложение 8, Част III. Скриптът ще открие формата автоматично.
+                                </div>
+                            )}
+                        </div>
                     </>
                 ),
             )}

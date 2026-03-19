@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Приложение 8 - Част III - NRA Form Mock</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      color: #333;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    .form-header {
+      background-color: #e8f4f8;
+      padding: 15px;
+      border-left: 4px solid #2196F3;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 15px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f9f9f9;
+      font-weight: bold;
+    }
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 13px;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #2196F3;
+      box-shadow: 0 0 5px rgba(33, 150, 243, 0.5);
+    }
+    .row-actions {
+      padding: 5px;
+      text-align: center;
+    }
+    .delete-btn {
+      background-color: #f44336;
+      padding: 5px 10px;
+      font-size: 12px;
+      width: auto;
+    }
+    .delete-btn:hover {
+      background-color: #da190b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="form-header">
+      <h2>Приложение 8, Част III</h2>
+      <p>Част III – Определяне на дължимия окончателен данък по чл. 38 от ЗДДФЛ за доходи от източници в чужбина на местни физически лица</p>
+    </div>
+
+    <button id="addRowBtn">Добави нов ред >></button>
+
+    <table id="nraTable">
+      <thead>
+        <tr>
+          <th>Име на източник</th>
+          <th>Държава</th>
+          <th>Код</th>
+          <th>Метод</th>
+          <th>Брой</th>
+          <th>Цена</th>
+          <th>Цена закупуване</th>
+          <th>Курс</th>
+          <th>Сума BGN</th>
+          <th>Данък</th>
+          <th>Нетна сума</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody id="nraTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const countries = ['САЩ', 'Германия', 'Ирландия', 'Великобритания', 'Хонконг'];
+    const codes = ['8141', '8142', '815'];
+    const methods = ['1', '2', '3'];
+
+    // Detect decimal separator from initial inputs (simulated as comma)
+    window.__decimalSeparator = ',';
+
+    function addRow() {
+      const tbody = document.getElementById('nraTableBody');
+      const rowNum = tbody.children.length + 1;
+      const row = document.createElement('tr');
+      row.dataset.rowNum = rowNum;
+
+      row.innerHTML = `
+        <td><input type="text" class="name-input" placeholder="Име" /></td>
+        <td>
+          <select class="country-select">
+            <option value="">-- Избери държава --</option>
+            ${countries.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <select class="code-select">
+            <option value="">-- Избери код --</option>
+            ${codes.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <select class="method-select">
+            <option value="">-- Избери метод --</option>
+            ${methods.map(m => `<option value="${m}">${m}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td><input type="text" class="numeric-input" value="0.00" placeholder="0.00" /></td>
+        <td class="row-actions">
+          <button class="delete-btn" onclick="deleteRow(${rowNum})">Изтрий</button>
+        </td>
+      `;
+
+      tbody.appendChild(row);
+      return row;
+    }
+
+    function deleteRow(rowNum) {
+      const row = document.querySelector(`tr[data-row-num="${rowNum}"]`);
+      if (row) row.remove();
+    }
+
+    document.getElementById('addRowBtn').addEventListener('click', addRow);
+
+    // Expose API for script to interact with form
+    window.__nraFormAPI = {
+      getRowCount: () => document.getElementById('nraTableBody').children.length,
+      getLastRow: () => {
+        const rows = document.getElementById('nraTableBody').children;
+        return rows[rows.length - 1] || null;
+      },
+      fillNameInput: (row, name) => {
+        const input = row.querySelector('.name-input');
+        if (input) input.value = name;
+      },
+      selectCountry: (row, country) => {
+        const select = row.querySelector('.country-select');
+        if (select) {
+          const option = Array.from(select.options).find(o => o.value === country);
+          if (option) {
+            select.value = country;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+        }
+        return false;
+      },
+      selectCode: (row, code) => {
+        const select = row.querySelector('.code-select');
+        if (select) {
+          select.value = code;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+        return false;
+      },
+      selectMethod: (row, method) => {
+        const select = row.querySelector('.method-select');
+        if (select) {
+          select.value = method;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+        return false;
+      },
+      fillNumericInputs: (row, values) => {
+        const inputs = Array.from(row.querySelectorAll('.numeric-input'));
+        values.forEach((value, idx) => {
+          if (inputs[idx]) inputs[idx].value = value;
+        });
+      },
+      getCountryOptions: (row) => {
+        const select = row.querySelector('.country-select');
+        return select ? Array.from(select.options).map(o => o.value).filter(v => v) : [];
+      },
+      getFormHeaderText: () => {
+        return document.body.innerText;
+      }
+    };
+  </script>
+</body>
+</html>

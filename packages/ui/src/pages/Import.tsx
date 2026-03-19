@@ -368,6 +368,12 @@ export function Import() {
                         s.source = { type: 'IB', file: file.name };
                     }
                 }
+
+                for (const h of fifoConsumed) {
+                    if (!h.source) {
+                        h.source = { type: 'IB', file: file.name };
+                    }
+                }
                 importSales(newSales);
 
                 // Use Open Positions as authoritative year-end holdings (if available)
@@ -483,6 +489,12 @@ export function Import() {
                 for (const s of newSales) {
                     if (!s.source) {
                         s.source = { type: 'Revolut', file: file.name };
+                    }
+                }
+
+                for (const h of revConsumed) {
+                    if (!h.source) {
+                        h.source = { type: 'Revolut', file: file.name };
                     }
                 }
                 // FifoEngine flattens holdings by symbol (Map), losing original order.

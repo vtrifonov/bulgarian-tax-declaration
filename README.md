@@ -77,6 +77,30 @@ pnpm --filter @bg-tax/ui dev:vite
 pnpm dev
 ```
 
+## NRA Form Filler
+
+Automates filling **Приложение 8, Част III** (foreign dividends) in the NRA online tax declaration portal.
+
+### Clipboard Script (Web + Desktop)
+
+A self-contained JavaScript snippet you paste into your browser's DevTools console.
+
+1. In the Declaration page, click **"Генерирай скрипт"**
+2. Navigate to the NRA portal → Приложение 8, Част III
+3. Open DevTools console (`Cmd+Option+J` on Mac / `F12` on Windows → Console tab)
+4. If the console asks, type `allow pasting` and press Enter
+5. Paste the script and press Enter
+6. Watch the blue progress bar in the top-right corner — click **"Спри"** to stop early
+
+### Browser Automation (Desktop Only)
+
+Launches a Chromium browser via Playwright. Requires **Node.js ≥ 20** ([download](https://nodejs.org/en/download)).
+
+1. In the Declaration page, click **"Отвори браузър"**
+2. Log in to the NRA portal and navigate to Приложение 8, Част III
+3. A confirmation overlay appears — click **"Попълни"** to auto-fill all rows
+4. Review the filled form and submit manually
+
 ## Commands
 
 ### Root (monorepo)

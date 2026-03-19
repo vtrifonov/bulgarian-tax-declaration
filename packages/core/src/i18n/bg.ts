@@ -219,4 +219,17 @@ export const bg = {
     'button.downloadTemplate': 'Изтегли шаблон (CSV)',
     'confirm.resetAll': 'Това ще изтрие всички импортирани данни. Сигурни ли сте?',
     'privacy.notice': 'Данъчните ви данни се съхраняват само локално. Нищо не се изпраща към сървър.',
+
+    // NRA form filler
+    'nra.fill.button': 'Попълни в НАП',
+    'nra.fill.launching': 'Стартиране на браузъра...',
+    'nra.fill.waiting': 'Очакване на формата...',
+    'nra.fill.fillNow': 'Попълни сега',
+    'nra.fill.progress': 'Попълване... ({current}/{total})',
+    'nra.fill.countryPrompt': 'Изберете държава в браузъра',
+    'nra.fill.done': 'Попълнено ({count} реда)',
+    'nra.fill.error': 'Грешка',
+    'nra.fill.nodeRequired': 'Node.js (>= 20) не е намерен. Инсталирайте от https://nodejs.org/en/download',
+    'nra.fill.noDividends': 'Няма дивиденти за попълване',
+    'nra.fill.installingChromium': 'Инсталиране на Chromium...',
 };

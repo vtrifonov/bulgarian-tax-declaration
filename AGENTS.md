@@ -145,6 +145,48 @@ If your provider produces a new data type not in this table, you must:
 2. Add import logic in `packages/core/src/parsers/excel-full-import.ts`
 3. Register the sheet in `packages/core/src/excel/generator.ts`
 
+## NRA Form Filler
+
+### Architecture
+
+- `packages/core/src/nra/form-data.ts` — `buildNraFormRows()`: pure function, transforms `Dividend[]` → `NraFormRow[]`
+- `packages/ui/src/hooks/useNraFiller.ts` — React hook: generates fill script (clipboard) or spawns Playwright sidecar (browser)
+- `scripts/nra-fill-form.mjs` — Standalone Playwright sidecar (desktop only)
+
+### NRA Form Field IDs (Приложение 8, Част III)
+
+Pattern: `A8D5:N_fieldname` where N is 1-based row number.
+
+| Field | ID suffix | Type | Notes |
+|-------|-----------|------|-------|
+| Name | `_name` | text | Company/symbol |
+| Country | `_country` | select | Bulgarian names (e.g., "САЩ") |
+| Income code | `_incomecode` | select | 8141 for dividends |
+| Method code | `_methodcode` | select | Always 1 |
+| Gross amount | `_sum` | text | Col 6 |
+| Acquisition cost | `_value` | text | Col 7, only for code 8142 |
+| Difference | `_diff` | text | Auto-calculated, skip |
+| Foreign tax | `_paidtax` | text | Col 9 |
+| Allowed credit | `_permitedtax` | text | Col 10 |
+| Recognized credit | `_tax` | text | Col 11 |
+| Tax due | `_owetax` | text | Col 12 |
+
+### Fill Script Behavior
+
+- Rows created via `addDynamicElement('A8D5')` (NRA's global JS function)
+- **Field order matters**: set `incomecode` and `methodcode` BEFORE numeric fields (NRA JS resets numbers when codes are empty)
+- 300ms delay between fields, 500ms after code/method, 800ms between rows
+- Column 7 (`_value`) only filled for code 8142, skipped for 8141
+- Column 8 (`_diff`) auto-calculated by NRA form, never set manually
+
+### Updating When NRA Form Changes
+
+1. Open the form in DevTools, inspect field IDs
+2. Update `generateFillScript()` in `packages/ui/src/hooks/useNraFiller.ts`
+3. Update the same logic in `scripts/nra-fill-form.mjs` (keep in sync)
+4. Update `NraFormRow` interface in `packages/core/src/nra/form-data.ts` if columns change
+5. Test clipboard approach first (easier to debug), then browser automation
+
 ## Adding a New Broker Provider
 
 ### Step 1: Create provider module
