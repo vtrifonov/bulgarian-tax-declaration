@@ -23,10 +23,11 @@ export function useAutoSave() {
             clearTimeout(timerRef.current);
             timerRef.current = setTimeout(() => {
                 void (async () => {
+                    let encryptedPersonal: string | undefined;
+
                     try {
                         // Encrypt personal data before saving
                         const personalData = state.spb8PersonalData;
-                        let encryptedPersonal: string | undefined;
 
                         if (personalData && Object.keys(personalData).length > 0) {
                             try {

@@ -86,6 +86,7 @@ export interface AppState {
     manualEntries: ManualEntry[];
     foreignAccounts?: ForeignAccountBalance[];
     spb8PersonalData?: Spb8PersonalData;
+    yearEndPrices?: Record<string, number>;
 }
 
 /** Validation warning — non-blocking */

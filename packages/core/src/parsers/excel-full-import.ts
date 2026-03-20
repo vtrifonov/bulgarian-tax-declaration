@@ -4,9 +4,11 @@ import { importHoldingsFromExcel } from './excel-import.js';
 import type {
     BrokerInterest,
     Dividend,
+    ForeignAccountBalance,
     Holding,
     InterestEntry,
     Sale,
+    Spb8PersonalData,
     StockYieldEntry,
 } from '../types/index.js';
 
@@ -69,6 +71,10 @@ export interface FullExcelImport {
     dividends: Dividend[];
     stockYield: StockYieldEntry[];
     brokerInterest: BrokerInterest[];
+    foreignAccounts: ForeignAccountBalance[];
+    spb8PersonalData?: Spb8PersonalData;
+    yearEndPrices: Record<string, number>;
+    fxRates: Record<string, Record<string, number>>;
 }
 
 /**
@@ -86,6 +92,10 @@ export async function importFullExcel(buffer: ArrayBuffer): Promise<FullExcelImp
     const dividends = readDividendsSheet(wb);
     const stockYield = readStockYieldSheet(wb);
     const brokerInterest = readBrokerInterestSheets(wb);
+    const foreignAccounts = readSpb8AccountsSheet(wb);
+    const spb8PersonalData = readSpb8PersonalDataSheet(wb);
+    const yearEndPrices = readSpb8SecuritiesSheet(wb);
+    const fxRates = readFxSheets(wb);
 
     // Resolve consumedBy sale numbers to sale IDs
     for (const h of holdings) {
@@ -102,7 +112,7 @@ export async function importFullExcel(buffer: ArrayBuffer): Promise<FullExcelImp
         }
     }
 
-    return { holdings, sales, dividends, stockYield, brokerInterest };
+    return { holdings, sales, dividends, stockYield, brokerInterest, foreignAccounts, spb8PersonalData, yearEndPrices, fxRates };
 }
 
 function readSalesSheet(wb: ExcelJS.Workbook): Sale[] {
@@ -346,4 +356,153 @@ function readInterestRows(ws: ExcelJS.Worksheet, currency: string): InterestEntr
     });
 
     return entries;
+}
+
+function readSpb8AccountsSheet(wb: ExcelJS.Workbook): ForeignAccountBalance[] {
+    const ws = wb.getWorksheet('СПБ-8 Сметки');
+
+    if (!ws) {
+        return [];
+    }
+    const accounts: ForeignAccountBalance[] = [];
+
+    ws.eachRow((row, rowNumber) => {
+        if (rowNumber <= 1) {
+            return;
+        }
+        const broker = cellStr(row.getCell(1));
+
+        if (!broker) {
+            return;
+        }
+        accounts.push({
+            broker,
+            type: (cellStr(row.getCell(2)) || '03') as ForeignAccountBalance['type'],
+            maturity: (cellStr(row.getCell(3)) || 'L') as ForeignAccountBalance['maturity'],
+            country: cellStr(row.getCell(4)),
+            currency: cellStr(row.getCell(5)),
+            amountStartOfYear: cellNum(row.getCell(6)),
+            amountEndOfYear: cellNum(row.getCell(7)),
+        });
+    });
+
+    return accounts;
+}
+
+function readSpb8PersonalDataSheet(wb: ExcelJS.Workbook): Spb8PersonalData | undefined {
+    const ws = wb.getWorksheet('СПБ-8 Лични Данни');
+
+    if (!ws) {
+        return undefined;
+    }
+    const result: Spb8PersonalData = {};
+
+    ws.eachRow((row, rowNumber) => {
+        if (rowNumber <= 1) {
+            return;
+        }
+        const key = cellStr(row.getCell(1));
+        const value = cellStr(row.getCell(2));
+
+        if (!key || !value) {
+            return;
+        }
+
+        if (key === 'name') {
+            result.name = value;
+        } else if (key === 'egn') {
+            result.egn = value;
+        } else if (key === 'phone') {
+            result.phone = value;
+        } else if (key === 'email') {
+            result.email = value;
+        } else if (key.startsWith('address.')) {
+            result.address ??= {};
+            const addressKey = key.replace('address.', '') as keyof NonNullable<Spb8PersonalData['address']>;
+
+            result.address[addressKey] = value;
+        }
+    });
+
+    const hasData = Boolean(
+        result.name
+            || result.egn
+            || result.phone
+            || result.email
+            || result.address?.city
+            || result.address?.postalCode
+            || result.address?.district
+            || result.address?.street
+            || result.address?.number
+            || result.address?.entrance,
+    );
+
+    return hasData ? result : undefined;
+}
+
+function readSpb8SecuritiesSheet(wb: ExcelJS.Workbook): Record<string, number> {
+    const ws = wb.getWorksheet('СПБ-8 Ценни Книжа');
+
+    if (!ws) {
+        return {};
+    }
+
+    const prices: Record<string, number> = {};
+
+    ws.eachRow((row, rowNumber) => {
+        if (rowNumber <= 1) {
+            return;
+        }
+        const isin = cellStr(row.getCell(1));
+        const price = cellNum(row.getCell(6));
+
+        if (!isin || price <= 0) {
+            return;
+        }
+
+        prices[isin] = price;
+    });
+
+    return prices;
+}
+
+function readFxSheets(wb: ExcelJS.Workbook): Record<string, Record<string, number>> {
+    const fxRates: Record<string, Record<string, number>> = {};
+    const excludedSheetNames = new Set([
+        'Притежания',
+        'Продажби',
+        'Дивиденти',
+        'IB Stock Yield',
+        'СПБ-8 Сметки',
+        'СПБ-8 Ценни Книжа',
+        'СПБ-8 Лични Данни',
+    ]);
+
+    for (const ws of wb.worksheets) {
+        if (excludedSheetNames.has(ws.name) || !/^[A-Z]{3}$/.test(ws.name)) {
+            continue;
+        }
+
+        const rates: Record<string, number> = {};
+
+        ws.eachRow((row, rowNumber) => {
+            if (rowNumber <= 1) {
+                return;
+            }
+            const date = cellDate(row.getCell(1));
+            const rate = cellNum(row.getCell(2));
+
+            if (!date || rate <= 0) {
+                return;
+            }
+
+            rates[date] = rate;
+        });
+
+        if (Object.keys(rates).length > 0) {
+            fxRates[ws.name] = rates;
+        }
+    }
+
+    return fxRates;
 }

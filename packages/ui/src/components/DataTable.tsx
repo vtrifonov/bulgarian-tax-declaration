@@ -59,6 +59,8 @@ export interface DataTableProps<TData> {
     onSplitRow?: (rowIndex: number) => void;
     /** Row indices that should be rendered with strikethrough (consumed by FIFO) */
     strikeThroughRows?: Set<number>;
+    /** Row indices that should be highlighted as partially consumed / linked */
+    highlightRows?: Set<number>;
     /** Called to reorder a row — enables ▲/▼ buttons in "#" column when sorted by "#" or unsorted */
     onMoveRow?: (fromIndex: number, toIndex: number) => void;
     /** Called when the user changes column sorting — receives the new SortingState */
@@ -67,8 +69,7 @@ export interface DataTableProps<TData> {
     initialSorting?: { id: string; desc: boolean }[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function DataTable<TData extends Record<string, any>>({
+export function DataTable<TData extends object>({
     columns,
     data,
     onAddRow,
@@ -86,6 +87,7 @@ export function DataTable<TData extends Record<string, any>>({
     onDeleteRow,
     onSplitRow,
     strikeThroughRows,
+    highlightRows,
     onMoveRow,
     onSortingChange,
     initialSorting,
@@ -267,7 +269,8 @@ export function DataTable<TData extends Record<string, any>>({
             if (!key) {
                 continue;
             }
-            const raw = key in row ? String(row[key] ?? '') : (meta?.editInitialValue?.(row) ?? '');
+            const rowValues = row as Record<string, unknown>;
+            const raw = key in rowValues ? String(rowValues[key] ?? '') : (meta?.editInitialValue?.(row) ?? '');
 
             // Store date fields as display format (DD.MM.YYYY)
             values[key] = meta?.inputType === 'date' ? isoToDisplay(raw) : raw;
@@ -567,6 +570,7 @@ export function DataTable<TData extends Record<string, any>>({
                         const isEditing = editingRowIndex === rowIndex;
                         const hasWarning = warningRows?.has(rowIndex) ?? false;
                         const isConsumed = strikeThroughRows?.has(rowIndex) ?? false;
+                        const isHighlighted = highlightRows?.has(rowIndex) ?? false;
                         const rowWarnings = warningMessages?.get(rowIndex);
                         let firstEditableFound = false;
 
@@ -575,7 +579,7 @@ export function DataTable<TData extends Record<string, any>>({
                                 key={row.id}
                                 className={`${rowIndex % 2 === 0 ? 'even' : 'odd'} ${hasWarning ? 'warning-row' : ''} ${isEditing ? 'editing-row' : ''} ${
                                     isConsumed ? 'consumed-row' : ''
-                                }`}
+                                } ${isHighlighted ? 'linked-row' : ''}`}
                                 onDoubleClick={(e) => {
                                     if (isEditing) {
                                         return;

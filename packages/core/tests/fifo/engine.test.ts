@@ -277,4 +277,59 @@ describe('FifoEngine', () => {
 
         expect(totalMsftQty).toBe(5);
     });
+
+    it('matches sells only against lots from the same broker', () => {
+        const existingHoldings: Holding[] = [
+            { id: 'ib-1', broker: 'IB', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2024-01-01', quantity: 10, currency: 'USD', unitPrice: 100 },
+            { id: 'rev-1', broker: 'Revolut', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2025-01-01', quantity: 5, currency: 'USD', unitPrice: 200 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'AAPL', dateTime: '2025-02-01, 10:00:00', quantity: -5, price: 300, proceeds: 1500, commission: 0 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'Revolut', { AAPL: 'САЩ' });
+
+        expect(result.sales).toHaveLength(1);
+        expect(result.sales[0].dateAcquired).toBe('2025-01-01');
+        expect(result.sales[0].buyPrice).toBe(200);
+        expect(result.holdings.find(h => h.id === 'ib-1')?.quantity).toBe(10);
+        expect(result.holdings.find(h => h.id === 'rev-1')).toBeUndefined();
+    });
+
+    it('matches sells against brokerless legacy lots for the same symbol and currency', () => {
+        const existingHoldings: Holding[] = [
+            { id: 'legacy-1', broker: '', country: 'САЩ', symbol: 'AAPL', dateAcquired: '2024-01-01', quantity: 10, currency: 'USD', unitPrice: 100 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'USD', symbol: 'AAPL', dateTime: '2025-02-01, 10:00:00', quantity: -5, price: 300, proceeds: 1500, commission: 0 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'IB', { AAPL: 'САЩ' });
+
+        expect(result.sales).toHaveLength(1);
+        expect(result.sales[0].dateAcquired).toBe('2024-01-01');
+        expect(result.sales[0].buyPrice).toBe(100);
+        expect(result.holdings[0].quantity).toBe(5);
+    });
+
+    it('does not match lots with the same symbol in a different currency', () => {
+        const existingHoldings: Holding[] = [
+            { id: 'usd-1', broker: 'IB', country: 'САЩ', symbol: 'SHOP', dateAcquired: '2024-01-01', quantity: 1, currency: 'USD', unitPrice: 70 },
+            { id: 'cad-1', broker: 'IB', country: 'Канада', symbol: 'SHOP', dateAcquired: '2024-02-01', quantity: 1, currency: 'CAD', unitPrice: 100 },
+        ];
+        const trades: Trade[] = [
+            { currency: 'CAD', symbol: 'SHOP', dateTime: '2025-03-01, 10:00:00', quantity: -1, price: 120, proceeds: 120, commission: 0 },
+        ];
+
+        const engine = new FifoEngine(existingHoldings);
+        const result = engine.processTrades(trades, 'IB', { SHOP: 'Канада' });
+
+        expect(result.sales).toHaveLength(1);
+        expect(result.sales[0].dateAcquired).toBe('2024-02-01');
+        expect(result.sales[0].buyPrice).toBe(100);
+        expect(result.holdings.find(h => h.id === 'usd-1')?.quantity).toBe(1);
+        expect(result.holdings.find(h => h.id === 'cad-1')).toBeUndefined();
+    });
 });

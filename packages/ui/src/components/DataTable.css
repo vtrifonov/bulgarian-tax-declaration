@@ -94,6 +94,15 @@
     background-color: rgba(220, 53, 69, 0.15) !important;
 }
 
+.data-table tbody tr.linked-row {
+    background-color: rgba(46, 160, 67, 0.16) !important;
+    border-left: 3px solid #2ea043;
+}
+
+.data-table tbody tr.linked-row:hover {
+    background-color: rgba(46, 160, 67, 0.22) !important;
+}
+
 .data-table tbody tr.consumed-row td {
     text-decoration: line-through;
     opacity: 0.5;

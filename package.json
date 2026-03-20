@@ -7,10 +7,11 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @bg-tax/ui dev",
     "bundle": "pnpm --filter @bg-tax/ui exec tauri build && node scripts/copy-bundle.mjs",
+    "typecheck": "pnpm --filter @bg-tax/core exec tsc -p tsconfig.json --noEmit && pnpm --filter @bg-tax/ui exec tsc -b && pnpm --filter @bg-tax/ui exec tsc -p ../../tsconfig.scripts.json --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "format": "dprint fmt",
-    "format:check": "dprint check",
+    "format": "node ./scripts/run-dprint.mjs fmt",
+    "format:check": "node ./scripts/run-dprint.mjs check",
     "spell": "cspell '**'"
   },
   "engines": {

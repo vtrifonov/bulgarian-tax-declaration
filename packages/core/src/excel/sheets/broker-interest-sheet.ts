@@ -27,8 +27,16 @@ export function addBrokerInterestSheets(workbook: Workbook, state: AppState): vo
     }
 }
 
+function sanitizeWorksheetName(name: string): string {
+    return name
+        .replace(/[*?:\\/[\]]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 31);
+}
+
 function addInterestSheet(workbook: Workbook, bi: BrokerInterest, state: AppState): void {
-    const sheetName = `${bi.broker} Лихви ${bi.currency}`;
+    const sheetName = sanitizeWorksheetName(`${bi.broker} Лихви ${bi.currency}`);
     const sheet = workbook.addWorksheet(sheetName);
 
     const ccy = state.baseCurrency;

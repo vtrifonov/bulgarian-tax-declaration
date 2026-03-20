@@ -1,5 +1,6 @@
 import * as ExcelJS from 'exceljs';
 
+import { resolveIsinSync } from '../isin-map.js';
 import type { Holding } from '../types/index.js';
 const randomUUID = () => crypto.randomUUID();
 
@@ -176,8 +177,16 @@ export async function importHoldingsFromExcel(buffer: ArrayBuffer): Promise<Hold
             notes: colMap.notes ? cellStr(row.getCell(colMap.notes)) || undefined : undefined,
         };
 
+        const isin = resolveIsinSync(symbol);
+
+        if (isin) {
+            holding.isin = isin;
+        }
+
         if (hasConsumedBy) {
-            holding.consumedByFifo = true;
+            if (quantity <= 0) {
+                holding.consumedByFifo = true;
+            }
             // Store raw sale numbers temporarily — resolved to IDs by importFullExcel
             (holding as Holding & { _consumedByNums?: string })._consumedByNums = consumedByRaw;
         }
@@ -285,7 +294,9 @@ export function importHoldingsFromCsv(content: string): Holding[] {
         };
 
         if (hasConsumedBy) {
-            holding.consumedByFifo = true;
+            if (quantity <= 0) {
+                holding.consumedByFifo = true;
+            }
             (holding as Holding & { _consumedByNums?: string })._consumedByNums = consumedByRaw;
         }
 

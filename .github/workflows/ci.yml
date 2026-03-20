@@ -55,6 +55,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install
+      - run: pnpm typecheck
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm --filter @bg-tax/ui lint

@@ -14,22 +14,26 @@ export interface FifoResult {
 }
 
 export class FifoEngine {
-    private lots: Map<string, Holding[]>; // symbol → sorted lots (oldest first)
+    private lots: Map<string, Holding[]>; // symbol+currency → sorted lots (oldest first)
 
     constructor(existingHoldings: Holding[]) {
         this.lots = new Map();
 
         for (const h of existingHoldings) {
-            const list = this.lots.get(h.symbol) ?? [];
+            const list = this.lots.get(this.getLotKey(h.symbol, h.currency)) ?? [];
 
             list.push({ ...h });
-            this.lots.set(h.symbol, list);
+            this.lots.set(this.getLotKey(h.symbol, h.currency), list);
         }
 
         // Sort each symbol's lots by dateAcquired
         for (const [, list] of this.lots) {
             list.sort((a, b) => a.dateAcquired.localeCompare(b.dateAcquired));
         }
+    }
+
+    private getLotKey(symbol: string, currency: string): string {
+        return `${symbol}::${currency}`;
     }
 
     processTrades(
@@ -78,10 +82,10 @@ export class FifoEngine {
             currency: trade.currency,
             unitPrice: trade.price,
         };
-        const list = this.lots.get(trade.symbol) ?? [];
+        const list = this.lots.get(this.getLotKey(trade.symbol, trade.currency)) ?? [];
 
         list.push(lot);
-        this.lots.set(trade.symbol, list);
+        this.lots.set(this.getLotKey(trade.symbol, trade.currency), list);
     }
 
     private sellLots(
@@ -94,15 +98,20 @@ export class FifoEngine {
         const consumed: Holding[] = [];
         let remaining = Math.abs(trade.quantity);
         const dateSold = trade.dateTime.split(',')[0].trim();
-        const lots = this.lots.get(trade.symbol) ?? [];
+        const lots = this.lots.get(this.getLotKey(trade.symbol, trade.currency)) ?? [];
 
         // Per-share cost basis from the sell trade (IB provides total basis)
         const basisPerShare = trade.basis !== undefined && trade.basis !== null
             ? Math.abs(trade.basis) / Math.abs(trade.quantity)
             : 0;
 
-        while (remaining > 0 && lots.length > 0) {
-            const lot = lots[0];
+        while (remaining > 0) {
+            const lotIndex = lots.findIndex(lot => lot.broker === broker || !lot.broker);
+
+            if (lotIndex === -1) {
+                break;
+            }
+            const lot = lots[lotIndex];
             const consumedQty = Math.min(lot.quantity, remaining);
 
             // Use lot price if available, fall back to trade's basis (e.g. for transfers with no price)
@@ -134,7 +143,7 @@ export class FifoEngine {
 
             if (lot.quantity <= 0) {
                 lot.consumedByFifo = true;
-                consumed.push(lots.shift() as Holding);
+                consumed.push(lots.splice(lotIndex, 1)[0] as Holding);
             }
         }
 

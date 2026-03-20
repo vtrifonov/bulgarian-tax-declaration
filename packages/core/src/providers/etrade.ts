@@ -16,7 +16,7 @@ function ensureWorker(): void {
     // In browser environments, pdfjs-dist needs a worker.
     // PDFParse.setWorker() with no args uses the bundled default in Node.
     // In browser, we point to the pdfjs-dist worker via CDN or local path.
-    if (typeof window !== 'undefined') {
+    if ('window' in globalThis) {
         try {
             // Use the worker bundled with pdfjs-dist (resolved by Vite/bundler)
             PDFParse.setWorker(
@@ -43,8 +43,6 @@ export const etradeProvider: BrokerProvider = {
             async parseBinary(buffer: ArrayBuffer): Promise<BrokerProviderResult> {
                 ensureWorker();
                 const parser = new PDFParse({ data: new Uint8Array(buffer) });
-
-                await parser.load();
                 const result = await parser.getText();
                 const fullText = result.pages.map((p: { text: string }) => p.text).join('\n');
 

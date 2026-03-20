@@ -340,8 +340,25 @@ describe('generateNraAppendix8Part3', () => {
 
         const buf1 = await generateNraAppendix8Part3(dividends, fxRates);
         const buf2 = await generateNraAppendix8Part3(dividends, fxRates);
+        const wb1 = new ExcelJS.Workbook();
+        const wb2 = new ExcelJS.Workbook();
 
-        expect(buf1).toEqual(buf2);
+        await wb1.xlsx.load(buf1.buffer as ArrayBuffer);
+        await wb2.xlsx.load(buf2.buffer as ArrayBuffer);
+
+        const sheet1 = wb1.getWorksheet('Приложение 8 Част III');
+        const sheet2 = wb2.getWorksheet('Приложение 8 Част III');
+
+        expect(sheet1).toBeDefined();
+        expect(sheet2).toBeDefined();
+        expect(sheet1!.rowCount).toBe(sheet2!.rowCount);
+        expect(sheet1!.columnCount).toBe(sheet2!.columnCount);
+
+        for (let row = 1; row <= sheet1!.rowCount; row++) {
+            for (let col = 1; col <= sheet1!.columnCount; col++) {
+                expect(sheet1!.getRow(row).getCell(col).value).toEqual(sheet2!.getRow(row).getCell(col).value);
+            }
+        }
     });
 
     it('preserves dividend order after sorting by symbol then date', async () => {

@@ -64,6 +64,25 @@ function fillMissingIsins(holdings: Holding[]): void {
     }
 }
 
+function mergeFifoResultsWithExistingHoldings(
+    existingHoldings: Holding[],
+    fifoHoldings: Holding[],
+    consumedHoldings: Holding[],
+): Holding[] {
+    const existingIds = new Set(existingHoldings.map(h => h.id));
+    const consumedExisting = consumedHoldings.filter(h => existingIds.has(h.id));
+    const consumedIds = new Set(consumedExisting.map(h => h.id));
+    const updatedById = new Map(
+        fifoHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
+    );
+    const survivingOriginals = existingHoldings
+        .filter(h => !consumedIds.has(h.id))
+        .map(h => updatedById.get(h.id) ?? h);
+    const newHoldings = fifoHoldings.filter(h => !existingIds.has(h.id));
+
+    return [...survivingOriginals, ...consumedExisting, ...newHoldings];
+}
+
 function detectFileType(content: string, filename: string): ImportedFile['type'] | null {
     // IB Activity statement
     if (content.startsWith('Statement,Header,Field Name') || content.includes('Trades,Header,DataDiscriminator')) {
@@ -86,6 +105,23 @@ function detectFileType(content: string, filename: string): ImportedFile['type']
     }
 
     return null;
+}
+
+function importPriority(type: ImportedFile['type'] | null): number {
+    switch (type) {
+        case 'ib':
+            return 10;
+        case 'revolut-investments':
+            return 20;
+        case 'revolut-account':
+            return 30;
+        case 'revolut':
+            return 40;
+        case 'etrade':
+            return 50;
+        default:
+            return 999;
+    }
 }
 
 export function Import() {
@@ -551,8 +587,12 @@ export function Import() {
                 }
 
                 // FIFO: process all trades (buys + sells) against existing holdings
-                const fifo = new FifoEngine([...useAppStore.getState().holdings]);
-                const { holdings: fifoHoldings, consumedHoldings: fifoConsumed, sales: newSales, warnings } = fifo.processTrades(parsed.trades, 'IB', countryMap);
+                const currentHoldings = useAppStore.getState().holdings;
+                const sellTrades = parsed.trades.filter(t => t.quantity < 0);
+                const fifo = new FifoEngine([...currentHoldings]);
+                const { holdings: fifoHoldings, consumedHoldings: fifoConsumed, sales: newSales, warnings } = fifo.processTrades(sellTrades, 'IB', countryMap);
+                const existingIds = new Set(currentHoldings.map(h => h.id));
+                const consumedExisting = fifoConsumed.filter(h => existingIds.has(h.id));
 
                 for (const s of newSales) {
                     if (!s.source) {
@@ -560,7 +600,7 @@ export function Import() {
                     }
                 }
 
-                for (const h of fifoConsumed) {
+                for (const h of consumedExisting) {
                     if (!h.source) {
                         h.source = { type: 'IB', file: file.name };
                     }
@@ -571,10 +611,11 @@ export function Import() {
                 // If prior-year holdings exist, only add this year's buy lots (skip pre-existing)
                 const hasPriorHoldings = useAppStore.getState().holdings.some(h => h.source?.type !== 'IB');
                 let finalHoldings: Holding[];
+                let allHoldings: Holding[];
 
                 if (parsed.openPositions.length > 0) {
-                    const ibExistingHoldings = useAppStore.getState().holdings.map(h => ({ symbol: h.symbol, broker: h.broker }));
-                    finalHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
+                    const ibExistingHoldings = currentHoldings.map(h => ({ symbol: h.symbol, broker: h.broker }));
+                    const statementHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
                         broker: 'IB',
                         countryMap,
                         source: { type: 'IB', file: file.name },
@@ -583,17 +624,29 @@ export function Import() {
                         skipPreExisting: hasPriorHoldings,
                         existingHoldings: ibExistingHoldings,
                     });
+                    finalHoldings = statementHoldings;
+                    allHoldings = [
+                        ...mergeFifoResultsWithExistingHoldings(currentHoldings, fifoHoldings, fifoConsumed),
+                        ...statementHoldings,
+                    ];
                 } else {
-                    finalHoldings = fifoHoldings;
+                    const currentStatementFifo = new FifoEngine([]);
+                    const { holdings: currentStatementHoldings } = currentStatementFifo.processTrades(parsed.trades, 'IB', countryMap);
 
-                    for (const h of finalHoldings) {
+                    finalHoldings = [
+                        ...mergeFifoResultsWithExistingHoldings(currentHoldings, fifoHoldings, fifoConsumed),
+                        ...currentStatementHoldings,
+                    ];
+                    allHoldings = finalHoldings;
+
+                    for (const h of finalHoldings.filter(h => !existingIds.has(h.id))) {
                         if (!h.source) {
                             h.source = { type: 'IB', file: file.name };
                         }
                     }
                 }
                 // Merge: keep non-IB holdings (with symbol + country normalization), replace IB holdings
-                const existingNonIb = useAppStore.getState().holdings.filter(h => h.source?.type !== 'IB');
+                const existingNonIb = currentHoldings.filter(h => h.source?.type !== 'IB');
 
                 for (const h of existingNonIb) {
                     // Normalize "CSPX/SXR8" style symbols from prior-year imports
@@ -620,13 +673,6 @@ export function Import() {
                         h.country = countryMap[h.symbol] ?? '';
                     }
                 }
-                // Include consumed holdings (marked by FIFO engine) so user can see what was matched
-                const consumedIds = new Set(fifoConsumed.map(h => h.id));
-                const remainingNonIb = existingNonIb.filter(h => !consumedIds.has(h.id));
-
-                // Apply ISIN map from IB CSV, then fill remaining via global ISIN cache
-                const allHoldings = [...remainingNonIb, ...fifoConsumed, ...finalHoldings];
-
                 if (parsed.isinMap) {
                     for (const h of allHoldings) {
                         if (!h.isin && parsed.isinMap[h.symbol]) {
@@ -699,14 +745,22 @@ export function Import() {
                     currency: t.currency,
                 }));
 
-                const fifo = new FifoEngine([...useAppStore.getState().holdings]);
-                const { holdings: newHoldings, consumedHoldings: revConsumed, sales: newSales, warnings } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
+                const currentHoldings = useAppStore.getState().holdings;
+                const sellTrades = fifoTrades.filter(t => t.quantity < 0);
+                const fifo = new FifoEngine([...currentHoldings]);
+                const { holdings: updatedExistingHoldings, consumedHoldings: revConsumed, sales: newSales, warnings } = fifo.processTrades(sellTrades, 'Revolut', countryMap);
+                const existingIds = new Set(currentHoldings.map(h => h.id));
+                const consumedExisting = revConsumed.filter(h => existingIds.has(h.id));
 
-                for (const h of newHoldings) {
+                for (const h of parsedHoldings) {
+                    if (!h.country) {
+                        h.country = countryMap[h.symbol] ?? '';
+                    }
                     if (!h.source) {
                         h.source = { type: 'Revolut', file: file.name };
                     }
                 }
+                fillMissingIsins(parsedHoldings);
 
                 for (const s of newSales) {
                     if (!s.source) {
@@ -714,27 +768,15 @@ export function Import() {
                     }
                 }
 
-                for (const h of revConsumed) {
+                for (const h of consumedExisting) {
                     if (!h.source) {
                         h.source = { type: 'Revolut', file: file.name };
                     }
                 }
-                // FifoEngine flattens holdings by symbol (Map), losing original order.
-                // Preserve original order: keep all non-consumed holdings in their
-                // original positions, with quantities updated by FIFO. Append new
-                // Revolut holdings at the end.
-                const currentHoldings = useAppStore.getState().holdings;
-                const existingIds = new Set(currentHoldings.map(h => h.id));
-                const consumedIds = new Set(revConsumed.map(h => h.id));
-                const updatedById = new Map(
-                    newHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
-                );
-                const survivingOriginals = currentHoldings
-                    .filter(h => !consumedIds.has(h.id))
-                    .map(h => updatedById.get(h.id) ?? h);
-                const newRevolutHoldings = newHoldings.filter(h => !existingIds.has(h.id));
-
-                importHoldings([...survivingOriginals, ...revConsumed, ...newRevolutHoldings]);
+                importHoldings([
+                    ...mergeFifoResultsWithExistingHoldings(currentHoldings, updatedExistingHoldings, revConsumed),
+                    ...parsedHoldings,
+                ]);
 
                 // Merge: keep non-Revolut sales, add Revolut sales
                 const existingSales = useAppStore.getState().sales.filter(s => s.source?.type !== 'Revolut');
@@ -749,7 +791,7 @@ export function Import() {
                     name: file.name,
                     type: 'revolut-investments',
                     status: 'success',
-                    message: `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${newHoldings.length} remaining holdings${warnMsg}`,
+                    message: `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${parsedHoldings.length} remaining holdings${warnMsg}`,
                 });
             } else if (fileType === 'revolut-account') {
                 const { parseRevolutAccountStatement } = await import('@bg-tax/core');
@@ -831,10 +873,11 @@ export function Import() {
     }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear, setForeignAccounts, processEtradeResult]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
-        Array.from(files).forEach(file => {
-            if (file.name.endsWith('.csv') || file.name.endsWith('.pdf')) {
-                void processFile(file);
-            } else {
+        void (async () => {
+            const supported = Array.from(files).filter(file => file.name.endsWith('.csv') || file.name.endsWith('.pdf'));
+            const unsupported = Array.from(files).filter(file => !file.name.endsWith('.csv') && !file.name.endsWith('.pdf'));
+
+            for (const file of unsupported) {
                 addImportedFile({
                     name: file.name,
                     type: 'ib',
@@ -842,7 +885,23 @@ export function Import() {
                     message: 'Only .csv and .pdf files are supported',
                 });
             }
-        });
+
+            const withPriority = await Promise.all(supported.map(async (file) => {
+                if (file.name.toLowerCase().endsWith('.pdf')) {
+                    return { file, priority: importPriority('etrade') };
+                }
+
+                const content = await file.text();
+
+                return { file, priority: importPriority(detectFileType(content, file.name)) };
+            }));
+
+            withPriority.sort((a, b) => a.priority - b.priority || a.file.name.localeCompare(b.file.name));
+
+            for (const { file } of withPriority) {
+                await processFile(file);
+            }
+        })();
     }, [processFile, addImportedFile]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {

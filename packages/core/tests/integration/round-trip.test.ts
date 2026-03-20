@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import * as ExcelJS from 'exceljs';
+import { PDFParse } from 'pdf-parse';
 import {
     describe,
     expect,
@@ -23,11 +24,14 @@ import {
     importPreviousSpb8,
     type InterestEntry,
     matchWhtToDividends,
+    parseEtradePdf,
     parseIBCsv,
+    parseRevolutAccountStatement,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
     populateSaleFxRates,
     resolveCountry,
+    resolveIsinSync,
     splitOpenPositions,
     TaxCalculator,
     type Trade,
@@ -48,7 +52,7 @@ const FIGI_COUNTRIES: Record<string, string> = {
     DAL: 'САЩ',
     RIO: 'САЩ',
     COIN: 'САЩ',
-    ASML: 'САЩ',
+    ASML: 'Нидерландия (Холандия)',
     SAPd: 'Германия',
     SAP: 'Германия',
     '1810': 'Хонконг',
@@ -89,6 +93,247 @@ function groupInterestByCurrency(broker: string, entries: InterestEntry[]): Brok
     return Array.from(byCurrency.entries()).map(([currency, entries]) => ({ broker, currency, entries }));
 }
 
+function mergeFifoResultsWithExistingHoldings(
+    existingHoldings: Holding[],
+    fifoHoldings: Holding[],
+    consumedHoldings: Holding[],
+): Holding[] {
+    const existingIds = new Set(existingHoldings.map(h => h.id));
+    const consumedExisting = consumedHoldings.filter(h => existingIds.has(h.id));
+    const consumedIds = new Set(consumedExisting.map(h => h.id));
+    const updatedById = new Map(
+        fifoHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
+    );
+    const survivingOriginals = existingHoldings
+        .filter(h => !consumedIds.has(h.id))
+        .map(h => updatedById.get(h.id) ?? h);
+    const newHoldings = fifoHoldings.filter(h => !existingIds.has(h.id));
+
+    return [...survivingOriginals, ...consumedExisting, ...newHoldings];
+}
+
+async function extractPdfText(filename: string): Promise<string> {
+    const buf = readFileSync(join(SAMPLES, filename));
+    const parser = new PDFParse({ data: new Uint8Array(buf) });
+
+    await parser.load();
+    const result = await parser.getText();
+
+    return result.pages.map((p: { text: string }) => p.text).join('\n');
+}
+
+function fillMissingIsins(holdings: Holding[]): void {
+    for (const holding of holdings) {
+        if (!holding.isin) {
+            holding.isin = resolveIsinSync(holding.symbol);
+        }
+    }
+}
+
+function cellValueForCompare(cell: ExcelJS.Cell): string | number | null {
+    const value = cell.value;
+
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === 'object' && 'result' in value) {
+        const result = (value as { result?: unknown }).result;
+
+        if (result === null || result === undefined) {
+            return null;
+        }
+
+        return typeof result === 'number' ? result : String(result);
+    }
+
+    return typeof value === 'number' ? value : String(value);
+}
+
+function expectWorkbookSheetsToMatch(generated: ExcelJS.Workbook, reference: ExcelJS.Workbook, sheetNames: string[]): void {
+    expect(generated.worksheets.map(ws => ws.name)).toEqual(reference.worksheets.map(ws => ws.name));
+
+    for (const sheetName of sheetNames) {
+        const generatedSheet = generated.getWorksheet(sheetName);
+        const referenceSheet = reference.getWorksheet(sheetName);
+
+        expect(generatedSheet, `${sheetName} exists in generated workbook`).toBeDefined();
+        expect(referenceSheet, `${sheetName} exists in reference workbook`).toBeDefined();
+        expect(generatedSheet!.rowCount, `${sheetName} row count`).toBe(referenceSheet!.rowCount);
+
+        const maxColumns = Math.max(generatedSheet!.columnCount, referenceSheet!.columnCount);
+
+        for (let rowIndex = 1; rowIndex <= referenceSheet!.rowCount; rowIndex++) {
+            const generatedRow = generatedSheet!.getRow(rowIndex);
+            const referenceRow = referenceSheet!.getRow(rowIndex);
+
+            for (let columnIndex = 1; columnIndex <= maxColumns; columnIndex++) {
+                const generatedValue = cellValueForCompare(generatedRow.getCell(columnIndex));
+                const referenceValue = cellValueForCompare(referenceRow.getCell(columnIndex));
+
+                if (typeof generatedValue === 'number' && typeof referenceValue === 'number') {
+                    expect(generatedValue, `${sheetName} r${rowIndex} c${columnIndex}`).toBeCloseTo(referenceValue, 8);
+                } else {
+                    expect(generatedValue, `${sheetName} r${rowIndex} c${columnIndex}`).toBe(referenceValue);
+                }
+            }
+        }
+    }
+}
+
+async function buildReferenceSampleState(): Promise<AppState> {
+    const referenceWorkbook = readFileSync(join(SAMPLES, 'Данъчна_2025.xlsx'));
+    const referenceImport = await importFullExcel(referenceWorkbook.buffer as ArrayBuffer);
+    const holdingsCsv = readFileSync(join(SAMPLES, 'holdings.csv'), 'utf-8');
+    const initialHoldings = importHoldingsFromCsv(holdingsCsv);
+
+    const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
+    const ibParsed = parseIBCsv(ibCsv);
+    const { matched, unmatched } = matchWhtToDividends(ibParsed.dividends, ibParsed.withholdingTax);
+    const allDividends = [...matched, ...unmatched];
+
+    for (const dividend of allDividends) {
+        dividend.country = resolveCountryWithFigi(dividend.symbol);
+        const { bgTaxDue, whtCredit } = calcDividendTax(dividend.grossAmount, dividend.withholdingTax);
+
+        dividend.bgTaxDue = bgTaxDue;
+        dividend.whtCredit = whtCredit;
+    }
+
+    const ibCountryMap = buildCountryMap([
+        ...ibParsed.trades,
+        ...ibParsed.openPositions.map(position => ({ symbol: position.symbol })),
+    ]);
+    const ibSellTrades = ibParsed.trades.filter(trade => trade.quantity < 0);
+    const ibFifo = new FifoEngine([...initialHoldings]);
+    const { holdings: updatedExistingAfterIb, consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(
+        ibSellTrades,
+        'IB',
+        ibCountryMap,
+    );
+    const ibStatementHoldings = splitOpenPositions(ibParsed.openPositions, ibParsed.trades, {
+        broker: 'IB',
+        countryMap: ibCountryMap,
+        taxYear: 2025,
+        symbolAliases: ibParsed.symbolAliases,
+        skipPreExisting: true,
+        existingHoldings: initialHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+    });
+    const holdingsAfterIb = [
+        ...mergeFifoResultsWithExistingHoldings(initialHoldings, updatedExistingAfterIb, ibConsumed),
+        ...ibStatementHoldings,
+    ];
+
+    fillMissingIsins(holdingsAfterIb);
+
+    const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
+    const { trades: revTrades, holdings: revParsedHoldings } = parseRevolutInvestmentsCsv(investCsv);
+
+    fillMissingIsins(revParsedHoldings);
+    const revCountryMap = buildCountryMap(revTrades.map(t => ({ ticker: t.ticker })));
+
+    for (const holding of revParsedHoldings) {
+        if (!holding.country) {
+            holding.country = revCountryMap[holding.symbol] ?? '';
+        }
+    }
+
+    const revSellTrades = revTrades
+        .filter(trade => trade.type.includes('SELL'))
+        .map(trade => ({
+            symbol: trade.ticker,
+            dateTime: trade.date,
+            quantity: -trade.quantity,
+            price: trade.pricePerShare,
+            proceeds: trade.totalAmount,
+            commission: 0,
+            currency: trade.currency,
+        }));
+    const revFifo = new FifoEngine([...holdingsAfterIb]);
+    const { holdings: updatedExistingAfterRev, consumedHoldings: revConsumed, sales: revSales } = revFifo.processTrades(
+        revSellTrades,
+        'Revolut',
+        revCountryMap,
+    );
+    const finalHoldings = [
+        ...mergeFifoResultsWithExistingHoldings(holdingsAfterIb, updatedExistingAfterRev, revConsumed),
+        ...revParsedHoldings,
+    ];
+
+    const etradeText = await extractPdfText('ClientStatements_9999_2025.pdf');
+    const etrade = parseEtradePdf(etradeText);
+    const etradeCountryMap = buildCountryMap((etrade.openPositions ?? []).map(position => ({ symbol: position.symbol })));
+    const etradeHoldings = splitOpenPositions(etrade.openPositions ?? [], [], {
+        broker: 'E*TRADE',
+        countryMap: etradeCountryMap,
+        taxYear: 2025,
+        symbolAliases: {},
+        skipPreExisting: true,
+        existingHoldings: finalHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+    });
+
+    fillMissingIsins(etradeHoldings);
+
+    const finalHoldingsWithEtrade = [
+        ...finalHoldings.filter(h => h.source?.type !== 'E*TRADE'),
+        ...etradeHoldings,
+    ];
+
+    const etradeDividends = (etrade.dividends ?? []).map(dividend => {
+        const { bgTaxDue, whtCredit } = calcDividendTax(dividend.grossAmount, dividend.withholdingTax);
+
+        return {
+            ...dividend,
+            country: resolveCountryWithFigi(dividend.symbol) || 'US',
+            bgTaxDue,
+            whtCredit,
+        };
+    });
+
+    const eurInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8'));
+    const gbpInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-gbp.csv'), 'utf-8'));
+    const revolutAccount = parseRevolutAccountStatement(readFileSync(join(SAMPLES, 'revolut-account.csv'), 'utf-8'));
+    const ibForeignAccounts = (ibParsed.cashBalances ?? []).map(balance => ({
+        broker: ibParsed.brokerName ?? 'Interactive Brokers',
+        type: '03' as const,
+        maturity: 'L' as const,
+        country: ibParsed.brokerName?.includes('Ireland') ? 'IE' : 'US',
+        currency: balance.currency,
+        amountStartOfYear: balance.amountStartOfYear,
+        amountEndOfYear: balance.amountEndOfYear,
+    }));
+
+    return {
+        taxYear: 2025,
+        baseCurrency: 'BGN',
+        language: 'bg',
+        holdings: finalHoldingsWithEtrade,
+        sales: [...ibSales, ...revSales],
+        dividends: [...allDividends, ...etradeDividends],
+        stockYield: ibParsed.stockYield,
+        brokerInterest: [
+            gbpInterest,
+            eurInterest,
+            {
+                broker: 'E*TRADE',
+                currency: 'USD',
+                entries: etrade.interest ?? [],
+            },
+            ...groupInterestByCurrency('IB', ibParsed.interest),
+        ],
+        manualEntries: [],
+        foreignAccounts: [
+            revolutAccount,
+            ...ibForeignAccounts,
+            ...(etrade.foreignAccounts ?? []),
+            { broker: 'Revolut Savings', type: '02', maturity: 'L', country: 'IE', currency: 'GBP', amountStartOfYear: 0, amountEndOfYear: 200 },
+            { broker: 'Revolut Savings', type: '02', maturity: 'L', country: 'IE', currency: 'EUR', amountStartOfYear: 0, amountEndOfYear: 300 },
+        ],
+        yearEndPrices: referenceImport.yearEndPrices,
+        fxRates: referenceImport.fxRates,
+    };
+}
+
 function buildAppStateFromIB(csv: string, existingHoldings: Holding[] = []): AppState {
     const parsed = parseIBCsv(csv);
 
@@ -112,15 +357,34 @@ function buildAppStateFromIB(csv: string, existingHoldings: Holding[] = []): App
         countryMap[t.symbol] = resolveCountry(t.symbol);
     }
 
-    // FIFO: process all trades against existing holdings
+    for (const p of parsed.openPositions) {
+        countryMap[p.symbol] ??= resolveCountry(p.symbol);
+    }
+
+    // Sales match only previously imported holdings.
+    const sellTrades = parsed.trades.filter(t => t.quantity < 0);
     const fifo = new FifoEngine([...existingHoldings]);
-    const { holdings, consumedHoldings, sales } = fifo.processTrades(parsed.trades, 'IB', countryMap);
+    const { holdings, consumedHoldings, sales } = fifo.processTrades(sellTrades, 'IB', countryMap);
+    const finalHoldings = parsed.openPositions.length > 0
+        ? splitOpenPositions(parsed.openPositions, parsed.trades, {
+            broker: 'IB',
+            countryMap,
+            taxYear: 2025,
+            symbolAliases: parsed.symbolAliases,
+            skipPreExisting: existingHoldings.length > 0,
+            existingHoldings: existingHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+        })
+        : [
+            ...mergeFifoResultsWithExistingHoldings(existingHoldings, holdings, consumedHoldings),
+            ...new FifoEngine([]).processTrades(parsed.trades, 'IB', countryMap).holdings,
+        ];
+    const consumedExisting = consumedHoldings.filter(h => existingHoldings.some(existing => existing.id === h.id));
 
     return {
         taxYear: 2025,
         baseCurrency: 'BGN',
         language: 'bg',
-        holdings: [...consumedHoldings, ...holdings],
+        holdings: [...consumedExisting, ...finalHoldings],
         sales,
         dividends: allDividends,
         stockYield: parsed.stockYield,
@@ -156,12 +420,29 @@ function buildFullState(): AppState {
     for (const t of parsed.trades) {
         ibCountryMap[t.symbol] = resolveCountry(t.symbol);
     }
+
+    for (const p of parsed.openPositions) {
+        ibCountryMap[p.symbol] ??= resolveCountry(p.symbol);
+    }
+    const ibSellTrades = parsed.trades.filter(t => t.quantity < 0);
     const ibFifo = new FifoEngine([...initialHoldings]);
-    const { holdings: ibHoldings, consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(parsed.trades, 'IB', ibCountryMap);
+    const { holdings: ibFifoHoldings, consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(ibSellTrades, 'IB', ibCountryMap);
+    const ibConsumedExisting = ibConsumed.filter(h => initialHoldings.some(existing => existing.id === h.id));
+    const ibOpenHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
+        broker: 'IB',
+        countryMap: ibCountryMap,
+        taxYear: 2025,
+        symbolAliases: parsed.symbolAliases,
+        skipPreExisting: true,
+        existingHoldings: initialHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+    });
+    const ibHoldings = parsed.openPositions.length > 0
+        ? mergeFifoResultsWithExistingHoldings(initialHoldings, ibOpenHoldings, ibConsumedExisting)
+        : mergeFifoResultsWithExistingHoldings(initialHoldings, ibFifoHoldings, ibConsumed);
 
     // 3. Parse Revolut investments and run FIFO
     const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
-    const { trades: revTrades } = parseRevolutInvestmentsCsv(investCsv);
+    const { trades: revTrades, holdings: revParsedHoldings } = parseRevolutInvestmentsCsv(investCsv);
     const revCountryMap: Record<string, string> = {};
 
     for (const t of revTrades) {
@@ -176,8 +457,13 @@ function buildFullState(): AppState {
         commission: 0,
         currency: t.currency,
     }));
+    const revSellTrades = fifoTrades.filter(t => t.quantity < 0);
     const revFifo = new FifoEngine([...ibHoldings]);
-    const { holdings: allHoldings, consumedHoldings: revConsumed, sales: revSales } = revFifo.processTrades(fifoTrades, 'Revolut', revCountryMap);
+    const { holdings: updatedExistingHoldings, consumedHoldings: revConsumed, sales: revSales } = revFifo.processTrades(revSellTrades, 'Revolut', revCountryMap);
+    const mergedHoldings = [
+        ...mergeFifoResultsWithExistingHoldings(ibHoldings, updatedExistingHoldings, revConsumed),
+        ...revParsedHoldings,
+    ];
 
     // 4. Parse Revolut savings interest
     const eurInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8'));
@@ -187,7 +473,7 @@ function buildFullState(): AppState {
         taxYear: 2025,
         baseCurrency: 'BGN',
         language: 'bg',
-        holdings: [...ibConsumed, ...revConsumed, ...allHoldings],
+        holdings: mergedHoldings,
         sales: [...ibSales, ...revSales],
         dividends: allDividends,
         stockYield: parsed.stockYield,
@@ -302,24 +588,24 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const csv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
             const state = buildAppStateFromIB(csv);
 
-            // AMZN: bought 20 then sold 20 → fully consumed
+            // Same-statement buy+sell lots should produce sales, not consumed holdings.
             const amznConsumed = state.holdings.filter(h => h.symbol === 'AMZN' && h.consumedByFifo);
 
-            expect(amznConsumed).toHaveLength(1);
-            expect(amznConsumed[0].quantity).toBe(0);
-            expect(amznConsumed[0].consumedBySaleIds).toBeDefined();
-            expect(amznConsumed[0].consumedBySaleIds!.length).toBeGreaterThan(0);
+            expect(amznConsumed).toHaveLength(0);
 
-            // SAP (aliased from SAPd): bought 12 then sold 12 → fully consumed
+            // SAP (aliased from SAPd): bought 12 then sold 12 → sale only, no holding row
             const sapConsumed = state.holdings.filter(h => h.symbol === 'SAP' && h.consumedByFifo);
 
-            expect(sapConsumed).toHaveLength(1);
-            expect(sapConsumed[0].quantity).toBe(0);
+            expect(sapConsumed).toHaveLength(0);
 
-            // GOOG: bought 15 + transfer 150, sold 8 → partially consumed, NOT in consumed list
-            const googActive = state.holdings.filter(h => h.symbol === 'GOOG' && !h.consumedByFifo);
+            // GOOG and MSFT remain as open positions at period end.
+            const googActive = state.holdings.filter(h => h.symbol === 'GOOG');
+            const msftActive = state.holdings.filter(h => h.symbol === 'MSFT');
 
             expect(googActive.length).toBeGreaterThan(0);
+            expect(msftActive).toHaveLength(1);
+            expect(msftActive[0].dateAcquired).toBe('');
+            expect(msftActive[0].unitPrice).toBe(320);
         });
 
         it('parses transfer-in from Transfers section', () => {
@@ -350,26 +636,15 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             const consumedCount = state.holdings.filter(h => h.consumedByFifo).length;
 
-            expect(consumedCount).toBeGreaterThan(0);
+            expect(consumedCount).toBe(0);
 
             const buffer = await generateExcel(state);
             const reimported = await importFullExcel(buffer.buffer as ArrayBuffer);
 
-            // Consumed holdings survive round-trip (re-import may detect additional consumed via qty=0)
+            // Same-statement consumed buys should not be exported as holdings.
             const reimportedConsumed = reimported.holdings.filter(h => h.consumedByFifo);
 
-            expect(reimportedConsumed.length).toBeGreaterThanOrEqual(consumedCount);
-
-            // consumedBySaleIds resolved to valid sale IDs
-            for (const h of reimportedConsumed) {
-                expect(h.consumedBySaleIds).toBeDefined();
-
-                for (const saleId of h.consumedBySaleIds!) {
-                    const sale = reimported.sales.find(s => s.id === saleId);
-
-                    expect(sale).toBeDefined();
-                }
-            }
+            expect(reimportedConsumed).toHaveLength(0);
         });
     });
 
@@ -1826,96 +2101,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
     describe('Test 23: Full import matches reference Excel (Данъчна_2025.xlsx)', () => {
         it('exports from all samples and matches the reference file cell-by-cell', async () => {
-            // Build state replicating the UI flow:
-            // 1. Import initial holdings
-            // 2. Run IB FIFO + use splitOpenPositions for IB holdings
-            // 3. Run Revolut FIFO with existing-id separation for ordering
-            const holdingsCsv = readFileSync(join(SAMPLES, 'holdings.csv'), 'utf-8');
-            const initialHoldings = importHoldingsFromCsv(holdingsCsv);
-
-            const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
-            const parsed = parseIBCsv(ibCsv);
-
-            const { matched, unmatched } = matchWhtToDividends(parsed.dividends, parsed.withholdingTax);
-            const allDividends = [...matched, ...unmatched];
-
-            for (const d of allDividends) {
-                d.country = resolveCountryWithFigi(d.symbol);
-                const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
-
-                d.bgTaxDue = bgTaxDue;
-                d.whtCredit = whtCredit;
-            }
-
-            const ibCountryMap = buildCountryMap([
-                ...parsed.trades,
-                ...parsed.openPositions.map(p => ({ symbol: p.symbol })),
-            ]);
-            const ibFifo = new FifoEngine([...initialHoldings]);
-            const { consumedHoldings: ibConsumed, sales: ibSales } = ibFifo.processTrades(parsed.trades, 'IB', ibCountryMap);
-
-            const ibHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
-                broker: 'IB',
-                countryMap: ibCountryMap,
-                taxYear: 2025,
-                symbolAliases: parsed.symbolAliases,
-                skipPreExisting: true,
-            });
-
-            // Merge IB: keep non-IB holdings, add consumed + IB holdings
-            const consumedIds = new Set(ibConsumed.map(h => h.id));
-            const remainingNonIb = initialHoldings.filter(h => !consumedIds.has(h.id));
-
-            const ibMerged = [...remainingNonIb, ...ibConsumed, ...ibHoldings];
-
-            // 3. Parse Revolut investments
-            const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
-            const { trades: revTrades } = parseRevolutInvestmentsCsv(investCsv);
-            const revCountryMap = buildCountryMap(revTrades.map(t => ({ symbol: t.ticker })));
-            const fifoTrades: Trade[] = revTrades.map(t => ({
-                symbol: t.ticker,
-                dateTime: t.date,
-                quantity: t.type.includes('SELL') ? -t.quantity : t.quantity,
-                price: t.pricePerShare,
-                proceeds: t.type.includes('SELL') ? t.totalAmount : 0,
-                commission: 0,
-                currency: t.currency,
-            }));
-            const revFifo = new FifoEngine([...ibMerged]);
-            const { holdings: revHoldings, consumedHoldings: revConsumed, sales: revSales } = revFifo.processTrades(fifoTrades, 'Revolut', revCountryMap);
-
-            // Preserve original order (same as UI fix) — FIFO Map flattens by symbol
-            const existingIds = new Set(ibMerged.map(h => h.id));
-            const revConsumedIds = new Set(revConsumed.map(h => h.id));
-            const updatedById = new Map(
-                revHoldings.filter(h => existingIds.has(h.id)).map(h => [h.id, h]),
-            );
-            const survivingOriginals = ibMerged
-                .filter(h => !revConsumedIds.has(h.id))
-                .map(h => updatedById.get(h.id) ?? h);
-            const newRevolutHoldings = revHoldings.filter(h => !existingIds.has(h.id));
-            const finalHoldings = [...survivingOriginals, ...revConsumed, ...newRevolutHoldings];
-
-            // 4. Parse Revolut savings interest
-            const eurInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8'));
-            const gbpInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-gbp.csv'), 'utf-8'));
-
-            const state: AppState = {
-                taxYear: 2025,
-                baseCurrency: 'BGN',
-                language: 'bg',
-                holdings: finalHoldings,
-                sales: [...ibSales, ...revSales],
-                dividends: allDividends,
-                stockYield: parsed.stockYield,
-                brokerInterest: [
-                    ...groupInterestByCurrency('IB', parsed.interest),
-                    eurInterest,
-                    gbpInterest,
-                ],
-                fxRates: {},
-                manualEntries: [],
-            };
+            const state = await buildReferenceSampleState();
 
             // Export to Excel
             const buffer = await generateExcel(state);
@@ -1928,109 +2114,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const reference = new ExcelJS.Workbook();
 
             await reference.xlsx.readFile(join(SAMPLES, 'Данъчна_2025.xlsx'));
-
-            // Helper: extract cell value as comparable primitive
-            const cellVal = (cell: ExcelJS.Cell): string | number | null => {
-                const v = cell.value;
-
-                if (v === null || v === undefined) {
-                    return null;
-                }
-
-                if (typeof v === 'object' && 'result' in v) {
-                    const r = (v as { result?: unknown }).result;
-
-                    if (r === null || r === undefined) {
-                        return null;
-                    }
-
-                    return typeof r === 'number' ? r : String(r);
-                }
-
-                return typeof v === 'number' ? v : String(v);
-            };
-
-            // --- Holdings (Притежания) ---
-            const refH = reference.getWorksheet('Притежания')!;
-            const genH = generated.getWorksheet('Притежания')!;
-
-            expect(genH.rowCount).toBe(refH.rowCount);
-
-            for (let r = 2; r <= refH.rowCount; r++) {
-                const refRow = refH.getRow(r);
-                const genRow = genH.getRow(r);
-
-                expect(cellVal(genRow.getCell(1)), `row ${r} broker`).toBe(cellVal(refRow.getCell(1)));
-                expect(cellVal(genRow.getCell(2)), `row ${r} symbol`).toBe(cellVal(refRow.getCell(2)));
-                expect(cellVal(genRow.getCell(3)), `row ${r} country`).toBe(cellVal(refRow.getCell(3)));
-                expect(cellVal(genRow.getCell(4)), `row ${r} date`).toBe(cellVal(refRow.getCell(4)));
-                expect(cellVal(genRow.getCell(5)) as number, `row ${r} quantity`).toBeCloseTo(cellVal(refRow.getCell(5)) as number, 6);
-                expect(cellVal(genRow.getCell(6)), `row ${r} currency`).toBe(cellVal(refRow.getCell(6)));
-                expect(cellVal(genRow.getCell(7)) as number, `row ${r} price`).toBeCloseTo(cellVal(refRow.getCell(7)) as number, 2);
-            }
-
-            // --- Sales (Продажби) ---
-            const refS = reference.getWorksheet('Продажби')!;
-            const genS = generated.getWorksheet('Продажби')!;
-
-            expect(genS.rowCount).toBe(refS.rowCount);
-
-            for (let r = 2; r <= refS.rowCount; r++) {
-                const refRow = refS.getRow(r);
-                const genRow = genS.getRow(r);
-
-                expect(cellVal(genRow.getCell(1)), `sale row ${r} broker`).toBe(cellVal(refRow.getCell(1)));
-                expect(cellVal(genRow.getCell(2)), `sale row ${r} symbol`).toBe(cellVal(refRow.getCell(2)));
-                expect(cellVal(genRow.getCell(3)), `sale row ${r} country`).toBe(cellVal(refRow.getCell(3)));
-                expect(cellVal(genRow.getCell(4)), `sale row ${r} buy date`).toBe(cellVal(refRow.getCell(4)));
-                expect(cellVal(genRow.getCell(5)), `sale row ${r} sell date`).toBe(cellVal(refRow.getCell(5)));
-                expect(cellVal(genRow.getCell(6)) as number, `sale row ${r} qty`).toBeCloseTo(cellVal(refRow.getCell(6)) as number, 6);
-                expect(cellVal(genRow.getCell(7)), `sale row ${r} currency`).toBe(cellVal(refRow.getCell(7)));
-                expect(cellVal(genRow.getCell(8)) as number, `sale row ${r} buy price`).toBeCloseTo(cellVal(refRow.getCell(8)) as number, 2);
-                expect(cellVal(genRow.getCell(9)) as number, `sale row ${r} sell price`).toBeCloseTo(cellVal(refRow.getCell(9)) as number, 2);
-            }
-
-            // --- Dividends (Дивиденти) ---
-            const refD = reference.getWorksheet('Дивиденти')!;
-            const genD = generated.getWorksheet('Дивиденти')!;
-
-            expect(genD.rowCount).toBe(refD.rowCount);
-
-            for (let r = 2; r <= refD.rowCount; r++) {
-                const refRow = refD.getRow(r);
-                const genRow = genD.getRow(r);
-
-                expect(cellVal(genRow.getCell(1)), `div row ${r} symbol`).toBe(cellVal(refRow.getCell(1)));
-                expect(cellVal(genRow.getCell(2)), `div row ${r} country`).toBe(cellVal(refRow.getCell(2)));
-                expect(cellVal(genRow.getCell(3)), `div row ${r} date`).toBe(cellVal(refRow.getCell(3)));
-                expect(cellVal(genRow.getCell(4)), `div row ${r} currency`).toBe(cellVal(refRow.getCell(4)));
-                expect(cellVal(genRow.getCell(5)) as number, `div row ${r} gross`).toBeCloseTo(cellVal(refRow.getCell(5)) as number, 2);
-                expect(cellVal(genRow.getCell(6)) as number, `div row ${r} wht`).toBeCloseTo(cellVal(refRow.getCell(6)) as number, 2);
-            }
-
-            // --- Stock Yield ---
-            const refSY = reference.getWorksheet('IB Stock Yield')!;
-            const genSY = generated.getWorksheet('IB Stock Yield')!;
-
-            expect(genSY.rowCount).toBe(refSY.rowCount);
-
-            for (let r = 2; r <= refSY.rowCount; r++) {
-                const refRow = refSY.getRow(r);
-                const genRow = genSY.getRow(r);
-
-                expect(cellVal(genRow.getCell(1)), `yield row ${r} date`).toBe(cellVal(refRow.getCell(1)));
-                expect(cellVal(genRow.getCell(2)), `yield row ${r} symbol`).toBe(cellVal(refRow.getCell(2)));
-                expect(cellVal(genRow.getCell(3)), `yield row ${r} currency`).toBe(cellVal(refRow.getCell(3)));
-                expect(cellVal(genRow.getCell(4)) as number, `yield row ${r} amount`).toBeCloseTo(cellVal(refRow.getCell(4)) as number, 4);
-            }
-
-            // --- Interest sheets: verify row counts ---
-            for (const sheetName of ['Revolut Лихви GBP', 'Revolut Лихви EUR', 'IB Лихви USD']) {
-                const refSheet = reference.getWorksheet(sheetName)!;
-                const genSheet = generated.getWorksheet(sheetName)!;
-
-                expect(genSheet.rowCount, `${sheetName} row count`).toBe(refSheet.rowCount);
-            }
+            expectWorkbookSheetsToMatch(generated, reference, reference.worksheets.map(ws => ws.name));
         });
     });
 
@@ -2045,6 +2129,9 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             expect(imported.holdings.length).toBeGreaterThan(0);
             expect(imported.sales.length).toBeGreaterThan(0);
             expect(imported.dividends.length).toBeGreaterThan(0);
+            expect(imported.foreignAccounts.length).toBeGreaterThan(0);
+            expect(Object.keys(imported.yearEndPrices).length).toBeGreaterThan(0);
+            expect(Object.keys(imported.fxRates).length).toBeGreaterThan(0);
 
             // Step 2: Export to Excel
             const state: AppState = {
@@ -2056,8 +2143,11 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 dividends: imported.dividends,
                 stockYield: imported.stockYield,
                 brokerInterest: imported.brokerInterest,
-                fxRates: {},
+                fxRates: imported.fxRates,
                 manualEntries: [],
+                foreignAccounts: imported.foreignAccounts,
+                spb8PersonalData: imported.spb8PersonalData,
+                yearEndPrices: imported.yearEndPrices,
             };
             const exportedBuffer = await generateExcel(state);
 
@@ -2070,64 +2160,19 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             expect(reimported.dividends.length).toBe(imported.dividends.length);
             expect(reimported.stockYield.length).toBe(imported.stockYield.length);
             expect(totalInterestEntries(reimported.brokerInterest)).toBe(totalInterestEntries(imported.brokerInterest));
+            expect(reimported.foreignAccounts).toEqual(imported.foreignAccounts);
+            expect(reimported.spb8PersonalData).toEqual(imported.spb8PersonalData);
+            expect(reimported.yearEndPrices).toEqual(imported.yearEndPrices);
+            expect(reimported.fxRates).toEqual(imported.fxRates);
 
-            // Step 5: Compare holdings cell-by-cell (in order)
-            for (let i = 0; i < imported.holdings.length; i++) {
-                const orig = imported.holdings[i];
-                const re = reimported.holdings[i];
+            // Step 5: Compare exported workbook to reference workbook sheet-by-sheet
+            const exportedWorkbook = new ExcelJS.Workbook();
 
-                expect(re.broker, `holding ${i} broker`).toBe(orig.broker);
-                expect(re.symbol, `holding ${i} symbol`).toBe(orig.symbol);
-                expect(re.country, `holding ${i} country`).toBe(orig.country);
-                expect(re.dateAcquired, `holding ${i} date`).toBe(orig.dateAcquired);
-                expect(re.quantity, `holding ${i} qty`).toBeCloseTo(orig.quantity, 6);
-                expect(re.currency, `holding ${i} currency`).toBe(orig.currency);
-                expect(re.unitPrice, `holding ${i} price`).toBeCloseTo(orig.unitPrice, 2);
-            }
+            await exportedWorkbook.xlsx.load(exportedBuffer.buffer as ArrayBuffer);
+            const referenceWorkbook = new ExcelJS.Workbook();
 
-            // Step 6: Compare sales cell-by-cell
-            for (let i = 0; i < imported.sales.length; i++) {
-                const orig = imported.sales[i];
-                const re = reimported.sales[i];
-
-                expect(re.broker, `sale ${i} broker`).toBe(orig.broker);
-                expect(re.symbol, `sale ${i} symbol`).toBe(orig.symbol);
-                expect(re.dateAcquired, `sale ${i} buy date`).toBe(orig.dateAcquired);
-                expect(re.dateSold, `sale ${i} sell date`).toBe(orig.dateSold);
-                expect(re.quantity, `sale ${i} qty`).toBeCloseTo(orig.quantity, 6);
-                expect(re.buyPrice, `sale ${i} buy price`).toBeCloseTo(orig.buyPrice, 2);
-                expect(re.sellPrice, `sale ${i} sell price`).toBeCloseTo(orig.sellPrice, 2);
-            }
-
-            // Step 7: Compare dividends cell-by-cell
-            for (let i = 0; i < imported.dividends.length; i++) {
-                const orig = imported.dividends[i];
-                const re = reimported.dividends[i];
-
-                expect(re.symbol, `div ${i} symbol`).toBe(orig.symbol);
-                expect(re.date, `div ${i} date`).toBe(orig.date);
-                expect(re.grossAmount, `div ${i} gross`).toBeCloseTo(orig.grossAmount, 2);
-                expect(re.withholdingTax, `div ${i} wht`).toBeCloseTo(orig.withholdingTax, 2);
-            }
-
-            // Step 8: Compare broker interest
-            for (const origBi of imported.brokerInterest) {
-                const reBi = reimported.brokerInterest.find(
-                    b => b.broker === origBi.broker && b.currency === origBi.currency,
-                );
-
-                expect(reBi, `${origBi.broker} ${origBi.currency} interest`).toBeDefined();
-                expect(reBi!.entries.length).toBe(origBi.entries.length);
-
-                const sortE = (e: { date: string; amount: number }[]) => [...e].sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
-                const origEntries = sortE(origBi.entries);
-                const reEntries = sortE(reBi!.entries);
-
-                for (let i = 0; i < origEntries.length; i++) {
-                    expect(reEntries[i].date).toBe(origEntries[i].date);
-                    expect(reEntries[i].amount).toBeCloseTo(origEntries[i].amount, 4);
-                }
-            }
+            await referenceWorkbook.xlsx.readFile(refPath);
+            expectWorkbookSheetsToMatch(exportedWorkbook, referenceWorkbook, referenceWorkbook.worksheets.map(ws => ws.name));
         });
     });
 
@@ -2136,11 +2181,8 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
             const state = buildAppStateFromIB(ibCsv);
 
-            // IB sample: GOOG buy 15 sell 8 → 7 remaining + consumed lot
-            // AMZN buy 20 sell 20 → 0 remaining + consumed lot
-            // ASML buy 5, SAPd buy 12 sell 12, RIO buy 25, 1810 buy 200, DAL transfer 150
-            // Open Positions: GOOG(10), MSFT(5), ASML(5), RIO(25), 1810(200)
-            // Without prior holdings, FIFO only uses trades as lots
+            // IB holdings come from Open Positions, while sells match only prior imported holdings.
+            // With no prior holdings, all statement sales stay unmatched.
 
             // Sales: GOOG sell 8, AMZN sell 20, SAPd sell 12 = 3 sales
             expect(state.sales).toHaveLength(3);
@@ -2150,13 +2192,15 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const googSale = state.sales.find(s => s.symbol === 'GOOG')!;
 
             expect(googSale.quantity).toBe(8);
+            expect(googSale.dateAcquired).toBe('');
             expect(googSale.buyPrice).toBeCloseTo(142.3, 2);
             expect(googSale.sellPrice).toBeCloseTo(189.75, 2);
 
             const amznSale = state.sales.find(s => s.symbol === 'AMZN')!;
 
             expect(amznSale.quantity).toBe(20);
-            expect(amznSale.buyPrice).toBeCloseTo(178.9, 2);
+            expect(amznSale.dateAcquired).toBe('');
+            expect(amznSale.buyPrice).toBeCloseTo(179, 2);
             expect(amznSale.sellPrice).toBeCloseTo(205.4, 2);
 
             // Dividends: GOOG(3), AMZN(3), ASML(2), RIO(2), SAP(1), 1810(1) = 12
@@ -2182,6 +2226,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const reGoog = reimported.sales.find(s => s.symbol === 'GOOG')!;
 
             expect(reGoog.quantity).toBe(8);
+            expect(reGoog.dateAcquired).toBe('');
             expect(reGoog.buyPrice).toBeCloseTo(142.3, 2);
             expect(reGoog.sellPrice).toBeCloseTo(189.75, 2);
         });
@@ -2281,13 +2326,14 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             // 3 sales: GOOG(8), AMZN(20), SAPd(12) — GOOG sell consumes from initial holdings
             expect(state.sales).toHaveLength(3);
 
-            // Holdings include consumed lots (AMZN, SAPd with qty=0) + surviving initial + IB buys
-            expect(state.holdings.length).toBeGreaterThan(8);
+            // Holdings reflect end-of-period open positions only, plus any consumed pre-existing holdings.
+            expect(state.holdings.length).toBeLessThanOrEqual(8);
 
-            // Consumed holdings: GOOG partial (8 from initial 15), AMZN full, SAPd full
+            // Only pre-existing holdings may be marked consumed by FIFO.
             const consumed = state.holdings.filter(h => h.consumedByFifo);
 
-            expect(consumed.length).toBeGreaterThanOrEqual(2); // AMZN + SAPd at minimum
+            expect(consumed).toHaveLength(1);
+            expect(consumed[0].symbol).toBe('AMZN');
 
             // Dividends: all from IB
             expect(state.dividends).toHaveLength(12);

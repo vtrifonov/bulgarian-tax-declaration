@@ -14,10 +14,13 @@ const EUR_BGN_FIXED = 1.95583;
  * - Converting rates to the desired base currency
  */
 export class FxService {
-    constructor(
-        private cache: FxCache,
-        private baseCurrency: BaseCurrency,
-    ) {}
+    private readonly cache: FxCache;
+    private readonly baseCurrency: BaseCurrency;
+
+    constructor(cache: FxCache, baseCurrency: BaseCurrency) {
+        this.cache = cache;
+        this.baseCurrency = baseCurrency;
+    }
 
     /**
      * Get the exchange rate for converting a currency to the base currency on a given date.

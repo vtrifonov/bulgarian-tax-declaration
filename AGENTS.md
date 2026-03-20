@@ -26,7 +26,10 @@
 - Provider types in `packages/core/src/providers/types.ts` (BrokerProvider, FileHandler)
 - Global types in `packages/core/src/types/index.ts` (AppState, Holding, Trade, InterestEntry)
 - Provider-specific internal types stay inside the provider file, not exported
+- **Holdings semantics**: active holdings represent end-of-period open positions. Lots that are bought and fully sold within the same imported statement must produce `sales`, but must not remain in `holdings`. Only previously imported holdings may be carried forward as `consumedByFifo` rows for traceability.
+- **FIFO matching scope**: match by `symbol` + `currency`, and only against lots from the same broker or brokerless legacy holdings. Do not match a provider's current-statement trades against the same statement's end-of-period holdings snapshot (`Open Positions`, broker holdings summary, etc.).
 - **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
+- **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
 
 ## Testing Requirements
@@ -140,7 +143,10 @@ Dates: ISO `YYYY-MM-DD` strings in cells.
 | Dividends | `Дивиденти` | `sheets/dividends-sheet.ts` | `excel-full-import.ts` |
 | Stock Yield | `IB Stock Yield` | `sheets/stock-yield-sheet.ts` | `excel-full-import.ts` |
 | Broker Interest | `{Broker} Лихви {CCY}` | `sheets/broker-interest-sheet.ts` | `excel-full-import.ts` |
-| FX Rates | `{CCY}` | `sheets/fx-sheet.ts` | (not reimported) |
+| SPB-8 Accounts | `СПБ-8 Сметки` | `sheets/spb8-accounts-sheet.ts` | `excel-full-import.ts` |
+| SPB-8 Personal Data | `СПБ-8 Лични Данни` | `sheets/spb8-personal-sheet.ts` | `excel-full-import.ts` |
+| SPB-8 Securities | `СПБ-8 Ценни Книжа` | `sheets/spb8-securities-sheet.ts` | `excel-full-import.ts` |
+| FX Rates | `{CCY}` | `sheets/fx-sheet.ts` | `excel-full-import.ts` |
 
 If your provider produces a new data type not in this table, you must:
 1. Create a new sheet generator in `packages/core/src/excel/sheets/`
@@ -510,6 +516,7 @@ Run these before every push:
 ```bash
 pnpm --filter @bg-tax/core test   # All tests pass
 pnpm --filter @bg-tax/ui test     # All UI tests pass
+pnpm typecheck                     # TypeScript typecheck passes
 pnpm format                        # Format code with dprint
 pnpm format:check                  # Verify no unformatted files remain
 pnpm lint:fix                      # Auto-fix lint issues
