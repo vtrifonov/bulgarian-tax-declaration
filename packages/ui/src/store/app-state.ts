@@ -11,7 +11,7 @@ import { create } from 'zustand';
 
 export interface ImportedFile {
     name: string;
-    type: 'ib' | 'revolut' | 'revolut-investments' | 'revolut-account';
+    type: 'ib' | 'revolut' | 'revolut-investments' | 'revolut-account' | 'etrade';
     status: 'success' | 'error';
     message: string;
 }
@@ -288,7 +288,6 @@ export const useAppStore = create<AppState>((set) => ({
             // Preserve data that should survive a reset (expensive to re-fetch)
             fxRates: state.fxRates,
             yearEndPrices: state.yearEndPrices,
-            foreignAccounts: state.foreignAccounts,
             spb8PersonalData: state.spb8PersonalData,
         })),
 }));

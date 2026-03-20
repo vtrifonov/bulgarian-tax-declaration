@@ -29,6 +29,7 @@ export {
 } from './parsers/revolut-csv.js';
 export { parseRevolutInvestmentsCsv } from './parsers/revolut-investments.js';
 export { parseRevolutAccountStatement } from './parsers/revolut-account.js';
+export { parseEtradePdf } from './parsers/etrade-pdf.js';
 export { matchWhtToDividends } from './parsers/wht-matcher.js';
 export {
     importHoldingsFromCsv,
@@ -45,10 +46,16 @@ export {
 } from './country-map.js';
 export { providers } from './providers/registry.js';
 export type {
+    BinaryFileHandler,
     BrokerProvider,
     BrokerProviderResult,
     ExportInstruction,
     FileHandler,
+    TextFileHandler,
+} from './providers/types.js';
+export {
+    isBinaryHandler,
+    isTextHandler,
 } from './providers/types.js';
 export {
     getLanguage,

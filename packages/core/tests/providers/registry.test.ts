@@ -4,7 +4,11 @@ import {
     it,
 } from 'vitest';
 
-import { providers } from '../../src/providers/registry.js';
+import {
+    isBinaryHandler,
+    isTextHandler,
+    providers,
+} from '../../src/index.js';
 
 describe('Provider registry', () => {
     it('exports all registered providers', () => {
@@ -55,17 +59,29 @@ describe('FileHandler detection', () => {
     it('returns false for empty file content', () => {
         for (const p of providers) {
             for (const h of p.fileHandlers) {
-                expect(h.detectFile('', 'empty.csv')).toBe(false);
+                if (isTextHandler(h)) {
+                    expect(h.detectFile('', 'empty.csv')).toBe(false);
+                }
             }
         }
     });
 
     it('returns false for binary content (no crash)', () => {
-        const binary = '\xFF\xD8\xFF\xE0\x00\x10JFIF';
+        const binaryStr = '\xFF\xD8\xFF\xE0\x00\x10JFIF';
+        const buffer = new ArrayBuffer(binaryStr.length);
+        const view = new Uint8Array(buffer);
+
+        for (let i = 0; i < binaryStr.length; i++) {
+            view[i] = binaryStr.charCodeAt(i);
+        }
 
         for (const p of providers) {
             for (const h of p.fileHandlers) {
-                expect(h.detectFile(binary, 'image.jpg')).toBe(false);
+                if (isTextHandler(h)) {
+                    expect(h.detectFile(binaryStr, 'image.jpg')).toBe(false);
+                } else if (isBinaryHandler(h)) {
+                    expect(h.detectBinary(buffer, 'image.jpg')).toBe(false);
+                }
             }
         }
     });
@@ -73,7 +89,9 @@ describe('FileHandler detection', () => {
     it('returns false for generic CSV that matches no provider', () => {
         for (const p of providers) {
             for (const h of p.fileHandlers) {
-                expect(h.detectFile('Name,Age,City\nAlice,30,Sofia', 'data.csv')).toBe(false);
+                if (isTextHandler(h)) {
+                    expect(h.detectFile('Name,Age,City\nAlice,30,Sofia', 'data.csv')).toBe(false);
+                }
             }
         }
     });
@@ -90,7 +108,7 @@ describe('FileHandler detection', () => {
 
         for (const p of providers) {
             for (const h of p.fileHandlers) {
-                if (h.detectFile(content, 'test.csv')) {
+                if (isTextHandler(h) && h.detectFile(content, 'test.csv')) {
                     matchCount++;
                 }
             }
@@ -103,8 +121,32 @@ describe('FileHandler detection', () => {
 
         for (const p of providers) {
             for (const h of p.fileHandlers) {
-                expect(() => h.detectFile(malformed, 'bad.csv')).not.toThrow();
+                if (isTextHandler(h)) {
+                    expect(() => h.detectFile(malformed, 'bad.csv')).not.toThrow();
+                }
             }
         }
+    });
+
+    it('E*TRADE: detects by filename pattern (*.pdf + clientstatement)', () => {
+        const etrade = providers.find(p => p.name === 'E*TRADE')!;
+        const handler = etrade.fileHandlers[0];
+
+        expect(isBinaryHandler(handler)).toBe(true);
+
+        if (!isBinaryHandler(handler)) {
+            return;
+        }
+        const buf = new ArrayBuffer(10);
+
+        // Valid filenames
+        expect(handler.detectBinary(buf, 'ClientStatements_9999_033125.pdf')).toBe(true);
+        expect(handler.detectBinary(buf, 'CLIENTSTATEMENTS_1234.PDF')).toBe(true);
+        expect(handler.detectBinary(buf, 'clientstatement_2025.pdf')).toBe(true);
+
+        // Invalid filenames
+        expect(handler.detectBinary(buf, 'statement.pdf')).toBe(false);
+        expect(handler.detectBinary(buf, 'ClientStatements.txt')).toBe(false);
+        expect(handler.detectBinary(buf, 'generic.pdf')).toBe(false);
     });
 });

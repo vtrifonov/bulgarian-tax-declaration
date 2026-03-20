@@ -3,18 +3,22 @@ import {
     FifoEngine,
     FxService,
     InMemoryFxCache,
+    isBinaryHandler,
     matchWhtToDividends,
     parseIBCsv,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
+    parseRevolutSavingsPositions,
     populateSaleFxRates,
     providers,
     resolveCountries,
+    resolveIsinSync,
     splitOpenPositions,
     t,
 } from '@bg-tax/core';
 import type {
     BrokerInterest,
+    BrokerProviderResult,
     Holding,
     IBParsedData,
 } from '@bg-tax/core';
@@ -49,6 +53,15 @@ function getCorsFetch(): typeof fetch {
 
         return fetch(proxied, init);
     }) as typeof fetch;
+}
+
+/** Fill missing ISINs on holdings using the global ISIN cache. Shared across all providers. */
+function fillMissingIsins(holdings: Holding[]): void {
+    for (const h of holdings) {
+        if (!h.isin) {
+            h.isin = resolveIsinSync(h.symbol);
+        }
+    }
 }
 
 function detectFileType(content: string, filename: string): ImportedFile['type'] | null {
@@ -87,6 +100,14 @@ export function Import() {
             current: string;
         } | null
     >(null);
+    const [pendingSavingsBalances, setPendingSavingsBalances] = useState<{
+        isin: string;
+        currency: string;
+        quantityEndOfYear: number;
+        openingBalance: string;
+        closingBalance: string;
+        fileName: string;
+    }[]>([]);
 
     const {
         importHoldings,
@@ -259,7 +280,171 @@ export function Import() {
         })();
     }, [importedFiles.length, baseCurrency, taxYear, importSales, setFxRates]); // Re-run after file import or settings change
 
+    const processEtradeResult = useCallback(async (
+        result: BrokerProviderResult,
+        file: File,
+    ) => {
+        const source = { type: 'E*TRADE', file: file.name };
+        const { taxYear: currentTaxYear } = useAppStore.getState();
+
+        // Interest (MMF distributions) — append new entries, deduplicate by (date, amount)
+        if (result.interest && result.interest.length > 0) {
+            const entriesWithSource = result.interest.map(e => ({ ...e, source }));
+            const allBrokerInterest = useAppStore.getState().brokerInterest;
+            const existingEtrade = allBrokerInterest.find(bi => bi.broker === 'E*TRADE');
+            const otherBrokers = allBrokerInterest.filter(bi => bi.broker !== 'E*TRADE');
+
+            // Merge: keep existing E*TRADE entries + add new ones that aren't duplicates
+            const existingEntries = existingEtrade?.entries ?? [];
+            const existingKeys = new Set(existingEntries.map(e => `${e.date}|${e.amount}`));
+            const newEntries = entriesWithSource.filter(e => !existingKeys.has(`${e.date}|${e.amount}`));
+            const mergedEntries = [...existingEntries, ...newEntries];
+
+            const etradeInterest = {
+                broker: 'E*TRADE',
+                currency: 'USD',
+                entries: mergedEntries,
+            };
+            importBrokerInterest([...otherBrokers, etradeInterest]);
+        }
+
+        // Holdings (open positions)
+        if (result.openPositions && result.openPositions.length > 0) {
+            const hasPriorHoldings = useAppStore.getState().holdings.some(h => h.source?.type !== 'E*TRADE');
+            const countryMap = await resolveCountries(
+                result.openPositions.map(p => ({ symbol: p.symbol, currency: p.currency })),
+                getCorsFetch(),
+            );
+
+            const currentHoldings = useAppStore.getState().holdings;
+            const newHoldings = splitOpenPositions(result.openPositions, [], {
+                broker: 'E*TRADE',
+                countryMap,
+                source,
+                taxYear: currentTaxYear,
+                symbolAliases: {},
+                skipPreExisting: hasPriorHoldings,
+                existingHoldings: currentHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+            });
+
+            // Fill missing ISINs (needed for SPB-8)
+            fillMissingIsins(newHoldings);
+
+            // Replace E*TRADE holdings, keep others
+            const existingNonEtrade = useAppStore.getState().holdings.filter(h => h.source?.type !== 'E*TRADE');
+            importHoldings([...existingNonEtrade, ...newHoldings]);
+        }
+
+        // Dividends (equity dividends with WHT) — append and deduplicate across quarterly PDFs
+        if (result.dividends && result.dividends.length > 0) {
+            const divSymbols = result.dividends.map(d => ({ symbol: d.symbol, currency: d.currency }));
+            const divCountryMap = await resolveCountries(divSymbols, getCorsFetch());
+
+            for (const d of result.dividends) {
+                d.country = divCountryMap[d.symbol] ?? 'US';
+                d.source = source;
+                const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
+                d.bgTaxDue = bgTaxDue;
+                d.whtCredit = whtCredit;
+            }
+
+            const existingDividends = useAppStore.getState().dividends;
+            const existingKeys = new Set(
+                existingDividends
+                    .filter(d => d.source?.type === 'E*TRADE')
+                    .map(d => `${d.date}|${d.symbol}|${d.grossAmount}`),
+            );
+            const newDividends = result.dividends.filter(
+                d => !existingKeys.has(`${d.date}|${d.symbol}|${d.grossAmount}`),
+            );
+            importDividends([...existingDividends, ...newDividends]);
+        }
+
+        // Foreign account balance (cash) — merge with existing E*TRADE balance:
+        // Keep the earliest start-of-year (from Q1) and latest end-of-year (from Q4)
+        if (result.foreignAccounts && result.foreignAccounts.length > 0) {
+            const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
+            const existingEtradeCash = currentAccounts.find(a => a.broker === 'E*TRADE');
+            const newCash = result.foreignAccounts[0];
+
+            const mergedCash = existingEtradeCash
+                ? {
+                    ...newCash,
+                    // Keep the smaller start (Q1's prior-year-end balance is the start of year)
+                    amountStartOfYear: Math.min(existingEtradeCash.amountStartOfYear, newCash.amountStartOfYear),
+                    // Keep the larger end (Q4's end balance is the end of year)
+                    amountEndOfYear: Math.max(existingEtradeCash.amountEndOfYear, newCash.amountEndOfYear),
+                }
+                : newCash;
+
+            const filtered = currentAccounts.filter(a => a.broker !== 'E*TRADE');
+            setForeignAccounts([...filtered, mergedCash]);
+        }
+
+        // Success message
+        const parts: string[] = [];
+        if (result.openPositions?.length) parts.push(`${result.openPositions.length} holdings`);
+        if (result.dividends?.length) parts.push(`${result.dividends.length} dividends`);
+        if (result.interest?.length) parts.push(`${result.interest.length} interest entries`);
+        if (result.foreignAccounts?.length) parts.push('cash balance');
+        if (result.warnings?.length) parts.push(`${result.warnings.length} warnings`);
+
+        const msg = parts.join(', ') || 'No data found in statement';
+
+        addImportedFile({
+            name: file.name,
+            type: 'etrade',
+            status: 'success',
+            message: `${msg} (Note: trades are not yet supported for E*TRADE)`,
+        });
+    }, [importHoldings, importBrokerInterest, addImportedFile, setForeignAccounts]);
+
     const processFile = useCallback(async (file: File) => {
+        // Binary file path (PDF)
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+            try {
+                if (file.size > 10 * 1024 * 1024) {
+                    addImportedFile({
+                        name: file.name,
+                        type: 'etrade',
+                        status: 'error',
+                        message: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum 10MB allowed.`,
+                    });
+                    return;
+                }
+
+                const buffer = await file.arrayBuffer();
+
+                for (const provider of providers) {
+                    for (const handler of provider.fileHandlers) {
+                        if (isBinaryHandler(handler) && handler.detectBinary(buffer, file.name)) {
+                            const result = await handler.parseBinary(buffer);
+                            await processEtradeResult(result, file);
+                            return;
+                        }
+                    }
+                }
+
+                // No binary handler matched this PDF
+                addImportedFile({
+                    name: file.name,
+                    type: 'etrade',
+                    status: 'error',
+                    message: 'Unrecognized PDF format. Only E*TRADE Client Statements (PDF) are currently supported.',
+                });
+                return;
+            } catch (err) {
+                addImportedFile({
+                    name: file.name,
+                    type: 'etrade',
+                    status: 'error',
+                    message: `PDF parse error: ${err instanceof Error ? err.message : String(err)}`,
+                });
+                return;
+            }
+        }
+
+        // Existing text file path (CSV) — keep everything below unchanged
         const content = await file.text();
         const fileType = detectFileType(content, file.name);
 
@@ -388,6 +573,7 @@ export function Import() {
                 let finalHoldings: Holding[];
 
                 if (parsed.openPositions.length > 0) {
+                    const ibExistingHoldings = useAppStore.getState().holdings.map(h => ({ symbol: h.symbol, broker: h.broker }));
                     finalHoldings = splitOpenPositions(parsed.openPositions, parsed.trades, {
                         broker: 'IB',
                         countryMap,
@@ -395,6 +581,7 @@ export function Import() {
                         taxYear,
                         symbolAliases: parsed.symbolAliases,
                         skipPreExisting: hasPriorHoldings,
+                        existingHoldings: ibExistingHoldings,
                     });
                 } else {
                     finalHoldings = fifoHoldings;
@@ -437,7 +624,7 @@ export function Import() {
                 const consumedIds = new Set(fifoConsumed.map(h => h.id));
                 const remainingNonIb = existingNonIb.filter(h => !consumedIds.has(h.id));
 
-                // Apply ISIN map to all holdings (for SPB-8)
+                // Apply ISIN map from IB CSV, then fill remaining via global ISIN cache
                 const allHoldings = [...remainingNonIb, ...fifoConsumed, ...finalHoldings];
 
                 if (parsed.isinMap) {
@@ -447,6 +634,7 @@ export function Import() {
                         }
                     }
                 }
+                fillMissingIsins(allHoldings);
                 importHoldings(allHoldings);
 
                 // Store foreign account balances from IB Cash Report (for SPB-8)
@@ -615,6 +803,22 @@ export function Import() {
                     status: 'success',
                     message: `${revolut.currency}: ${revolut.entries.length} entries, net ${netInterest.toFixed(2)} ${revolut.currency}`,
                 });
+
+                // Extract position data for balance prompt
+                const position = parseRevolutSavingsPositions(content);
+                if (position.isin) {
+                    setPendingSavingsBalances(prev => [
+                        ...prev.filter(p => !(p.isin === position.isin && p.currency === position.currency)),
+                        {
+                            isin: position.isin,
+                            currency: position.currency,
+                            quantityEndOfYear: position.quantityEndOfYear,
+                            openingBalance: '',
+                            closingBalance: position.quantityEndOfYear.toFixed(2),
+                            fileName: file.name,
+                        },
+                    ]);
+                }
             }
         } catch (err) {
             addImportedFile({
@@ -624,18 +828,18 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             });
         }
-    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear, setForeignAccounts]);
+    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear, setForeignAccounts, processEtradeResult]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         Array.from(files).forEach(file => {
-            if (file.name.endsWith('.csv')) {
+            if (file.name.endsWith('.csv') || file.name.endsWith('.pdf')) {
                 void processFile(file);
             } else {
                 addImportedFile({
                     name: file.name,
                     type: 'ib',
                     status: 'error',
-                    message: 'Only .csv files are supported',
+                    message: 'Only .csv and .pdf files are supported',
                 });
             }
         });
@@ -721,7 +925,7 @@ export function Import() {
                         <input
                             ref={fileInputRef}
                             type='file'
-                            accept='.csv'
+                            accept='.csv,.pdf'
                             multiple
                             onChange={handleFileInput}
                             style={{ display: 'none' }}
@@ -865,13 +1069,19 @@ export function Import() {
                                             style={{
                                                 marginLeft: '0.5rem',
                                                 fontSize: '0.8rem',
-                                                backgroundColor: f.type === 'ib' ? 'var(--accent)' : f.type === 'revolut-investments' ? '#6f42c1' : '#28a745',
+                                                backgroundColor: f.type === 'ib'
+                                                    ? 'var(--accent)'
+                                                    : f.type === 'revolut-investments'
+                                                    ? '#6f42c1'
+                                                    : f.type === 'etrade'
+                                                    ? '#ff6b35'
+                                                    : '#28a745',
                                                 color: 'white',
                                                 padding: '0.1rem 0.4rem',
                                                 borderRadius: '3px',
                                             }}
                                         >
-                                            {f.type === 'ib' ? 'IB' : f.type === 'revolut-investments' ? 'Revolut Inv.' : 'Revolut'}
+                                            {f.type === 'ib' ? 'IB' : f.type === 'revolut-investments' ? 'Revolut Inv.' : f.type === 'etrade' ? 'E*TRADE' : 'Revolut'}
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -882,18 +1092,111 @@ export function Import() {
                         </div>
                     )}
 
+                    {/* Revolut Savings balance prompt */}
+                    {pendingSavingsBalances.length > 0 && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ marginBottom: '0.5rem' }}>{t('import.savingsBalanceTitle')}</h3>
+                            {pendingSavingsBalances.map((sb, idx) => (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        padding: '1rem',
+                                        marginBottom: '0.5rem',
+                                        borderRadius: '6px',
+                                        backgroundColor: 'var(--bg-secondary)',
+                                        border: '1px solid var(--accent)',
+                                    }}
+                                >
+                                    <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                                        Revolut Savings — {sb.currency} ({sb.isin})
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                                        {t('import.savingsBalanceHint')}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                                            {t('import.openingBalance')}:
+                                            <input
+                                                type='number'
+                                                step='0.01'
+                                                value={sb.openingBalance}
+                                                onChange={(e) => {
+                                                    const updated = [...pendingSavingsBalances];
+                                                    updated[idx] = { ...sb, openingBalance: e.target.value };
+                                                    setPendingSavingsBalances(updated);
+                                                }}
+                                                style={{ marginLeft: '0.5rem', width: '120px', padding: '0.3rem' }}
+                                                placeholder='0.00'
+                                            />
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                                            {t('import.closingBalance')}:
+                                            <input
+                                                type='number'
+                                                step='0.01'
+                                                value={sb.closingBalance}
+                                                onChange={(e) => {
+                                                    const updated = [...pendingSavingsBalances];
+                                                    updated[idx] = { ...sb, closingBalance: e.target.value };
+                                                    setPendingSavingsBalances(updated);
+                                                }}
+                                                style={{ marginLeft: '0.5rem', width: '120px', padding: '0.3rem' }}
+                                            />
+                                        </label>
+                                        <button
+                                            onClick={() => {
+                                                // Store the balance as a foreign account (type 02 = securities)
+                                                const opening = parseFloat(sb.openingBalance) || 0;
+                                                const closing = parseFloat(sb.closingBalance) || sb.quantityEndOfYear;
+
+                                                const account = {
+                                                    broker: 'Revolut Savings',
+                                                    type: '02' as const,
+                                                    maturity: 'L' as const,
+                                                    country: 'IE',
+                                                    currency: sb.currency,
+                                                    amountStartOfYear: opening,
+                                                    amountEndOfYear: closing,
+                                                };
+
+                                                const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
+                                                const filtered = currentAccounts.filter(
+                                                    a => !(a.broker === 'Revolut Savings' && a.currency === sb.currency),
+                                                );
+                                                setForeignAccounts([...filtered, account]);
+
+                                                // Remove this prompt
+                                                setPendingSavingsBalances(prev => prev.filter((_, i) => i !== idx));
+                                            }}
+                                            style={{
+                                                padding: '0.4rem 1rem',
+                                                backgroundColor: 'var(--accent)',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {t('button.save')}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     <button
-                        disabled={!!fxProgress?.active}
+                        disabled={!!fxProgress?.active || pendingSavingsBalances.length > 0}
                         onClick={() => navigate('/workspace')}
                         style={{
                             padding: '0.75rem 2rem',
                             fontSize: '1rem',
-                            backgroundColor: importedFiles.some(f => f.status === 'success') ? 'var(--accent)' : 'var(--border)',
+                            backgroundColor: importedFiles.some(f => f.status === 'success') && pendingSavingsBalances.length === 0 ? 'var(--accent)' : 'var(--border)',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            cursor: 'pointer',
-                            opacity: fxProgress?.active ? 0.7 : 1,
+                            cursor: pendingSavingsBalances.length > 0 || fxProgress?.active ? 'not-allowed' : 'pointer',
+                            opacity: fxProgress?.active || pendingSavingsBalances.length > 0 ? 0.7 : 1,
                         }}
                     >
                         {fxProgress?.active ? t('import.fetchingFx') : t('button.continue')}

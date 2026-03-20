@@ -964,6 +964,17 @@ describe('useAppStore', () => {
             expect(state.taxYear).toBe(2025);
         });
 
+        it('clears foreign accounts on reset', () => {
+            useAppStore.getState().setForeignAccounts([
+                { broker: 'E*TRADE', type: '03', maturity: 'L', country: 'US', currency: 'USD', amountStartOfYear: 5000, amountEndOfYear: 6000 },
+                { broker: 'IB', type: '03', maturity: 'L', country: 'US', currency: 'USD', amountStartOfYear: 1000, amountEndOfYear: 2000 },
+            ]);
+            expect(useAppStore.getState().foreignAccounts).toHaveLength(2);
+
+            useAppStore.getState().reset();
+            expect(useAppStore.getState().foreignAccounts).toEqual([]);
+        });
+
         it('resets data arrays to empty', () => {
             const dividend: Dividend = {
                 symbol: 'AAPL',

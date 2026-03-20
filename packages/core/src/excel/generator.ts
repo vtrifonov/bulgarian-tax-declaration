@@ -11,6 +11,9 @@ import { addStockYieldSheet } from './sheets/stock-yield-sheet.js';
 export async function generateExcel(state: AppState): Promise<Uint8Array> {
     const workbook = new ExcelJS.Workbook();
 
+    workbook.created = new Date(0);
+    workbook.modified = new Date(0);
+
     // 1. Data sheets
     addHoldingsSheet(workbook, state);
     addSalesSheet(workbook, state);

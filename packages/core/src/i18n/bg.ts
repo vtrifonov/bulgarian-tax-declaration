@@ -112,16 +112,20 @@ export const bg = {
     'import.freshDesc': 'Без предишни притежания',
     'import.json': 'От експорт на приложението (.json)',
     'import.excel': 'От генериран Excel (.xlsx)',
-    'import.dragDrop': 'Плъзнете CSV файлове тук',
+    'import.dragDrop': 'Плъзнете CSV или PDF файлове тук',
     'import.dropHere': 'Пуснете файловете тук',
     'import.or': 'или',
-    'import.supported': 'Поддържани: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV',
+    'import.supported': 'Поддържани: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV, E*TRADE PDF',
     'import.currentData': 'Текущи данни',
     'import.sourceFiles': 'Файлове',
     'tab.interest': 'Лихви',
     'import.howTo': 'Как да експортирате извлеченията',
     'import.importedFiles': 'Импортирани файлове',
     'import.fetchingFx': 'Извличане на валутни курсове от ЕЦБ...',
+    'import.savingsBalanceTitle': 'Салдо на Revolut спестявания',
+    'import.savingsBalanceHint': 'Въведете началното и крайното салдо от PDF отчета на Revolut (Savings → ... → Statement → PDF)',
+    'import.openingBalance': 'Начално салдо',
+    'import.closingBalance': 'Крайно салдо',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Брокер',
@@ -220,6 +224,14 @@ export const bg = {
     'provider.revolut.instructions.account.step1': 'Отворете Revolut → Сметка → Извлечения',
     'provider.revolut.instructions.account.step2': 'Изберете период: 1 януари до 31 декември',
     'provider.revolut.instructions.account.step3': 'Изтеглете CSV формат',
+
+    'provider.etrade.instructions.statement.label': 'E*TRADE (Morgan Stanley)',
+    'provider.etrade.instructions.statement.step1': 'Влезте в E*TRADE акаунта си на us.etrade.com',
+    'provider.etrade.instructions.statement.step2': 'Отидете на Accounts → Documents → Statements',
+    'provider.etrade.instructions.statement.step3': 'Задайте Document type: Statements, Timeframe: данъчната година, натиснете Apply',
+    'provider.etrade.instructions.statement.step4': 'Изберете всички 4 тримесечни отчета, натиснете Download → "Download selections as one file"',
+    'provider.etrade.instructions.statement.step5': 'Импортирайте изтегления PDF файл тук (един обединен или няколко отделни файла)',
+    'provider.etrade.instructions.statement.step6': 'Забележка: Импортират се само позиции, лихви (MMF) и касови салда. Сделки (покупка/продажба) все още не се поддържат.',
 
     // SPB-8
     'nav.spb8': 'СПБ-8',

@@ -13,6 +13,10 @@ export interface SplitOpenPositionsOpts {
     taxYear: number;
     symbolAliases: Record<string, string>;
     skipPreExisting?: boolean;
+    /** When skipPreExisting is true, existing holdings to check against.
+     *  Pre-existing positions are only skipped if a matching symbol+broker already exists here.
+     *  Positions for symbols NOT in this list are still added (new symbols from the provider). */
+    existingHoldings?: { symbol: string; broker: string }[];
 }
 
 /**
@@ -70,8 +74,17 @@ export function splitOpenPositions(
         const survivedThisYearQty = totalBoughtThisYear - sellsFromThisYear;
         const preExistingQty = pos.quantity - survivedThisYearQty;
 
-        // Pre-existing lot (bought before this year) — skip if prior-year holdings already imported
-        if (preExistingQty > 0 && !opts.skipPreExisting) {
+        // Pre-existing lot (bought before this year)
+        // Skip if prior-year holdings already cover this symbol+broker.
+        // But if this symbol is NEW (not in existing holdings for this broker), add it even when skipPreExisting is true.
+        // When existingHoldings is provided, do per-symbol check.
+        // When not provided, fall back to old behavior (skip all when skipPreExisting=true).
+        const symbolAlreadyExists = opts.existingHoldings
+            ? opts.existingHoldings.some(h => h.symbol === pos.symbol && h.broker === opts.broker)
+            : true; // no list provided → assume all exist (backward compat)
+        const shouldAddPreExisting = !opts.skipPreExisting || !symbolAlreadyExists;
+
+        if (preExistingQty > 0 && shouldAddPreExisting) {
             // Back-calculate cost: IB's costPrice is weighted average of ALL remaining shares.
             // Subtract only the cost of SURVIVING this-year buys to get pre-existing cost.
             const sortedBuysForCost = [...buys].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
