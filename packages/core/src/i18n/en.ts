@@ -112,16 +112,20 @@ export const en = {
     'import.freshDesc': 'No previous holdings',
     'import.json': 'From app export (.json)',
     'import.excel': 'From app-generated Excel (.xlsx)',
-    'import.dragDrop': 'Drag & drop CSV files here',
+    'import.dragDrop': 'Drag & drop CSV or PDF files here',
     'import.dropHere': 'Drop files here',
     'import.or': 'or',
-    'import.supported': 'Supported: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV',
+    'import.supported': 'Supported: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV, E*TRADE PDF',
     'import.currentData': 'Current data',
     'import.sourceFiles': 'Files',
     'tab.interest': 'Interest',
     'import.howTo': 'How to export your statements',
     'import.importedFiles': 'Imported Files',
     'import.fetchingFx': 'Fetching FX rates from ECB...',
+    'import.savingsBalanceTitle': 'Revolut Savings Balance',
+    'import.savingsBalanceHint': 'Enter the Opening and Closing balance from your Revolut PDF statement (Savings → ... → Statement → PDF)',
+    'import.openingBalance': 'Opening balance',
+    'import.closingBalance': 'Closing balance',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Broker',
@@ -220,6 +224,14 @@ export const en = {
     'provider.revolut.instructions.account.step1': 'Open Revolut → Account → Statements',
     'provider.revolut.instructions.account.step2': 'Select period: Jan 1 to Dec 31',
     'provider.revolut.instructions.account.step3': 'Download CSV format',
+
+    'provider.etrade.instructions.statement.label': 'E*TRADE (Morgan Stanley)',
+    'provider.etrade.instructions.statement.step1': 'Log in to your E*TRADE account at us.etrade.com',
+    'provider.etrade.instructions.statement.step2': 'Go to Accounts → Documents → Statements',
+    'provider.etrade.instructions.statement.step3': 'Set Document type: Statements, Timeframe: the tax year, click Apply',
+    'provider.etrade.instructions.statement.step4': 'Select all 4 quarterly statements, click Download → "Download selections as one file"',
+    'provider.etrade.instructions.statement.step5': 'Import the downloaded PDF file here (single file or multiple quarterly files both work)',
+    'provider.etrade.instructions.statement.step6': 'Note: Only holdings, interest (MMF), and cash balances are imported. Trades (buy/sell) are not yet supported.',
 
     // SPB-8
     'nav.spb8': 'SPB-8',

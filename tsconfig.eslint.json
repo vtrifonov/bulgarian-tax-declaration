@@ -1,14 +1,1 @@
-{
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": ".",
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
-  },
-  "include": [
-    "packages/core/src",
-    "packages/core/tests",
-    "packages/ui/src"
-  ]
-}
+{ "extends": "./tsconfig.json", "include": ["packages/core/src/**/*.ts", "packages/core/tests/**/*.ts"] }

@@ -26,6 +26,7 @@
 - Provider types in `packages/core/src/providers/types.ts` (BrokerProvider, FileHandler)
 - Global types in `packages/core/src/types/index.ts` (AppState, Holding, Trade, InterestEntry)
 - Provider-specific internal types stay inside the provider file, not exported
+- **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
 
 ## Testing Requirements
@@ -42,6 +43,7 @@
 ### Fixture location
 - CSV/Excel test data: `packages/core/tests/fixtures/{parser-name}-*.csv`
 - Sample import files: `samples/{handler-id}.csv`
+- PDF test data: mock pdf-parse text output as string constants in test files (no binary PDF fixtures needed)
 
 ### Provider parser test template
 Create `packages/core/tests/parsers/{provider-name}.test.ts`:
@@ -224,6 +226,8 @@ export const yourProvider: BrokerProvider = {
 };
 ```
 
+Examples of implemented providers: Interactive Brokers, Revolut, E*TRADE.
+
 ### Step 2: Handle dividends and tax (if applicable)
 If your provider parses dividends, you MUST:
 ```typescript
@@ -243,7 +247,7 @@ for (const d of dividends) {
 - Add to `packages/core/src/providers/registry.ts`:
   ```typescript
   import { yourProvider } from './your-provider.js';
-  export const providers = [ibProvider, revolutProvider, yourProvider];
+  export const providers = [ibProvider, revolutProvider, etradeProvider, yourProvider];
   ```
 - Export from `packages/core/src/index.ts`
 

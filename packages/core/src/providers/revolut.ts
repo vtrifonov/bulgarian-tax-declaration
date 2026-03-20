@@ -12,6 +12,7 @@ export const revolutProvider: BrokerProvider = {
     fileHandlers: [
         {
             id: 'revolut-savings',
+            kind: 'text' as const,
             detectFile(content: string, filename: string): boolean {
                 return content.includes('Interest PAID') || filename.startsWith('savings-statement');
             },
@@ -23,6 +24,7 @@ export const revolutProvider: BrokerProvider = {
         },
         {
             id: 'revolut-investments',
+            kind: 'text' as const,
             detectFile(content: string): boolean {
                 const firstLine = content.split('\n')[0] ?? '';
 
@@ -46,6 +48,7 @@ export const revolutProvider: BrokerProvider = {
         },
         {
             id: 'revolut-account',
+            kind: 'text' as const,
             detectFile(content: string): boolean {
                 try {
                     const firstLine = content.split('\n')[0] ?? '';

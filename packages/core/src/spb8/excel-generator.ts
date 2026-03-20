@@ -154,6 +154,9 @@ function applyBorderRange(
 
 export async function generateSpb8Excel(formData: Spb8FormData): Promise<Uint8Array> {
     const workbook = new ExcelJS.Workbook();
+
+    workbook.created = new Date(0);
+    workbook.modified = new Date(0);
     const sheet = workbook.addWorksheet('СПБ-8');
 
     // Set column widths

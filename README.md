@@ -8,7 +8,7 @@
 
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
-Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency), and Revolut investments (trades). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration.
+Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency), Revolut investments (trades), and E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration.
 
 ## Prerequisites
 
@@ -37,8 +37,8 @@ bulgarian-tax-declaration/
 ├── packages/
 │   ├── core/          # Pure TypeScript library (no UI deps)
 │   │   ├── src/
-│   │   │   ├── providers/      # BrokerProvider registry (IB, Revolut, etc.)
-│   │   │   ├── parsers/       # CSV/Excel parsers, WHT matcher
+│   │   │   ├── providers/      # BrokerProvider registry (IB, Revolut, E*TRADE, etc.)
+│   │   │   ├── parsers/       # CSV/Excel parsers, PDF parsers, WHT matcher
 │   │   │   ├── fx/            # ECB API client, FX cache, gap-fill
 │   │   │   ├── fifo/          # FIFO lot matching engine
 │   │   │   ├── tax/           # Bulgarian tax rules + calculator
@@ -216,6 +216,7 @@ WHT credit formula: `tax_due = max(0, bg_rate × gross - wht_paid)` — excess f
 - **Interactive Brokers**: CSV activity statement — trades, dividends, WHT, stock yield, interest
 - **Revolut Savings**: Statement per currency fund — interest paid, service fees
 - **Revolut Investments**: Account statement — trades (buys/sells)
+- **E*TRADE/Morgan Stanley**: PDF statement — holdings, interest, cash balances
 - **FX Rates**: Auto-fetched from ECB API (cached locally)
 
 ## Contributing

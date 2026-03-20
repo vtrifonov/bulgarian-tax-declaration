@@ -12,6 +12,7 @@ export const ibProvider: BrokerProvider = {
     fileHandlers: [
         {
             id: 'ib-activity',
+            kind: 'text' as const,
             detectFile(content: string): boolean {
                 return content.startsWith('Statement,Header,Field Name');
             },

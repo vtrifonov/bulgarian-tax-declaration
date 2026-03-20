@@ -17,6 +17,8 @@ cccies
 ccies
 ciphertext
 claude
+clientstatement
+clientstatements
 conid
 cqxs
 cspx
@@ -25,6 +27,7 @@ dtf
 elana
 estc
 estimatedtax
+etrade
 eunl
 eur
 exceljs
@@ -69,6 +72,8 @@ nlvf
 nonresidentincome
 nosuch
 npv
+numpages
+numrender
 officedocument
 omxs
 openfigi
@@ -77,6 +82,9 @@ owetax
 pacman
 paidtax
 paymentamount
+pdfjs
+pdfkit
+pdfparse
 permitedtax
 pltr
 prgs

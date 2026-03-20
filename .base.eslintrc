@@ -18,7 +18,8 @@
         "vite.config.ts",
         "vitest.config.ts",
         "packages/ui/src/**",
-        "packages/ui/src-tauri/**"
+        "packages/ui/src-tauri/**",
+        "samples/**"
     ],
     "parser": "@typescript-eslint/parser",
     "parserOptions": {

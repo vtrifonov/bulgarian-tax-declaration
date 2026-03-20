@@ -14,6 +14,9 @@ export async function generateNraAppendix8(
     fxRates: Record<string, Record<string, number>>,
 ): Promise<Uint8Array> {
     const workbook = new ExcelJS.Workbook();
+
+    workbook.created = new Date(0);
+    workbook.modified = new Date(0);
     const sheet = workbook.addWorksheet('Приложение 8 Част I');
 
     // Header row matching NRA format
