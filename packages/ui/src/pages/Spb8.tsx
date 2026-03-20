@@ -403,20 +403,38 @@ export function Spb8() {
             {renderSection(
                 'personalData',
                 t('spb8.personalData'),
-                'Optional — stored locally',
+                t('spb8.personalData.sectionHint'),
                 true,
                 () => (
-                    <div style={{ maxWidth: '600px' }}>
+                    <div style={{ width: '100%' }}>
                         {!editingPersonal
                             ? (
                                 <div>
-                                    <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                    <div
+                                        style={{
+                                            marginBottom: '1rem',
+                                            fontSize: '0.9rem',
+                                            color: 'var(--text-secondary)',
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))',
+                                            gap: '0.5rem 1.5rem',
+                                            alignItems: 'start',
+                                        }}
+                                    >
                                         {displayPersonal.name || displayPersonal.email
                                             ? (
                                                 <>
                                                     {displayPersonal.name && <div>{displayPersonal.name}</div>}
                                                     {displayPersonal.email && <div>{displayPersonal.email}</div>}
                                                     {displayPersonal.phone && <div>{displayPersonal.phone}</div>}
+                                                    {displayPersonal.address?.city && <div>{`${t('spb8.personalData.city')}: ${displayPersonal.address.city}`}</div>}
+                                                    {displayPersonal.address?.postalCode && (
+                                                        <div>{`${t('spb8.personalData.postalCode')}: ${displayPersonal.address.postalCode}`}</div>
+                                                    )}
+                                                    {displayPersonal.address?.district && <div>{`${t('spb8.personalData.district')}: ${displayPersonal.address.district}`}</div>}
+                                                    {displayPersonal.address?.street && <div>{`${t('spb8.personalData.street')}: ${displayPersonal.address.street}`}</div>}
+                                                    {displayPersonal.address?.number && <div>{`${t('spb8.personalData.number')}: ${displayPersonal.address.number}`}</div>}
+                                                    {displayPersonal.address?.entrance && <div>{`${t('spb8.personalData.entrance')}: ${displayPersonal.address.entrance}`}</div>}
                                                 </>
                                             )
                                             : <span>{t('spb8.personalData.noDataEntered')}</span>}
@@ -476,81 +494,228 @@ export function Spb8() {
                             )
                             : (
                                 <div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
-                                            {t('spb8.personalData.name')}
-                                        </label>
-                                        <input
-                                            type='text'
-                                            value={personalDataForm.name || ''}
-                                            onChange={e => setPersonalDataForm({ ...personalDataForm, name: e.target.value })}
-                                            aria-label={t('spb8.personalData.name')}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.5rem',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '4px',
-                                                fontFamily: 'inherit',
-                                                fontSize: 'inherit',
-                                            }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
-                                            {t('spb8.personalData.egn')}
-                                        </label>
-                                        <input
-                                            type='text'
-                                            value={personalDataForm.egn || ''}
-                                            onChange={e => setPersonalDataForm({ ...personalDataForm, egn: e.target.value })}
-                                            aria-label={t('spb8.personalData.egn')}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.5rem',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '4px',
-                                                fontFamily: 'inherit',
-                                                fontSize: 'inherit',
-                                            }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
-                                            {t('spb8.personalData.phone')}
-                                        </label>
-                                        <input
-                                            type='tel'
-                                            value={personalDataForm.phone || ''}
-                                            onChange={e => setPersonalDataForm({ ...personalDataForm, phone: e.target.value })}
-                                            aria-label={t('spb8.personalData.phone')}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.5rem',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '4px',
-                                                fontFamily: 'inherit',
-                                                fontSize: 'inherit',
-                                            }}
-                                        />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
-                                            {t('spb8.personalData.email')}
-                                        </label>
-                                        <input
-                                            type='email'
-                                            value={personalDataForm.email || ''}
-                                            onChange={e => setPersonalDataForm({ ...personalDataForm, email: e.target.value })}
-                                            aria-label={t('spb8.personalData.email')}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.5rem',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '4px',
-                                                fontFamily: 'inherit',
-                                                fontSize: 'inherit',
-                                            }}
-                                        />
+                                    <div
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))',
+                                            gap: '1rem',
+                                            marginBottom: '1rem',
+                                        }}
+                                    >
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.name')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.name || ''}
+                                                onChange={e => setPersonalDataForm({ ...personalDataForm, name: e.target.value })}
+                                                aria-label={t('spb8.personalData.name')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.egn')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.egn || ''}
+                                                onChange={e => setPersonalDataForm({ ...personalDataForm, egn: e.target.value })}
+                                                aria-label={t('spb8.personalData.egn')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.phone')}
+                                            </label>
+                                            <input
+                                                type='tel'
+                                                value={personalDataForm.phone || ''}
+                                                onChange={e => setPersonalDataForm({ ...personalDataForm, phone: e.target.value })}
+                                                aria-label={t('spb8.personalData.phone')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.email')}
+                                            </label>
+                                            <input
+                                                type='email'
+                                                value={personalDataForm.email || ''}
+                                                onChange={e => setPersonalDataForm({ ...personalDataForm, email: e.target.value })}
+                                                aria-label={t('spb8.personalData.email')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.city')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.city || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, city: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.city')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.postalCode')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.postalCode || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, postalCode: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.postalCode')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.district')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.district || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, district: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.district')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.street')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.street || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, street: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.street')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.number')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.number || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, number: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.number')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                                                {t('spb8.personalData.entrance')}
+                                            </label>
+                                            <input
+                                                type='text'
+                                                value={personalDataForm.address?.entrance || ''}
+                                                onChange={e =>
+                                                    setPersonalDataForm({
+                                                        ...personalDataForm,
+                                                        address: { ...personalDataForm.address, entrance: e.target.value },
+                                                    })}
+                                                aria-label={t('spb8.personalData.entrance')}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.5rem',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '4px',
+                                                    fontFamily: 'inherit',
+                                                    fontSize: 'inherit',
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <button
