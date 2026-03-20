@@ -3,11 +3,13 @@ import {
     fetchYearEndPrices,
     fxToBaseCurrency,
     generateSpb8Excel,
+    resolveIsinSync,
     t,
 } from '@bg-tax/core';
 import type { Spb8PersonalData } from '@bg-tax/core';
 import {
     useCallback,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
@@ -46,6 +48,7 @@ export function Spb8() {
         addForeignAccount,
         updateForeignAccount,
         deleteForeignAccount,
+        updateHolding,
         setSpb8PersonalData,
     } = useAppStore();
 
@@ -70,6 +73,21 @@ export function Spb8() {
     const setYearEndPrices = useAppStore(s => s.setYearEndPrices);
     const [priceFetchProgress, setPriceFetchProgress] = useState<string | null>(null);
     const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
+
+    useEffect(() => {
+        for (const [index, holding] of holdings.entries()) {
+            if (holding.consumedByFifo || holding.isin || !holding.symbol) {
+                continue;
+            }
+            const isin = resolveIsinSync(holding.symbol);
+
+            if (!isin) {
+                continue;
+            }
+
+            updateHolding(index, { ...holding, isin });
+        }
+    }, [holdings, updateHolding]);
 
     // Assemble SPB-8 data
     const spb8Data = useMemo(() => {
@@ -847,7 +865,10 @@ export function Spb8() {
                                     </tr>
                                 ))}
                                 <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 600 }}>
-                                    <td style={tdL} colSpan={6}>{t('spb8.securities.totalRow')}</td>
+                                    <td style={tdL} colSpan={3}>{t('spb8.securities.totalRow')}</td>
+                                    <td style={tdM}>{spb8Data.securities.reduce((sum, s) => sum + s.quantityStartOfYear, 0).toFixed(4)}</td>
+                                    <td style={tdM}>{spb8Data.securities.reduce((sum, s) => sum + s.quantityEndOfYear, 0).toFixed(4)}</td>
+                                    <td />
                                     <td style={tdM}>{spb8Data.securities.reduce((sum, s) => sum + (s.amountEndOfYearBgn ?? 0), 0).toFixed(2)} {baseCcy}</td>
                                 </tr>
                             </tbody>

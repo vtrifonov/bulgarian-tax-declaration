@@ -46,8 +46,8 @@ function formatQuantity(n: number): string {
 }
 
 // Helper to create an editable column definition
-function createEditableColumn<T extends Record<string, unknown>>(
-    accessorKey: keyof T,
+function createEditableColumn<T extends object, K extends Extract<keyof T, string> = Extract<keyof T, string>>(
+    accessorKey: K,
     header: string,
     options?: {
         align?: 'left' | 'right' | 'center';
@@ -1073,6 +1073,7 @@ export function Workspace() {
         let totalInBase = 0;
 
         const consumedRows = new Set<number>();
+        const linkedRows = new Set<number>();
         const hasConsumed = holdings.some(h => h.consumedByFifo);
 
         holdings.forEach((holding, i) => {
@@ -1080,6 +1081,9 @@ export function Workspace() {
                 consumedRows.add(i);
 
                 return;
+            }
+            if ((holding.consumedBySaleIds?.length ?? 0) > 0) {
+                linkedRows.add(i);
             }
             totalQuantity += holding.quantity;
             const cyyTotal = holding.quantity * holding.unitPrice;
@@ -1121,6 +1125,7 @@ export function Workspace() {
                     onSortingChange={(s) => setTableSorting('holdings', s)}
                     initialSorting={tableSorting.holdings}
                     strikeThroughRows={consumedRows.size > 0 ? consumedRows : undefined}
+                    highlightRows={linkedRows.size > 0 ? linkedRows : undefined}
                     warningRows={holdingsWarnings.rows}
                     warningMessages={holdingsWarnings.messages}
                     warningCount={holdingsWarnings.rows.size}

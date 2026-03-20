@@ -12,6 +12,7 @@ azvl
 badsym
 bgn
 bgtax
+brokerless
 bvme
 cccies
 ccies
@@ -132,6 +133,7 @@ xlfn
 yourbroker
 zprg
 зддфл
+игнатиев
 кликнете
 клипборда
 матуритет
@@ -140,3 +142,4 @@ zprg
 нидерландия
 придоб
 прил
+средец

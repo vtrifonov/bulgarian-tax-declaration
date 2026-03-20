@@ -24,7 +24,8 @@
     "**/build",
     "**/*-lock.json",
     "**/node_modules",
-    "**/dist"
+    "**/dist",
+    "**/.dprint-cache"
   ],
   "plugins": [
     "https://plugins.dprint.dev/json-0.19.3.wasm",

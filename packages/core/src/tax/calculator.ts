@@ -40,7 +40,11 @@ export interface StockYieldResult {
 const BGN_TO_EUR = 1.95583;
 
 export class TaxCalculator {
-    constructor(private baseCurrency: 'BGN' | 'EUR') {}
+    private readonly baseCurrency: 'BGN' | 'EUR';
+
+    constructor(baseCurrency: 'BGN' | 'EUR') {
+        this.baseCurrency = baseCurrency;
+    }
 
     calcCapitalGains(sales: Sale[]): CapitalGainsResult {
         let totalProceeds = 0;

@@ -168,6 +168,9 @@ function Layout() {
                     dividends: applySorting(state.dividends, ts.dividends ?? []),
                     language: 'en',
                     manualEntries: [],
+                    foreignAccounts: state.foreignAccounts,
+                    spb8PersonalData: state.spb8PersonalData,
+                    yearEndPrices: state.yearEndPrices,
                 }).then(buffer => {
                     const blob = new Blob([buffer.buffer as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                     const url = URL.createObjectURL(blob);

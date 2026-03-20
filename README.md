@@ -10,6 +10,13 @@ Desktop application for Bulgarian taxpayers (expats/investors) to prepare their 
 
 Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency), Revolut investments (trades), and E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration.
 
+Holdings in the workspace represent end-of-period open positions. Trades that open and close within the same imported statement generate sales, but do not remain in holdings. FIFO matching is scoped to the same `symbol` and `currency`, and only against lots from the same broker or brokerless legacy holdings.
+
+The exported `Данъчна_2025.xlsx` workbook is also a resumable project file. Loading it restores the main tax state plus SPB-8 state, including:
+- foreign accounts (`СПБ-8 Сметки`)
+- securities and explicit year-end prices (`СПБ-8 Ценни Книжа`)
+- SPB-8 personal data (`СПБ-8 Лични Данни`)
+
 ## Prerequisites
 
 - **Node.js** ≥ 20
@@ -218,6 +225,17 @@ WHT credit formula: `tax_due = max(0, bg_rate × gross - wht_paid)` — excess f
 - **Revolut Investments**: Account statement — trades (buys/sells)
 - **E*TRADE/Morgan Stanley**: PDF statement — holdings, interest, cash balances
 - **FX Rates**: Auto-fetched from ECB API (cached locally)
+
+## Excel Round-trip
+
+The main workbook is intended to round-trip cleanly:
+
+- import broker files and/or prior holdings
+- export `Данъчна_2025.xlsx`
+- re-import `Данъчна_2025.xlsx`
+- export again with the same workbook data
+
+This round-trip includes holdings, sales, dividends, interest, FX sheets, and the SPB-8 tabs.
 
 ## Contributing
 

@@ -62,7 +62,7 @@ export function populateSaleFxRates(
  */
 export function populateDividendFxRates(
     dividends: Dividend[],
-    getRate: (currency: string, date: string) => number | undefined,
+    _getRate: (currency: string, date: string) => number | undefined,
 ): Dividend[] {
     return dividends.map(d => ({ ...d })); // FX conversion happens in tax calculator
 }

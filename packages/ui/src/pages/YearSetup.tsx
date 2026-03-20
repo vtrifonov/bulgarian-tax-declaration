@@ -61,7 +61,16 @@ export function YearSetup() {
             } else if (importOption === 'excel-full') {
                 const buffer = await file.arrayBuffer();
                 const data = await importFullExcel(buffer);
-                const { importSales, importDividends, importStockYield, importBrokerInterest } = useAppStore.getState();
+                const {
+                    importSales,
+                    importDividends,
+                    importStockYield,
+                    importBrokerInterest,
+                    setForeignAccounts,
+                    setSpb8PersonalData,
+                    setFxRates,
+                    setYearEndPrices,
+                } = useAppStore.getState();
                 const parts: string[] = [];
 
                 if (data.holdings.length) {
@@ -106,6 +115,23 @@ export function YearSetup() {
                     const interestCount = data.brokerInterest.reduce((sum, bi) => sum + bi.entries.length, 0);
 
                     parts.push(`${interestCount} лихви (${data.brokerInterest.map(bi => bi.broker).join(', ')})`);
+                }
+                setForeignAccounts(data.foreignAccounts);
+                if (data.foreignAccounts.length) {
+                    parts.push(`${data.foreignAccounts.length} SPB-8 сметки`);
+                }
+
+                setSpb8PersonalData(data.spb8PersonalData ?? {});
+                if (data.spb8PersonalData) {
+                    parts.push('SPB-8 лични данни');
+                }
+                setYearEndPrices(data.yearEndPrices);
+                if (Object.keys(data.yearEndPrices).length > 0) {
+                    parts.push(`${Object.keys(data.yearEndPrices).length} SPB-8 цени`);
+                }
+                setFxRates(data.fxRates);
+                if (Object.keys(data.fxRates).length > 0) {
+                    parts.push(`${Object.keys(data.fxRates).length} FX листа`);
                 }
                 setImportStatus(parts.length > 0 ? `Imported: ${parts.join(', ')}` : 'No data found in file');
             }

@@ -2,7 +2,6 @@ import {
     calcDividendRowTax,
     generateExcel,
     generateNraAppendix8,
-    generateNraAppendix8Part3,
     t,
     TaxCalculator,
     toBaseCurrency,
@@ -28,6 +27,9 @@ export function Declaration() {
         fxRates,
         baseCurrency,
         taxYear,
+        foreignAccounts,
+        spb8PersonalData,
+        yearEndPrices,
         tableSorting,
     } = useAppStore();
 
@@ -248,6 +250,9 @@ export function Declaration() {
                 brokerInterest,
                 fxRates,
                 manualEntries: [],
+                foreignAccounts,
+                spb8PersonalData,
+                yearEndPrices,
             };
 
             const buffer = await generateExcel(stateAsAppState);
@@ -304,39 +309,6 @@ export function Declaration() {
             setNraError(error instanceof Error ? error.message : String(error));
         } finally {
             setNraExporting(false);
-        }
-    };
-
-    const [_nra3Exporting, setNra3Exporting] = useState(false);
-    const [_nra3Success, setNra3Success] = useState<string | null>(null);
-    const [_nra3Error, setNra3Error] = useState<string | null>(null);
-
-    const _handleExportNraPart3 = async () => {
-        setNra3Exporting(true);
-        setNra3Success(null);
-        setNra3Error(null);
-        try {
-            const buffer = await generateNraAppendix8Part3(dividends, fxRates);
-            const blob = new Blob([buffer.buffer as ArrayBuffer], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            });
-            const filename = `Приложение_8_Част_III_${taxYear}.xlsx`;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            setNra3Success(filename);
-            setTimeout(() => setNra3Success(null), 5000);
-        } catch (error) {
-            console.error('Failed to export NRA Appendix 8 Part III:', error);
-            setNra3Error(error instanceof Error ? error.message : String(error));
-        } finally {
-            setNra3Exporting(false);
         }
     };
 
