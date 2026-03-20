@@ -118,6 +118,7 @@ unstub
 usdeclaration
 uvyc
 vasil
+киприян
 vclt
 vhyl
 vlookup
