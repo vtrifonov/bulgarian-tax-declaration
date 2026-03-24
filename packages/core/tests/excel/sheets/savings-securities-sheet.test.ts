@@ -82,14 +82,15 @@ describe('addSavingsSecuritiesSheet', () => {
         };
 
         const sheet = addSavingsSecuritiesSheet(wb, state)!;
-
         const row1 = sheet.getRow(2);
+
         expect(row1.getCell(1).value).toBe('IE0002RUHW32');
         expect(row1.getCell(2).value).toBe('GBP');
         expect(row1.getCell(3).value).toBe(0);
         expect(row1.getCell(4).value).toBe(12.85);
 
         const row2 = sheet.getRow(3);
+
         expect(row2.getCell(1).value).toBe('IE000AZVL3K0');
         expect(row2.getCell(2).value).toBe('EUR');
         expect(row2.getCell(3).value).toBe(100);

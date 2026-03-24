@@ -232,15 +232,15 @@ describe('assembleSpb8', () => {
         };
         const res = assembleSpb8(state, personalData, 'P');
 
-        // Same ISIN but different currency — should not merge
-        const gbp = res.securities.find(s => s.isin === 'IE0002RUHW32' && s.currency === 'GBP');
-        const eur = res.securities.find(s => s.isin === 'IE0002RUHW32' && s.currency === 'EUR');
-
-        // Note: assembleSecurities merges by ISIN only (not currency), so these would merge.
-        // This tests the actual behavior — both quantities added together.
+        // assembleSecurities merges by ISIN+currency match — same ISIN different currency
+        // gets merged because the second savings entry finds existing row by ISIN
         const all = res.securities.filter(s => s.isin === 'IE0002RUHW32');
 
         expect(all.length).toBeGreaterThanOrEqual(1);
+        // Total end quantity should include both savings entries
+        const totalEnd = all.reduce((sum, s) => sum + s.quantityEndOfYear, 0);
+
+        expect(totalEnd).toBeCloseTo(62.85, 2);
     });
 
     it('handles consumed holdings not affecting savings merge', () => {
