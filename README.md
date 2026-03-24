@@ -8,13 +8,14 @@
 
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
-Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency), Revolut investments (trades), and E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration.
+Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency and fund positions for SPB-8 Section 04), Revolut investments (trades), and E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration. The Import page also allows manual entry of foreign bank account balances (e.g. Revolut, Wise current accounts) for SPB-8 Section 03.
 
 Holdings in the workspace represent end-of-period open positions. Trades that open and close within the same imported statement generate sales, but do not remain in holdings. FIFO matching is scoped to the same `symbol` and `currency`, and only against lots from the same broker or brokerless legacy holdings.
 
 The exported `Данъчна_2025.xlsx` workbook is also a resumable project file. Loading it restores the main tax state plus SPB-8 state, including:
 - foreign accounts (`СПБ-8 Сметки`)
 - securities and explicit year-end prices (`СПБ-8 Ценни Книжа`)
+- Revolut savings fund positions (`Спестовни Ценни Книжа`)
 - SPB-8 personal data (`СПБ-8 Лични Данни`)
 
 ## Prerequisites

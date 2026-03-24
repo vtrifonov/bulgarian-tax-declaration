@@ -50,6 +50,7 @@ export function useAutoSave() {
                             importedFiles: state.importedFiles,
                             tableSorting: state.tableSorting,
                             foreignAccounts: state.foreignAccounts,
+                            savingsSecurities: state.savingsSecurities,
                             spb8PersonalData: encryptedPersonal,
                             yearEndPrices: state.yearEndPrices,
                         };
@@ -80,6 +81,7 @@ export function useAutoSave() {
                                 importedFiles: state2.importedFiles,
                                 tableSorting: state2.tableSorting,
                                 foreignAccounts: state2.foreignAccounts,
+                                savingsSecurities: state2.savingsSecurities,
                                 spb8PersonalData: encryptedPersonal,
                                 yearEndPrices: state2.yearEndPrices,
                             };

@@ -28,6 +28,7 @@ export function Declaration() {
         baseCurrency,
         taxYear,
         foreignAccounts,
+        savingsSecurities,
         spb8PersonalData,
         yearEndPrices,
         tableSorting,
@@ -251,6 +252,7 @@ export function Declaration() {
                 fxRates,
                 manualEntries: [],
                 foreignAccounts,
+                savingsSecurities,
                 spb8PersonalData,
                 yearEndPrices,
             };

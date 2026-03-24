@@ -5,6 +5,7 @@ import type {
     Holding,
     Sale,
     Spb8PersonalData,
+    Spb8Security,
     StockYieldEntry,
 } from '@bg-tax/core';
 import { create } from 'zustand';
@@ -73,8 +74,10 @@ export interface AppState {
 
     // SPB-8 state
     foreignAccounts: ForeignAccountBalance[];
+    savingsSecurities: Spb8Security[];
     spb8PersonalData: Spb8PersonalData;
     setForeignAccounts: (accounts: ForeignAccountBalance[]) => void;
+    setSavingsSecurities: (securities: Spb8Security[]) => void;
     addForeignAccount: (account: ForeignAccountBalance) => void;
     updateForeignAccount: (index: number, account: ForeignAccountBalance) => void;
     deleteForeignAccount: (index: number) => void;
@@ -132,6 +135,7 @@ const initialState = {
     importedFiles: [] as ImportedFile[],
     tableSorting: {} as Record<string, { id: string; desc: boolean }[]>,
     foreignAccounts: [] as ForeignAccountBalance[],
+    savingsSecurities: [] as Spb8Security[],
     spb8PersonalData: {} as Spb8PersonalData,
     yearEndPrices: {} as Record<string, number>,
 };
@@ -258,6 +262,7 @@ export const useAppStore = create<AppState>((set) => ({
         }),
 
     setForeignAccounts: (accounts: ForeignAccountBalance[]) => set({ foreignAccounts: accounts }),
+    setSavingsSecurities: (securities: Spb8Security[]) => set({ savingsSecurities: securities }),
     addForeignAccount: (account: ForeignAccountBalance) =>
         set((state) => ({
             foreignAccounts: [...state.foreignAccounts, account],

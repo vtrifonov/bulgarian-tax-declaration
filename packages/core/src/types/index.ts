@@ -85,6 +85,8 @@ export interface AppState {
     fxRates: Record<string, Record<string, number>>; // currency → date → rate
     manualEntries: ManualEntry[];
     foreignAccounts?: ForeignAccountBalance[];
+    /** Revolut Savings fund positions for SPB-8 Section 04 */
+    savingsSecurities?: Spb8Security[];
     spb8PersonalData?: Spb8PersonalData;
     yearEndPrices?: Record<string, number>;
 }

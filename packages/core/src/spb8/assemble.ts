@@ -141,6 +141,23 @@ function assembleSecurities(
         });
     }
 
+    // Merge Revolut Savings fund positions (stored separately from holdings)
+    for (const sec of state.savingsSecurities ?? []) {
+        const existing = result.find(r => r.isin === sec.isin && r.currency === sec.currency);
+
+        if (existing) {
+            existing.quantityStartOfYear += sec.quantityStartOfYear;
+            existing.quantityEndOfYear += sec.quantityEndOfYear;
+        } else {
+            result.push({
+                isin: sec.isin,
+                currency: sec.currency,
+                quantityStartOfYear: sec.quantityStartOfYear,
+                quantityEndOfYear: sec.quantityEndOfYear,
+            });
+        }
+    }
+
     return result;
 }
 

@@ -121,6 +121,12 @@ export function YearSetup() {
                     parts.push(`${data.foreignAccounts.length} SPB-8 сметки`);
                 }
 
+                const { setSavingsSecurities } = useAppStore.getState();
+                setSavingsSecurities(data.savingsSecurities);
+                if (data.savingsSecurities.length) {
+                    parts.push(`${data.savingsSecurities.length} спестовни ценни книжа`);
+                }
+
                 setSpb8PersonalData(data.spb8PersonalData ?? {});
                 if (data.spb8PersonalData) {
                     parts.push('SPB-8 лични данни');
