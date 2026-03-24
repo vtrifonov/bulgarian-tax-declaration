@@ -894,19 +894,21 @@ export function Import() {
                     message: `${revolut.currency}: ${revolut.entries.length} entries, net ${netInterest.toFixed(2)} ${revolut.currency}`,
                 });
 
-                // Extract position data for balance prompt
+                // Extract position data for balance prompt (only if ISIN found)
                 const position = parseRevolutSavingsPositions(content);
-                setPendingSavingsBalances(prev => [
-                    ...prev.filter(p => !(p.isin === position.isin && p.currency === position.currency)),
-                    {
-                        isin: position.isin,
-                        currency: position.currency,
-                        quantityEndOfYear: position.quantityEndOfYear,
-                        openingBalance: '',
-                        closingBalance: position.quantityEndOfYear.toFixed(2),
-                        fileName: file.name,
-                    },
-                ]);
+                if (position.isin) {
+                    setPendingSavingsBalances(prev => [
+                        ...prev.filter(p => !(p.isin === position.isin && p.currency === position.currency)),
+                        {
+                            isin: position.isin,
+                            currency: position.currency,
+                            quantityEndOfYear: position.quantityEndOfYear,
+                            openingBalance: '',
+                            closingBalance: position.quantityEndOfYear.toFixed(2),
+                            fileName: file.name,
+                        },
+                    ]);
+                }
             }
         } catch (err) {
             addImportedFile({
@@ -1432,8 +1434,9 @@ export function Import() {
                                             type='text'
                                             value={acc.country}
                                             onChange={(e) => {
+                                                const code = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
                                                 const updated = [...bankAccounts];
-                                                updated[idx] = { ...acc, country: e.target.value.toUpperCase() };
+                                                updated[idx] = { ...acc, country: code };
                                                 setBankAccounts(updated);
                                             }}
                                             style={{ width: '50px', padding: '0.3rem', fontFamily: 'monospace' }}
