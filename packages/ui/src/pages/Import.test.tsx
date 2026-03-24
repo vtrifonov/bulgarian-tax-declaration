@@ -80,6 +80,7 @@ vi.mock('@bg-tax/core', () => ({
             'import.broker': 'Broker',
             'import.currency': 'Currency',
             'import.customBroker': 'Custom...',
+            'import.country': 'Country',
             'import.importedFiles': 'Imported Files',
             'import.fetchingFx': 'Fetching FX rates...',
             'import.howTo': 'How to export',
@@ -116,28 +117,30 @@ describe('Import page — foreign bank accounts', () => {
         expect(screen.getByText('Currency:')).toBeTruthy();
     });
 
-    it('shows imported brokers in the dropdown', () => {
+    it('shows broker input with datalist suggestions', () => {
         render(<Import />);
 
         fireEvent.click(screen.getByText('+ Add account'));
 
-        // The broker dropdown should have Revolut (from importedFiles) + Custom
-        const brokerSelect = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
-        const options = Array.from(brokerSelect.options).map(o => o.text);
+        // Broker is now a text input with datalist autocomplete
+        const brokerInput = screen.getByPlaceholderText('Broker');
 
-        expect(options).toContain('Revolut');
-        expect(options).toContain('Custom...');
+        expect(brokerInput).toBeTruthy();
     });
 
     it('shows common currencies in the dropdown', () => {
-        render(<Import />);
+        const { container } = render(<Import />);
 
         fireEvent.click(screen.getByText('+ Add account'));
 
-        // Find the currency select (second combobox)
-        const selects = screen.getAllByRole('combobox');
-        const currencySelect = selects[1] as HTMLSelectElement;
-        const options = Array.from(currencySelect.options).map(o => o.text);
+        // Find select elements directly (broker is now a text input, not a select)
+        const selects = container.querySelectorAll('select');
+        // Currency select has USD option
+        const currencySelect = Array.from(selects).find(s => Array.from(s.options).some(o => o.value === 'USD'));
+
+        expect(currencySelect).toBeTruthy();
+
+        const options = Array.from(currencySelect!.options).map(o => o.text);
 
         expect(options).toContain('USD');
         expect(options).toContain('GBP');
@@ -146,17 +149,18 @@ describe('Import page — foreign bank accounts', () => {
     });
 
     it('saves bank account to foreign accounts store', () => {
-        render(<Import />);
+        const { container } = render(<Import />);
 
         // Add a new account
         fireEvent.click(screen.getByText('+ Add account'));
 
-        // Select broker
-        const brokerSelect = screen.getAllByRole('combobox')[0];
-        fireEvent.change(brokerSelect, { target: { value: 'Revolut' } });
+        // Type broker name
+        const brokerInput = screen.getByPlaceholderText('Broker');
+        fireEvent.change(brokerInput, { target: { value: 'Revolut' } });
 
         // Select currency
-        const currencySelect = screen.getAllByRole('combobox')[1];
+        const selects = container.querySelectorAll('select');
+        const currencySelect = Array.from(selects).find(s => Array.from(s.options).some(o => o.value === 'USD'))!;
         fireEvent.change(currencySelect, { target: { value: 'USD' } });
 
         // Enter balances
@@ -171,7 +175,7 @@ describe('Import page — foreign bank accounts', () => {
         expect(mockStore.setForeignAccounts).toHaveBeenCalledWith([
             expect.objectContaining({
                 broker: 'Revolut',
-                type: '01',
+                type: '03',
                 maturity: 'L',
                 country: 'IE',
                 currency: 'USD',

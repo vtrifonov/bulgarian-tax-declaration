@@ -132,6 +132,7 @@ export const en = {
     'import.broker': 'Broker',
     'import.currency': 'Currency',
     'import.customBroker': 'Custom...',
+    'import.country': 'Country',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Broker',

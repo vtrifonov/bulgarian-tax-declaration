@@ -132,6 +132,7 @@ export const bg = {
     'import.broker': 'Брокер',
     'import.currency': 'Валута',
     'import.customBroker': 'Друг...',
+    'import.country': 'Държава',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Брокер',

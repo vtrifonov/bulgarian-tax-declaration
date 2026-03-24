@@ -34,6 +34,23 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/app-state';
 import type { ImportedFile } from '../store/app-state';
 
+const COUNTRY_OPTIONS = [
+    { code: 'IE', name: 'Ireland' },
+    { code: 'US', name: 'United States' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'NL', name: 'Netherlands' },
+    { code: 'LU', name: 'Luxembourg' },
+    { code: 'CH', name: 'Switzerland' },
+    { code: 'AT', name: 'Austria' },
+    { code: 'FR', name: 'France' },
+    { code: 'CY', name: 'Cyprus' },
+    { code: 'EE', name: 'Estonia' },
+    { code: 'LT', name: 'Lithuania' },
+    { code: 'LV', name: 'Latvia' },
+    { code: 'MT', name: 'Malta' },
+];
+
 /** Get a fetch function that bypasses CORS — Tauri HTTP plugin in app, Vite proxy in browser */
 function getCorsFetch(): typeof fetch {
     const isTauri = '__TAURI_INTERNALS__' in window;
@@ -149,6 +166,7 @@ export function Import() {
     const [bankAccounts, setBankAccounts] = useState<{
         broker: string;
         currency: string;
+        country: string;
         openingBalance: string;
         closingBalance: string;
     }[]>([]);
@@ -1352,32 +1370,21 @@ export function Import() {
                             >
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                     {t('import.broker')}:
-                                    <select
-                                        value={importedBrokers.includes(acc.broker) ? acc.broker : '__custom__'}
+                                    <input
+                                        type='text'
+                                        list={`broker-list-${idx}`}
+                                        value={acc.broker}
                                         onChange={(e) => {
                                             const updated = [...bankAccounts];
-                                            updated[idx] = { ...acc, broker: e.target.value === '__custom__' ? '' : e.target.value };
+                                            updated[idx] = { ...acc, broker: e.target.value };
                                             setBankAccounts(updated);
                                         }}
-                                        style={{ padding: '0.3rem', minWidth: '120px' }}
-                                    >
-                                        <option value=''>--</option>
-                                        {importedBrokers.map(b => <option key={b} value={b}>{b}</option>)}
-                                        <option value='__custom__'>{t('import.customBroker')}</option>
-                                    </select>
-                                    {!importedBrokers.includes(acc.broker) && acc.broker !== '' && (
-                                        <input
-                                            type='text'
-                                            value={acc.broker}
-                                            onChange={(e) => {
-                                                const updated = [...bankAccounts];
-                                                updated[idx] = { ...acc, broker: e.target.value };
-                                                setBankAccounts(updated);
-                                            }}
-                                            style={{ padding: '0.3rem', width: '120px' }}
-                                            placeholder='Broker name'
-                                        />
-                                    )}
+                                        style={{ padding: '0.3rem', width: '160px' }}
+                                        placeholder={t('import.broker')}
+                                    />
+                                    <datalist id={`broker-list-${idx}`}>
+                                        {importedBrokers.map(b => <option key={b} value={b} />)}
+                                    </datalist>
                                 </label>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                     {t('import.currency')}:
@@ -1405,6 +1412,35 @@ export function Import() {
                                         <option value=''>--</option>
                                         {availableCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {t('import.country')}:
+                                    <select
+                                        value={COUNTRY_OPTIONS.some(c => c.code === acc.country) ? acc.country : '__custom__'}
+                                        onChange={(e) => {
+                                            const updated = [...bankAccounts];
+                                            updated[idx] = { ...acc, country: e.target.value === '__custom__' ? '' : e.target.value };
+                                            setBankAccounts(updated);
+                                        }}
+                                        style={{ padding: '0.3rem', minWidth: '100px' }}
+                                    >
+                                        {COUNTRY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
+                                        <option value='__custom__'>{t('import.customBroker')}</option>
+                                    </select>
+                                    {!COUNTRY_OPTIONS.some(c => c.code === acc.country) && (
+                                        <input
+                                            type='text'
+                                            value={acc.country}
+                                            onChange={(e) => {
+                                                const updated = [...bankAccounts];
+                                                updated[idx] = { ...acc, country: e.target.value.toUpperCase() };
+                                                setBankAccounts(updated);
+                                            }}
+                                            style={{ width: '50px', padding: '0.3rem', fontFamily: 'monospace' }}
+                                            placeholder='XX'
+                                            maxLength={2}
+                                        />
+                                    )}
                                 </label>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                     {t('import.openingBalance')}:
@@ -1444,9 +1480,9 @@ export function Import() {
                                             const current = useAppStore.getState().foreignAccounts ?? [];
                                             setForeignAccounts([...current, {
                                                 broker: acc.broker,
-                                                type: '01' as const,
+                                                type: '03' as const,
                                                 maturity: 'L' as const,
-                                                country: 'IE',
+                                                country: acc.country || 'IE',
                                                 currency: acc.currency,
                                                 amountStartOfYear: opening,
                                                 amountEndOfYear: closing,
@@ -1484,7 +1520,7 @@ export function Import() {
                         ))}
 
                         <button
-                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', openingBalance: '', closingBalance: '' }])}
+                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', country: 'IE', openingBalance: '', closingBalance: '' }])}
                             style={{
                                 padding: '0.4rem 1rem',
                                 backgroundColor: 'var(--bg-secondary)',

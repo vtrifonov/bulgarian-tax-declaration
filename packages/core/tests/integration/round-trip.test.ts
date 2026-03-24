@@ -3024,7 +3024,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 foreignAccounts: [
                     {
                         broker: 'Revolut',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'USD',
@@ -3033,7 +3033,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                     },
                     {
                         broker: 'Revolut',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'GBP',
@@ -3071,7 +3071,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 foreignAccounts: [
                     {
                         broker: 'Revolut',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'USD',
@@ -3093,7 +3093,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             // Section 03: 1 bank account
             expect(spb8.accounts).toHaveLength(1);
-            expect(spb8.accounts[0].type).toBe('01');
+            expect(spb8.accounts[0].type).toBe('03');
 
             // Section 04: 1 savings security
             expect(spb8.securities).toHaveLength(1);
@@ -3218,7 +3218,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 foreignAccounts: [
                     {
                         broker: 'Revolut',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'USD',
@@ -3227,7 +3227,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                     },
                     {
                         broker: 'Revolut',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'GBP',
@@ -3236,7 +3236,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                     },
                     {
                         broker: 'Wise',
-                        type: '01',
+                        type: '03',
                         maturity: 'L',
                         country: 'IE',
                         currency: 'EUR',
@@ -3260,7 +3260,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const wise = reimported.foreignAccounts.find(a => a.broker === 'Wise');
 
             expect(revolUtUsd).toBeDefined();
-            expect(revolUtUsd!.type).toBe('01');
+            expect(revolUtUsd!.type).toBe('03');
             expect(revolUtUsd!.amountStartOfYear).toBe(0);
             expect(revolUtUsd!.amountEndOfYear).toBeCloseTo(1500.50, 2);
 
