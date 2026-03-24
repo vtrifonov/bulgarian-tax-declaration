@@ -10,6 +10,7 @@ import type {
     Holding,
     Sale,
     Spb8PersonalData,
+    Spb8Security,
     StockYieldEntry,
 } from '@bg-tax/core';
 import { useEffect } from 'react';
@@ -57,6 +58,7 @@ function Layout() {
     const setLanguage = useAppStore(s => s.setLanguage);
     const holdings = useAppStore(s => s.holdings);
     const foreignAccounts = useAppStore(s => s.foreignAccounts);
+    const savingsSecurities = useAppStore(s => s.savingsSecurities);
     const { user, signOut } = useAuth();
 
     // Auto-save state to IndexedDB
@@ -129,6 +131,10 @@ function Layout() {
 
             if (saved.foreignAccounts && Array.isArray(saved.foreignAccounts)) {
                 store.setForeignAccounts(saved.foreignAccounts as ForeignAccountBalance[]);
+            }
+
+            if (saved.savingsSecurities && Array.isArray(saved.savingsSecurities)) {
+                store.setSavingsSecurities(saved.savingsSecurities as Spb8Security[]);
             }
 
             if (saved.spb8PersonalData) {
@@ -238,7 +244,7 @@ function Layout() {
                         </Link>
                     ))}
 
-                    {(holdings.length > 0 || (foreignAccounts?.length ?? 0) > 0) && (
+                    {(holdings.length > 0 || (foreignAccounts?.length ?? 0) > 0 || (savingsSecurities?.length ?? 0) > 0) && (
                         <Link
                             to='/spb8'
                             style={{

@@ -126,6 +126,12 @@ export const bg = {
     'import.savingsBalanceHint': 'Въведете началното и крайното салдо от PDF отчета на Revolut (Savings → ... → Statement → PDF)',
     'import.openingBalance': 'Начално салдо',
     'import.closingBalance': 'Крайно салдо',
+    'import.foreignAccountsTitle': 'Чуждестранни банкови сметки',
+    'import.foreignAccountsHint': 'Добавете салда на чуждестранни банкови сметки за СПБ-8 Раздел 03 (Чуждестранни сметки)',
+    'import.addAccount': 'Добави сметка',
+    'import.broker': 'Брокер',
+    'import.currency': 'Валута',
+    'import.customBroker': 'Друг...',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Брокер',

@@ -126,6 +126,12 @@ export const en = {
     'import.savingsBalanceHint': 'Enter the Opening and Closing balance from your Revolut PDF statement (Savings → ... → Statement → PDF)',
     'import.openingBalance': 'Opening balance',
     'import.closingBalance': 'Closing balance',
+    'import.foreignAccountsTitle': 'Foreign Bank Accounts',
+    'import.foreignAccountsHint': 'Add foreign bank account balances for SPB-8 Section 03 (Чуждестранни сметки)',
+    'import.addAccount': 'Add account',
+    'import.broker': 'Broker',
+    'import.currency': 'Currency',
+    'import.customBroker': 'Custom...',
 
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Broker',

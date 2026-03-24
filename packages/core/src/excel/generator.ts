@@ -6,6 +6,7 @@ import { addDividendsSheet } from './sheets/dividends-sheet.js';
 import { addFxSheet } from './sheets/fx-sheet.js';
 import { addHoldingsSheet } from './sheets/holdings-sheet.js';
 import { addSalesSheet } from './sheets/sales-sheet.js';
+import { addSavingsSecuritiesSheet } from './sheets/savings-securities-sheet.js';
 import { addSpb8AccountsSheet } from './sheets/spb8-accounts-sheet.js';
 import { addSpb8PersonalDataSheet } from './sheets/spb8-personal-sheet.js';
 import { addSpb8SecuritiesSheet } from './sheets/spb8-securities-sheet.js';
@@ -26,6 +27,7 @@ export async function generateExcel(state: AppState): Promise<Uint8Array> {
     addSpb8AccountsSheet(workbook, state);
     addSpb8PersonalDataSheet(workbook, state);
     addSpb8SecuritiesSheet(workbook, state);
+    addSavingsSecuritiesSheet(workbook, state);
 
     // 2. FX rate sheets (last)
     const currencies = detectCurrencies(state);
@@ -51,6 +53,7 @@ function detectCurrencies(state: AppState): string[] {
         state.dividends,
         state.stockYield,
         state.brokerInterest,
+        state.savingsSecurities ?? [],
     ];
 
     for (const arr of itemArrays) {

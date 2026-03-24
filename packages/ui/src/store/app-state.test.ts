@@ -1242,4 +1242,45 @@ describe('old autosave without tableSorting', () => {
 
         expect(hasSorting).toBeUndefined();
     });
+
+    describe('setSavingsSecurities', () => {
+        it('stores savings securities', () => {
+            useAppStore.getState().setSavingsSecurities([
+                { isin: 'IE0002RUHW32', currency: 'GBP', quantityStartOfYear: 0, quantityEndOfYear: 12.85 },
+            ]);
+            expect(useAppStore.getState().savingsSecurities).toHaveLength(1);
+            expect(useAppStore.getState().savingsSecurities[0].isin).toBe('IE0002RUHW32');
+        });
+
+        it('replaces existing savings securities', () => {
+            useAppStore.getState().setSavingsSecurities([
+                { isin: 'IE0002RUHW32', currency: 'GBP', quantityStartOfYear: 0, quantityEndOfYear: 12.85 },
+            ]);
+            useAppStore.getState().setSavingsSecurities([
+                { isin: 'IE000AZVL3K0', currency: 'EUR', quantityStartOfYear: 100, quantityEndOfYear: 550 },
+            ]);
+            expect(useAppStore.getState().savingsSecurities).toHaveLength(1);
+            expect(useAppStore.getState().savingsSecurities[0].isin).toBe('IE000AZVL3K0');
+        });
+
+        it('clears savings securities on reset', () => {
+            useAppStore.getState().setSavingsSecurities([
+                { isin: 'IE0002RUHW32', currency: 'GBP', quantityStartOfYear: 0, quantityEndOfYear: 12.85 },
+            ]);
+            expect(useAppStore.getState().savingsSecurities).toHaveLength(1);
+            useAppStore.getState().reset();
+            expect(useAppStore.getState().savingsSecurities).toEqual([]);
+        });
+
+        it('is independent of foreign accounts', () => {
+            useAppStore.getState().setSavingsSecurities([
+                { isin: 'IE0002RUHW32', currency: 'GBP', quantityStartOfYear: 0, quantityEndOfYear: 12.85 },
+            ]);
+            useAppStore.getState().setForeignAccounts([
+                { broker: 'Revolut', type: '01', maturity: 'L', country: 'IE', currency: 'GBP', amountStartOfYear: 100, amountEndOfYear: 200 },
+            ]);
+            expect(useAppStore.getState().savingsSecurities).toHaveLength(1);
+            expect(useAppStore.getState().foreignAccounts).toHaveLength(1);
+        });
+    });
 });

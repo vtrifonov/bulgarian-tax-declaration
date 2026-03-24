@@ -44,6 +44,7 @@ export function Spb8() {
         fxRates,
         taxYear,
         foreignAccounts,
+        savingsSecurities,
         spb8PersonalData,
         addForeignAccount,
         updateForeignAccount,
@@ -105,6 +106,7 @@ export function Spb8() {
                     fxRates,
                     manualEntries: [],
                     foreignAccounts,
+                    savingsSecurities,
                     spb8PersonalData,
                 },
                 spb8PersonalData || {},
@@ -137,7 +139,7 @@ export function Spb8() {
 
             return null;
         }
-    }, [holdings, sales, fxRates, taxYear, foreignAccounts, spb8PersonalData, reportType, yearEndPrices]);
+    }, [holdings, sales, fxRates, taxYear, foreignAccounts, savingsSecurities, spb8PersonalData, reportType, yearEndPrices]);
 
     const baseCcy = taxYear >= 2026 ? 'EUR' : 'BGN';
 

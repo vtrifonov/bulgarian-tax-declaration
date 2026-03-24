@@ -146,6 +146,7 @@ Dates: ISO `YYYY-MM-DD` strings in cells.
 | SPB-8 Accounts | `СПБ-8 Сметки` | `sheets/spb8-accounts-sheet.ts` | `excel-full-import.ts` |
 | SPB-8 Personal Data | `СПБ-8 Лични Данни` | `sheets/spb8-personal-sheet.ts` | `excel-full-import.ts` |
 | SPB-8 Securities | `СПБ-8 Ценни Книжа` | `sheets/spb8-securities-sheet.ts` | `excel-full-import.ts` |
+| Savings Securities | `Спестовни Ценни Книжа` | `sheets/savings-securities-sheet.ts` | `excel-full-import.ts` |
 | FX Rates | `{CCY}` | `sheets/fx-sheet.ts` | `excel-full-import.ts` |
 
 If your provider produces a new data type not in this table, you must:
@@ -400,8 +401,11 @@ If the broker's data includes ISIN codes, return `isinMap` in `BrokerProviderRes
 - Key: ticker symbol (matching the symbols used in trades/holdings)
 - Value: 12-character ISIN code
 
+### Manual Foreign Bank Accounts (Import Page)
+The Import page includes a "Foreign Bank Accounts" section where users can manually enter bank account balances (e.g. Revolut, Wise current accounts). These are stored as `ForeignAccountBalance` with `type: '01'` and appear in SPB-8 Section 03. The broker dropdown auto-populates from imported files, and selecting a new currency triggers FX rate fetching from ECB.
+
 ### Revolut Savings Pattern
-Revolut "savings" are money market fund shares (ISINs: IE0002RUHW32 GBP, IE000H9J0QX4 USD, IE000AZVL3K0 EUR). These are Section 04 securities, NOT Section 03 accounts.
+Revolut "savings" are money market fund shares (ISINs: IE0002RUHW32 GBP, IE000H9J0QX4 USD, IE000AZVL3K0 EUR). These are Section 04 securities, NOT Section 03 accounts. The savings balance prompt on the Import page includes an editable ISIN field (auto-populated from CSV) and stores positions as `savingsSecurities` in AppState. The `assembleSecurities()` function merges these with stock holdings for SPB-8 output.
 
 ## Error Handling Standard
 

@@ -9,6 +9,7 @@ import type {
     InterestEntry,
     Sale,
     Spb8PersonalData,
+    Spb8Security,
     StockYieldEntry,
 } from '../types/index.js';
 
@@ -72,6 +73,7 @@ export interface FullExcelImport {
     stockYield: StockYieldEntry[];
     brokerInterest: BrokerInterest[];
     foreignAccounts: ForeignAccountBalance[];
+    savingsSecurities: Spb8Security[];
     spb8PersonalData?: Spb8PersonalData;
     yearEndPrices: Record<string, number>;
     fxRates: Record<string, Record<string, number>>;
@@ -93,6 +95,7 @@ export async function importFullExcel(buffer: ArrayBuffer): Promise<FullExcelImp
     const stockYield = readStockYieldSheet(wb);
     const brokerInterest = readBrokerInterestSheets(wb);
     const foreignAccounts = readSpb8AccountsSheet(wb);
+    const savingsSecurities = readSavingsSecuritiesSheet(wb);
     const spb8PersonalData = readSpb8PersonalDataSheet(wb);
     const yearEndPrices = readSpb8SecuritiesSheet(wb);
     const fxRates = readFxSheets(wb);
@@ -112,7 +115,7 @@ export async function importFullExcel(buffer: ArrayBuffer): Promise<FullExcelImp
         }
     }
 
-    return { holdings, sales, dividends, stockYield, brokerInterest, foreignAccounts, spb8PersonalData, yearEndPrices, fxRates };
+    return { holdings, sales, dividends, stockYield, brokerInterest, foreignAccounts, savingsSecurities, spb8PersonalData, yearEndPrices, fxRates };
 }
 
 function readSalesSheet(wb: ExcelJS.Workbook): Sale[] {
@@ -389,6 +392,34 @@ function readSpb8AccountsSheet(wb: ExcelJS.Workbook): ForeignAccountBalance[] {
     return accounts;
 }
 
+function readSavingsSecuritiesSheet(wb: ExcelJS.Workbook): Spb8Security[] {
+    const ws = wb.getWorksheet('Спестовни Ценни Книжа');
+
+    if (!ws) {
+        return [];
+    }
+    const securities: Spb8Security[] = [];
+
+    ws.eachRow((row, rowNumber) => {
+        if (rowNumber <= 1) {
+            return;
+        }
+        const isin = cellStr(row.getCell(1));
+
+        if (!isin) {
+            return;
+        }
+        securities.push({
+            isin,
+            currency: cellStr(row.getCell(2)),
+            quantityStartOfYear: cellNum(row.getCell(3)),
+            quantityEndOfYear: cellNum(row.getCell(4)),
+        });
+    });
+
+    return securities;
+}
+
 function readSpb8PersonalDataSheet(wb: ExcelJS.Workbook): Spb8PersonalData | undefined {
     const ws = wb.getWorksheet('СПБ-8 Лични Данни');
 
@@ -475,6 +506,7 @@ function readFxSheets(wb: ExcelJS.Workbook): Record<string, Record<string, numbe
         'IB Stock Yield',
         'СПБ-8 Сметки',
         'СПБ-8 Ценни Книжа',
+        'Спестовни Ценни Книжа',
         'СПБ-8 Лични Данни',
     ]);
 

@@ -25,6 +25,7 @@ import type {
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from 'react';
@@ -145,6 +146,13 @@ export function Import() {
         fileName: string;
     }[]>([]);
 
+    const [bankAccounts, setBankAccounts] = useState<{
+        broker: string;
+        currency: string;
+        openingBalance: string;
+        closingBalance: string;
+    }[]>([]);
+
     const {
         importHoldings,
         importSales,
@@ -161,8 +169,30 @@ export function Import() {
         brokerInterest,
         importedFiles,
         addImportedFile,
+        foreignAccounts,
         setForeignAccounts,
+        setSavingsSecurities,
     } = useAppStore();
+
+    // Derive broker names from imported files
+    const importedBrokers = useMemo(() => {
+        const brokers = new Set<string>();
+        for (const f of importedFiles) {
+            if (f.type === 'ib') brokers.add('Interactive Brokers');
+            if (f.type === 'revolut' || f.type === 'revolut-investments' || f.type === 'revolut-account') brokers.add('Revolut');
+            if (f.type === 'etrade') brokers.add('E*TRADE');
+        }
+        return Array.from(brokers).sort();
+    }, [importedFiles]);
+
+    // Common currencies + any seen in imported data
+    const availableCurrencies = useMemo(() => {
+        const ccys = new Set(['USD', 'EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'TRY', 'JPY', 'CAD', 'AUD']);
+        for (const h of holdings) ccys.add(h.currency);
+        for (const s of sales) ccys.add(s.currency);
+        for (const bi of brokerInterest) ccys.add(bi.currency);
+        return Array.from(ccys).sort();
+    }, [holdings, sales, brokerInterest]);
 
     // Auto-fetch FX rates when new currencies are detected — includes prior-year dates
     useEffect(() => {
@@ -848,19 +878,17 @@ export function Import() {
 
                 // Extract position data for balance prompt
                 const position = parseRevolutSavingsPositions(content);
-                if (position.isin) {
-                    setPendingSavingsBalances(prev => [
-                        ...prev.filter(p => !(p.isin === position.isin && p.currency === position.currency)),
-                        {
-                            isin: position.isin,
-                            currency: position.currency,
-                            quantityEndOfYear: position.quantityEndOfYear,
-                            openingBalance: '',
-                            closingBalance: position.quantityEndOfYear.toFixed(2),
-                            fileName: file.name,
-                        },
-                    ]);
-                }
+                setPendingSavingsBalances(prev => [
+                    ...prev.filter(p => !(p.isin === position.isin && p.currency === position.currency)),
+                    {
+                        isin: position.isin,
+                        currency: position.currency,
+                        quantityEndOfYear: position.quantityEndOfYear,
+                        openingBalance: '',
+                        closingBalance: position.quantityEndOfYear.toFixed(2),
+                        fileName: file.name,
+                    },
+                ]);
             }
         } catch (err) {
             addImportedFile({
@@ -1167,12 +1195,26 @@ export function Import() {
                                     }}
                                 >
                                     <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                                        Revolut Savings — {sb.currency} ({sb.isin})
+                                        Revolut Savings — {sb.currency}
                                     </div>
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
                                         {t('import.savingsBalanceHint')}
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                                            ISIN:
+                                            <input
+                                                type='text'
+                                                value={sb.isin}
+                                                onChange={(e) => {
+                                                    const updated = [...pendingSavingsBalances];
+                                                    updated[idx] = { ...sb, isin: e.target.value.toUpperCase() };
+                                                    setPendingSavingsBalances(updated);
+                                                }}
+                                                style={{ marginLeft: '0.5rem', width: '160px', padding: '0.3rem', fontFamily: 'monospace' }}
+                                                placeholder='e.g. IE0002RUHW32'
+                                            />
+                                        </label>
                                         <label style={{ display: 'flex', alignItems: 'center' }}>
                                             {t('import.openingBalance')}:
                                             <input
@@ -1204,25 +1246,22 @@ export function Import() {
                                         </label>
                                         <button
                                             onClick={() => {
-                                                // Store the balance as a foreign account (type 02 = securities)
+                                                // Store as SPB-8 Section 04 security (Ценни книжа)
                                                 const opening = parseFloat(sb.openingBalance) || 0;
                                                 const closing = parseFloat(sb.closingBalance) || sb.quantityEndOfYear;
 
-                                                const account = {
-                                                    broker: 'Revolut Savings',
-                                                    type: '02' as const,
-                                                    maturity: 'L' as const,
-                                                    country: 'IE',
-                                                    currency: sb.currency,
-                                                    amountStartOfYear: opening,
-                                                    amountEndOfYear: closing,
-                                                };
-
-                                                const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
-                                                const filtered = currentAccounts.filter(
-                                                    a => !(a.broker === 'Revolut Savings' && a.currency === sb.currency),
-                                                );
-                                                setForeignAccounts([...filtered, account]);
+                                                if (sb.isin) {
+                                                    const currentSecurities = useAppStore.getState().savingsSecurities ?? [];
+                                                    const filteredSec = currentSecurities.filter(
+                                                        s => !(s.isin === sb.isin && s.currency === sb.currency),
+                                                    );
+                                                    setSavingsSecurities([...filteredSec, {
+                                                        isin: sb.isin,
+                                                        currency: sb.currency,
+                                                        quantityStartOfYear: opening,
+                                                        quantityEndOfYear: closing,
+                                                    }]);
+                                                }
 
                                                 // Remove this prompt
                                                 setPendingSavingsBalances(prev => prev.filter((_, i) => i !== idx));
@@ -1243,6 +1282,221 @@ export function Import() {
                             ))}
                         </div>
                     )}
+
+                    {/* Foreign bank accounts section */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <h3 style={{ marginBottom: '0.5rem' }}>{t('import.foreignAccountsTitle')}</h3>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                            {t('import.foreignAccountsHint')}
+                        </div>
+
+                        {/* Existing foreign accounts from previous imports */}
+                        {(foreignAccounts ?? []).map((acc, idx) => (
+                            <div
+                                key={`existing-${idx}`}
+                                style={{
+                                    display: 'flex',
+                                    gap: '0.75rem',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    padding: '0.75rem',
+                                    marginBottom: '0.5rem',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                }}
+                            >
+                                <span style={{ fontWeight: 'bold', minWidth: '120px' }}>{acc.broker}</span>
+                                <span style={{ fontFamily: 'monospace' }}>{acc.currency}</span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    {t('import.openingBalance')}: {acc.amountStartOfYear.toFixed(2)}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    {t('import.closingBalance')}: {acc.amountEndOfYear.toFixed(2)}
+                                </span>
+                                <button
+                                    onClick={() => {
+                                        const updated = (foreignAccounts ?? []).filter((_, i) => i !== idx);
+                                        setForeignAccounts(updated);
+                                    }}
+                                    style={{
+                                        padding: '0.2rem 0.5rem',
+                                        backgroundColor: '#e74c3c',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                    }}
+                                >
+                                    {t('button.delete')}
+                                </button>
+                            </div>
+                        ))}
+
+                        {/* Pending new accounts being entered */}
+                        {bankAccounts.map((acc, idx) => (
+                            <div
+                                key={`new-${idx}`}
+                                style={{
+                                    display: 'flex',
+                                    gap: '0.75rem',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    padding: '0.75rem',
+                                    marginBottom: '0.5rem',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    border: '1px solid var(--accent)',
+                                }}
+                            >
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {t('import.broker')}:
+                                    <select
+                                        value={importedBrokers.includes(acc.broker) ? acc.broker : '__custom__'}
+                                        onChange={(e) => {
+                                            const updated = [...bankAccounts];
+                                            updated[idx] = { ...acc, broker: e.target.value === '__custom__' ? '' : e.target.value };
+                                            setBankAccounts(updated);
+                                        }}
+                                        style={{ padding: '0.3rem', minWidth: '120px' }}
+                                    >
+                                        <option value=''>--</option>
+                                        {importedBrokers.map(b => <option key={b} value={b}>{b}</option>)}
+                                        <option value='__custom__'>{t('import.customBroker')}</option>
+                                    </select>
+                                    {!importedBrokers.includes(acc.broker) && acc.broker !== '' && (
+                                        <input
+                                            type='text'
+                                            value={acc.broker}
+                                            onChange={(e) => {
+                                                const updated = [...bankAccounts];
+                                                updated[idx] = { ...acc, broker: e.target.value };
+                                                setBankAccounts(updated);
+                                            }}
+                                            style={{ padding: '0.3rem', width: '120px' }}
+                                            placeholder='Broker name'
+                                        />
+                                    )}
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {t('import.currency')}:
+                                    <select
+                                        value={acc.currency}
+                                        onChange={(e) => {
+                                            const updated = [...bankAccounts];
+                                            updated[idx] = { ...acc, currency: e.target.value };
+                                            setBankAccounts(updated);
+                                            // Trigger FX fetch for new currency
+                                            const ccy = e.target.value;
+                                            if (ccy && ccy !== 'EUR' && ccy !== 'BGN') {
+                                                const state = useAppStore.getState();
+                                                const yearEnd = `${taxYear}-12-31`;
+                                                if (!state.fxRates[ccy]?.[yearEnd]) {
+                                                    const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+                                                    void fxService.fetchRates([ccy], taxYear).then(rates => {
+                                                        useAppStore.getState().setFxRates(rates);
+                                                    });
+                                                }
+                                            }
+                                        }}
+                                        style={{ padding: '0.3rem', minWidth: '80px' }}
+                                    >
+                                        <option value=''>--</option>
+                                        {availableCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {t('import.openingBalance')}:
+                                    <input
+                                        type='number'
+                                        step='0.01'
+                                        value={acc.openingBalance}
+                                        onChange={(e) => {
+                                            const updated = [...bankAccounts];
+                                            updated[idx] = { ...acc, openingBalance: e.target.value };
+                                            setBankAccounts(updated);
+                                        }}
+                                        style={{ width: '120px', padding: '0.3rem' }}
+                                        placeholder='0.00'
+                                    />
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {t('import.closingBalance')}:
+                                    <input
+                                        type='number'
+                                        step='0.01'
+                                        value={acc.closingBalance}
+                                        onChange={(e) => {
+                                            const updated = [...bankAccounts];
+                                            updated[idx] = { ...acc, closingBalance: e.target.value };
+                                            setBankAccounts(updated);
+                                        }}
+                                        style={{ width: '120px', padding: '0.3rem' }}
+                                    />
+                                </label>
+                                <button
+                                    onClick={() => {
+                                        // Save this account
+                                        if (acc.broker && acc.currency) {
+                                            const opening = parseFloat(acc.openingBalance) || 0;
+                                            const closing = parseFloat(acc.closingBalance) || 0;
+                                            const current = useAppStore.getState().foreignAccounts ?? [];
+                                            setForeignAccounts([...current, {
+                                                broker: acc.broker,
+                                                type: '01' as const,
+                                                maturity: 'L' as const,
+                                                country: 'IE',
+                                                currency: acc.currency,
+                                                amountStartOfYear: opening,
+                                                amountEndOfYear: closing,
+                                            }]);
+                                            setBankAccounts(prev => prev.filter((_, i) => i !== idx));
+                                        }
+                                    }}
+                                    disabled={!acc.broker || !acc.currency}
+                                    style={{
+                                        padding: '0.3rem 0.75rem',
+                                        backgroundColor: acc.broker && acc.currency ? 'var(--accent)' : 'var(--border)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: acc.broker && acc.currency ? 'pointer' : 'not-allowed',
+                                    }}
+                                >
+                                    {t('button.save')}
+                                </button>
+                                <button
+                                    onClick={() => setBankAccounts(prev => prev.filter((_, i) => i !== idx))}
+                                    style={{
+                                        padding: '0.2rem 0.5rem',
+                                        backgroundColor: '#e74c3c',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                    }}
+                                >
+                                    {t('button.delete')}
+                                </button>
+                            </div>
+                        ))}
+
+                        <button
+                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', openingBalance: '', closingBalance: '' }])}
+                            style={{
+                                padding: '0.4rem 1rem',
+                                backgroundColor: 'var(--bg-secondary)',
+                                color: 'var(--text-primary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            + {t('import.addAccount')}
+                        </button>
+                    </div>
 
                     <button
                         disabled={!!fxProgress?.active || pendingSavingsBalances.length > 0}

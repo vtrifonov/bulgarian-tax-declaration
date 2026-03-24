@@ -29,6 +29,7 @@ import {
     parseRevolutAccountStatement,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
+    parseRevolutSavingsPositions,
     populateSaleFxRates,
     resolveCountry,
     resolveIsinSync,
@@ -2896,6 +2897,416 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 expect(reimported!.quantityStartOfYear).toBe(original.quantityStartOfYear);
                 expect(reimported!.quantityEndOfYear).toBe(original.quantityEndOfYear);
                 // Note: currency is not stored in the SPB-8 Excel form, so we don't verify it
+            }
+        });
+    });
+
+    describe('Test 30: Revolut Savings positions appear in SPB-8 Section 04 securities', () => {
+        it('parses savings CSV and includes positions in assembleSpb8 securities', () => {
+            const eurCsv = readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8');
+            const gbpCsv = readFileSync(join(SAMPLES, 'revolut-savings-gbp.csv'), 'utf-8');
+
+            // Parse savings positions (ISIN + quantities)
+            const eurPos = parseRevolutSavingsPositions(eurCsv);
+            const gbpPos = parseRevolutSavingsPositions(gbpCsv);
+
+            // Both should have ISINs extracted from descriptions
+            expect(eurPos.isin).toBeTruthy();
+            expect(gbpPos.isin).toBeTruthy();
+            expect(eurPos.currency).toBe('EUR');
+            expect(gbpPos.currency).toBe('GBP');
+
+            // Build state with savings securities (as the Import page would)
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { GBP: { '2025-12-31': 0.83 } },
+                manualEntries: [],
+                savingsSecurities: [
+                    {
+                        isin: eurPos.isin,
+                        currency: eurPos.currency,
+                        quantityStartOfYear: 0,
+                        quantityEndOfYear: eurPos.quantityEndOfYear,
+                    },
+                    {
+                        isin: gbpPos.isin,
+                        currency: gbpPos.currency,
+                        quantityStartOfYear: 0,
+                        quantityEndOfYear: gbpPos.quantityEndOfYear,
+                    },
+                ],
+            };
+
+            const spb8 = assembleSpb8(state, { name: 'Test', egn: '0000000000' }, 'P');
+
+            // Securities section should contain both savings funds
+            expect(spb8.securities).toHaveLength(2);
+
+            const eurSec = spb8.securities.find(s => s.isin === eurPos.isin);
+            const gbpSec = spb8.securities.find(s => s.isin === gbpPos.isin);
+
+            expect(eurSec).toBeDefined();
+            expect(gbpSec).toBeDefined();
+            expect(eurSec!.quantityEndOfYear).toBe(eurPos.quantityEndOfYear);
+            expect(gbpSec!.quantityEndOfYear).toBe(gbpPos.quantityEndOfYear);
+
+            // Accounts section should be empty (savings are securities, not accounts)
+            expect(spb8.accounts).toHaveLength(0);
+        });
+
+        it('merges savings with stock holdings when same ISIN exists', () => {
+            const eurCsv = readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8');
+            const eurPos = parseRevolutSavingsPositions(eurCsv);
+
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [
+                    {
+                        id: 'h1',
+                        broker: 'Interactive Brokers',
+                        country: 'IE',
+                        symbol: 'FUND',
+                        dateAcquired: '2024-06-15',
+                        quantity: 100,
+                        currency: 'EUR',
+                        unitPrice: 1,
+                        isin: eurPos.isin,
+                    },
+                ],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: {},
+                manualEntries: [],
+                savingsSecurities: [
+                    {
+                        isin: eurPos.isin,
+                        currency: eurPos.currency,
+                        quantityStartOfYear: 50,
+                        quantityEndOfYear: eurPos.quantityEndOfYear,
+                    },
+                ],
+            };
+
+            const spb8 = assembleSpb8(state, { name: 'Test', egn: '0000000000' }, 'P');
+
+            // Should be merged into one row
+            expect(spb8.securities).toHaveLength(1);
+            expect(spb8.securities[0].isin).toBe(eurPos.isin);
+            // Holdings: 100 + savings endQty
+            expect(spb8.securities[0].quantityEndOfYear).toBe(100 + eurPos.quantityEndOfYear);
+        });
+    });
+
+    describe('Test 31: Foreign bank accounts flow to SPB-8 Section 03', () => {
+        it('foreign accounts with type 01 appear in assembled accounts', () => {
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 }, GBP: { '2025-12-31': 0.83 } },
+                manualEntries: [],
+                foreignAccounts: [
+                    {
+                        broker: 'Revolut',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'USD',
+                        amountStartOfYear: 0,
+                        amountEndOfYear: 1500,
+                    },
+                    {
+                        broker: 'Revolut',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'GBP',
+                        amountStartOfYear: 200,
+                        amountEndOfYear: 350,
+                    },
+                ],
+            };
+
+            const spb8 = assembleSpb8(state, { name: 'Test', egn: '0000000000' }, 'P');
+
+            expect(spb8.accounts).toHaveLength(2);
+            expect(spb8.accounts[0].broker).toBe('Revolut');
+            expect(spb8.accounts[0].currency).toBe('USD');
+            expect(spb8.accounts[0].amountEndOfYear).toBe(1500);
+            expect(spb8.accounts[1].currency).toBe('GBP');
+            expect(spb8.accounts[1].amountEndOfYear).toBe(350);
+
+            // Securities should be empty (no holdings, no savings)
+            expect(spb8.securities).toHaveLength(0);
+        });
+
+        it('bank accounts and savings securities are independent sections', () => {
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 }, GBP: { '2025-12-31': 0.83 } },
+                manualEntries: [],
+                foreignAccounts: [
+                    {
+                        broker: 'Revolut',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'USD',
+                        amountStartOfYear: 0,
+                        amountEndOfYear: 1500,
+                    },
+                ],
+                savingsSecurities: [
+                    {
+                        isin: 'IE0002RUHW32',
+                        currency: 'GBP',
+                        quantityStartOfYear: 0,
+                        quantityEndOfYear: 12.85,
+                    },
+                ],
+            };
+
+            const spb8 = assembleSpb8(state, { name: 'Test', egn: '0000000000' }, 'P');
+
+            // Section 03: 1 bank account
+            expect(spb8.accounts).toHaveLength(1);
+            expect(spb8.accounts[0].type).toBe('01');
+
+            // Section 04: 1 savings security
+            expect(spb8.securities).toHaveLength(1);
+            expect(spb8.securities[0].isin).toBe('IE0002RUHW32');
+        });
+    });
+
+    describe('Test 32: Revolut savings round-trip through Excel (export → import → re-export)', () => {
+        it('savings securities survive Excel round-trip', async () => {
+            const eurCsv = readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8');
+            const gbpCsv = readFileSync(join(SAMPLES, 'revolut-savings-gbp.csv'), 'utf-8');
+
+            // Parse savings interest + positions
+            const eurInterest = parseRevolutCsv(eurCsv);
+            const gbpInterest = parseRevolutCsv(gbpCsv);
+            const eurPos = parseRevolutSavingsPositions(eurCsv);
+            const gbpPos = parseRevolutSavingsPositions(gbpCsv);
+
+            // Build state with savings securities (as Import page would)
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [eurInterest, gbpInterest],
+                fxRates: { GBP: { '2025-12-31': 0.83 } },
+                manualEntries: [],
+                savingsSecurities: [
+                    {
+                        isin: eurPos.isin,
+                        currency: eurPos.currency,
+                        quantityStartOfYear: 0,
+                        quantityEndOfYear: eurPos.quantityEndOfYear,
+                    },
+                    {
+                        isin: gbpPos.isin,
+                        currency: gbpPos.currency,
+                        quantityStartOfYear: 0,
+                        quantityEndOfYear: gbpPos.quantityEndOfYear,
+                    },
+                ],
+            };
+
+            // First export
+            const buf1 = await generateExcel(state);
+
+            // Import back
+            const reimported = await importFullExcel(buf1.buffer as ArrayBuffer);
+
+            // Verify savings securities survived
+            expect(reimported.savingsSecurities).toHaveLength(2);
+            const eurReimported = reimported.savingsSecurities.find(s => s.isin === eurPos.isin);
+            const gbpReimported = reimported.savingsSecurities.find(s => s.isin === gbpPos.isin);
+
+            expect(eurReimported).toBeDefined();
+            expect(eurReimported!.currency).toBe('EUR');
+            expect(eurReimported!.quantityEndOfYear).toBeCloseTo(eurPos.quantityEndOfYear, 4);
+
+            expect(gbpReimported).toBeDefined();
+            expect(gbpReimported!.currency).toBe('GBP');
+            expect(gbpReimported!.quantityEndOfYear).toBeCloseTo(gbpPos.quantityEndOfYear, 4);
+
+            // Re-export from reimported data
+            const state2: AppState = {
+                ...state,
+                brokerInterest: reimported.brokerInterest,
+                savingsSecurities: reimported.savingsSecurities,
+                fxRates: { ...state.fxRates, ...reimported.fxRates },
+            };
+            const buf2 = await generateExcel(state2);
+
+            // Compare: both exports should produce identical savings sheet
+            const wb1 = new ExcelJS.Workbook();
+            const wb2 = new ExcelJS.Workbook();
+
+            await wb1.xlsx.load(buf1.buffer as ArrayBuffer);
+            await wb2.xlsx.load(buf2.buffer as ArrayBuffer);
+
+            const sheet1 = wb1.getWorksheet('Спестовни Ценни Книжа');
+            const sheet2 = wb2.getWorksheet('Спестовни Ценни Книжа');
+
+            expect(sheet1).toBeDefined();
+            expect(sheet2).toBeDefined();
+            expect(sheet1!.rowCount).toBe(sheet2!.rowCount);
+
+            // Compare each data row cell-by-cell
+            for (let r = 2; r <= sheet1!.rowCount; r++) {
+                const row1 = sheet1!.getRow(r);
+                const row2 = sheet2!.getRow(r);
+
+                for (let c = 1; c <= 4; c++) {
+                    const v1 = row1.getCell(c).value;
+                    const v2 = row2.getCell(c).value;
+
+                    if (typeof v1 === 'number' && typeof v2 === 'number') {
+                        expect(v2).toBeCloseTo(v1, 4);
+                    } else {
+                        expect(String(v2)).toBe(String(v1));
+                    }
+                }
+            }
+        });
+    });
+
+    describe('Test 33: Foreign bank accounts survive Excel round-trip', () => {
+        it('manually entered bank accounts are preserved through export → import → re-export', async () => {
+            // State with manually entered bank accounts (as Import page would create)
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [],
+                fxRates: { USD: { '2025-12-31': 0.55 }, GBP: { '2025-12-31': 0.83 } },
+                manualEntries: [],
+                foreignAccounts: [
+                    {
+                        broker: 'Revolut',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'USD',
+                        amountStartOfYear: 0,
+                        amountEndOfYear: 1500.50,
+                    },
+                    {
+                        broker: 'Revolut',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'GBP',
+                        amountStartOfYear: 200,
+                        amountEndOfYear: 350.75,
+                    },
+                    {
+                        broker: 'Wise',
+                        type: '01',
+                        maturity: 'L',
+                        country: 'IE',
+                        currency: 'EUR',
+                        amountStartOfYear: 1000,
+                        amountEndOfYear: 2500,
+                    },
+                ],
+            };
+
+            // First export
+            const buf1 = await generateExcel(state);
+
+            // Import back
+            const reimported = await importFullExcel(buf1.buffer as ArrayBuffer);
+
+            // Verify all accounts survived
+            expect(reimported.foreignAccounts).toHaveLength(3);
+
+            const revolUtUsd = reimported.foreignAccounts.find(a => a.broker === 'Revolut' && a.currency === 'USD');
+            const revolUtGbp = reimported.foreignAccounts.find(a => a.broker === 'Revolut' && a.currency === 'GBP');
+            const wise = reimported.foreignAccounts.find(a => a.broker === 'Wise');
+
+            expect(revolUtUsd).toBeDefined();
+            expect(revolUtUsd!.type).toBe('01');
+            expect(revolUtUsd!.amountStartOfYear).toBe(0);
+            expect(revolUtUsd!.amountEndOfYear).toBeCloseTo(1500.50, 2);
+
+            expect(revolUtGbp).toBeDefined();
+            expect(revolUtGbp!.amountEndOfYear).toBeCloseTo(350.75, 2);
+
+            expect(wise).toBeDefined();
+            expect(wise!.currency).toBe('EUR');
+            expect(wise!.amountEndOfYear).toBe(2500);
+
+            // Re-export from reimported data
+            const state2: AppState = {
+                ...state,
+                foreignAccounts: reimported.foreignAccounts,
+            };
+            const buf2 = await generateExcel(state2);
+
+            // Compare accounts sheets cell-by-cell
+            const wb1 = new ExcelJS.Workbook();
+            const wb2 = new ExcelJS.Workbook();
+
+            await wb1.xlsx.load(buf1.buffer as ArrayBuffer);
+            await wb2.xlsx.load(buf2.buffer as ArrayBuffer);
+
+            const sheet1 = wb1.getWorksheet('СПБ-8 Сметки');
+            const sheet2 = wb2.getWorksheet('СПБ-8 Сметки');
+
+            expect(sheet1).toBeDefined();
+            expect(sheet2).toBeDefined();
+            expect(sheet1!.rowCount).toBe(sheet2!.rowCount);
+
+            for (let r = 2; r <= sheet1!.rowCount; r++) {
+                const row1 = sheet1!.getRow(r);
+                const row2 = sheet2!.getRow(r);
+
+                // Check broker, type, maturity, country, currency, amounts (cols 1-7)
+                for (let c = 1; c <= 7; c++) {
+                    const v1 = row1.getCell(c).value;
+                    const v2 = row2.getCell(c).value;
+
+                    if (typeof v1 === 'number' && typeof v2 === 'number') {
+                        expect(v2).toBeCloseTo(v1, 2);
+                    } else {
+                        expect(String(v2)).toBe(String(v1));
+                    }
+                }
             }
         });
     });
