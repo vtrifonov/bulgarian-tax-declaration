@@ -25,6 +25,8 @@
 | Create | `packages/core/tests/parsers/bondora-csv.test.ts` | Parser unit tests |
 | Create | `packages/core/tests/fixtures/bondora-statement.csv` | Test fixture (Variant A — old format) |
 | Create | `packages/core/tests/fixtures/bondora-statement-new.csv` | Test fixture (Variant B — new format) |
+| Modify | `packages/ui/src/pages/Import.tsx` | Add Bondora file detection, processing branch, and import priority |
+| Modify | `packages/ui/src/store/app-state.ts` | Add `'bondora'` to `ImportedFile['type']` union |
 
 ---
 
@@ -223,7 +225,111 @@ pnpm --filter @bg-tax/core test -- --coverage bondora
 
 ---
 
-### Task 6: Verify Integration
+### Task 6: Import Page Integration
+
+**Files:**
+- Modify: `packages/ui/src/store/app-state.ts`
+- Modify: `packages/ui/src/pages/Import.tsx`
+
+**Context:** Import.tsx uses hardcoded `detectFileType()` and provider-specific processing branches for text/CSV files. The generic provider abstraction is only used for binary files (E*TRADE PDFs). Bondora needs explicit integration.
+
+- [ ] **Step 1: Add `'bondora'` to `ImportedFile['type']` union**
+
+In `app-state.ts`, find the `ImportedFile` type and add `'bondora'` to the `type` union.
+
+- [ ] **Step 2: Add Bondora detection to `detectFileType()`**
+
+In `Import.tsx`, add after the Revolut investments check and before `return null`:
+
+```typescript
+// Bondora Account Statement (old or new format)
+const firstLine = content.split('\n')[0] ?? '';
+if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
+    return 'bondora';
+}
+if (firstLine.includes('Date') && firstLine.includes('Details') && firstLine.includes('Turnover')) {
+    return 'bondora';
+}
+```
+
+**Important:** Must come AFTER IB and Revolut checks to avoid false positives (IB CSVs also start with text headers).
+
+- [ ] **Step 3: Add `'bondora'` to `importPriority()`**
+
+```typescript
+case 'bondora':
+    return 55;  // After E*TRADE (50)
+```
+
+- [ ] **Step 4: Add `'bondora'` to `importedBrokers` memo**
+
+```typescript
+if (f.type === 'bondora') brokers.add('Bondora');
+```
+
+- [ ] **Step 5: Add Bondora processing branch**
+
+Add an `else if (fileType === 'bondora')` block in the file processing section. Follow the same pattern as Revolut savings (line ~860):
+
+```typescript
+} else if (fileType === 'bondora') {
+    const result = parseBondoraCsv(content);
+
+    // Add interest to brokerInterest (dedup by broker+currency)
+    const existing = useAppStore.getState().brokerInterest;
+    const isDuplicate = existing.some(bi => bi.broker === 'Bondora' && bi.currency === result.interest.currency);
+    if (!isDuplicate) {
+        addBrokerInterest(result.interest);
+    }
+
+    // Add foreign account balance
+    const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
+    const existingBondoraIdx = currentAccounts.findIndex(
+        a => a.broker === 'Bondora' && a.currency === result.foreignAccount.currency
+    );
+    if (existingBondoraIdx >= 0) {
+        const updated = [...currentAccounts];
+        updated[existingBondoraIdx] = result.foreignAccount;
+        setForeignAccounts(updated);
+    } else {
+        setForeignAccounts([...currentAccounts, result.foreignAccount]);
+    }
+
+    // Warnings
+    if (result.warnings.length > 0) {
+        // Show warnings in import status
+    }
+
+    const netInterest = result.interest.entries.reduce((s, e) => s + e.amount, 0);
+    addImportedFile({
+        name: file.name,
+        type: 'bondora',
+        status: 'success',
+        message: `EUR: ${result.interest.entries.length} interest entries, net ${netInterest.toFixed(2)} EUR` +
+            (result.warnings.length > 0 ? ` (${result.warnings.length} warnings)` : ''),
+    });
+}
+```
+
+- [ ] **Step 6: Add `parseBondoraCsv` import**
+
+Add to the core imports at the top of `Import.tsx`:
+
+```typescript
+import { parseBondoraCsv } from '@bg-tax/core';
+```
+
+- [ ] **Step 7: Update unrecognized file error message**
+
+Update the error message at line ~540 to include Bondora:
+
+```typescript
+'Unrecognized file format. Expected IB activity statement, Revolut savings/investments/account CSV, E*TRADE PDF, or Bondora account statement CSV.'
+```
+
+---
+
+### Task 7: Verify Integration
 
 - [ ] **Step 1: Run full test suite**
 
@@ -236,3 +342,7 @@ Ensure no regressions in existing provider tests.
 - [ ] **Step 2: Verify provider detection ordering**
 
 Confirm that Bondora's `detectFile` does not false-positive on IB or Revolut CSVs by checking the test fixtures from other providers.
+
+- [ ] **Step 3: Verify tax declaration flow**
+
+Confirm that Bondora interest stored in `state.brokerInterest` is automatically picked up by the Declaration page's interest tax calculation (Appendix 8, Table 6). The existing code at `Declaration.tsx` lines 65-78 iterates all `brokerInterest` entries — no code changes needed, just verify the data flows correctly end-to-end.

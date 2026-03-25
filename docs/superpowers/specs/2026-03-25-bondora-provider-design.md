@@ -282,22 +282,51 @@ Interest entries appear in the `Bondora Лихви EUR` sheet (following the `{B
 
 Foreign account balance appears in the `СПБ-8 Сметки` sheet alongside IB and Revolut accounts.
 
-## 10. UI Impact
+## 10. Tax Declaration Integration
 
-Minimal UI changes needed:
-- The Import page already handles any registered `BrokerProvider` with `TextFileHandler`
-- Bondora files will be auto-detected when dropped/selected
-- Interest will appear in the interest table
-- Foreign account will appear in the SPB-8 accounts table
+Bondora interest income is reported in the annual Bulgarian tax declaration (NRA form):
 
-## 11. Known Limitations (v1)
+- **Form location:** Приложение 8, Таблица 6 (Appendix 8, Table 6 — Foreign Interest Income)
+- **Column 4:** Gross interest amount (converted to base currency BGN/EUR)
+- **Column 7:** Tax due = gross × 10%
+- **No WHT credit:** Bondora does not withhold tax, so the full 10% is due
+
+**Automatic flow:** Once Bondora interest is stored in `state.brokerInterest`, the existing Declaration page (`Declaration.tsx`) automatically:
+1. Iterates all `brokerInterest` entries (lines 65-75)
+2. Converts each broker's interest sum to base currency
+3. Calculates 10% tax
+4. Aggregates with other interest sources (IB stock yield, Revolut savings, etc.)
+5. Maps totals to Appendix 8, Table 6 fields via form config
+
+No changes needed in the tax calculation or declaration mapping — only the import pipeline must store Bondora interest correctly in `state.brokerInterest`.
+
+## 11. UI Impact
+
+Import.tsx changes required — the Import page uses **hardcoded file detection** (`detectFileType` function) and provider-specific processing branches for text/CSV files (the generic provider abstraction is only used for binary files like E*TRADE PDFs):
+
+1. **`detectFileType()`** — Add a `'bondora'` case that checks the header for Bondora column names (must be ordered after IB/Revolut checks to avoid false positives)
+2. **Processing branch** — Add an `else if (fileType === 'bondora')` block that:
+   - Calls `parseBondoraCsv(content)`
+   - Adds the `BrokerInterest` result to `state.brokerInterest` (dedup by broker+currency, same pattern as Revolut savings at line ~860)
+   - Adds the `ForeignAccountBalance` to `state.foreignAccounts`
+   - Records the imported file with summary message
+3. **`importPriority()`** — Add `'bondora'` with priority 55 (after E*TRADE)
+4. **`importedBrokers` memo** — Add `'bondora'` → `'Bondora'` mapping
+5. **`ImportedFile['type']`** — Add `'bondora'` to the union type in `app-state.ts`
+
+Other UI pages need no changes:
+- Workspace interest table already shows all `brokerInterest` entries
+- Declaration page already aggregates all broker interest for tax calculation
+- SPB-8 page already shows all `foreignAccounts`
+
+## 12. Known Limitations (v1)
 
 - **No secondary market P&L:** Bondora secondary market profits/losses are not parsed (rarely used by Bulgarian investors)
 - **Start-of-year balance for Variant B:** If the CSV doesn't include a `BalanceAfterPayment` column and doesn't start from account opening, the start-of-year balance will be 0 and needs manual correction
 - **Go & Grow only:** Most Bulgarian Bondora investors use Go & Grow; Portfolio Manager loan-level data (individual loan IDs, default tracking) is out of scope for v1
 - **Single currency:** Only EUR is supported (Bondora operates exclusively in EUR)
 
-## 12. Out of Scope (v1)
+## 13. Out of Scope (v1)
 
 - Bondora API integration (programmatic data fetch)
 - PDF tax report parsing (PDF format, less structured than CSV)
@@ -306,7 +335,7 @@ Minimal UI changes needed:
 - Secondary market trade tracking
 - Loan-level investment details
 
-## 13. File Structure
+## 14. File Structure
 
 ```
 packages/core/src/
@@ -325,4 +354,10 @@ packages/core/tests/
   fixtures/
     bondora-statement.csv       — Test fixture (Variant A)
     bondora-statement-new.csv   — Test fixture (Variant B)
+
+packages/ui/src/
+  pages/
+    Import.tsx                  — Add Bondora detection + processing branch (modify)
+  store/
+    app-state.ts                — Add 'bondora' to ImportedFile type union (modify)
 ```
