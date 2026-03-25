@@ -4,6 +4,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import { PDFParse } from 'pdf-parse';
+
 import {
     assembleSpb8,
     calcDividendTax,
@@ -15,11 +17,13 @@ import {
     importHoldingsFromCsv,
     type InterestEntry,
     matchWhtToDividends,
+    parseEtradePdf,
     parseIBCsv,
     parseRevolutAccountStatement,
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
     resolveCountry,
+    resolveIsinSync,
     splitOpenPositions,
 } from '../packages/core/src/index.js';
 
@@ -35,12 +39,20 @@ const FIGI_COUNTRIES: Record<string, string> = {
     DAL: 'САЩ',
     RIO: 'САЩ',
     COIN: 'САЩ',
-    ASML: 'САЩ',
+    ASML: 'Нидерландия (Холандия)',
     SAPd: 'Германия',
     SAP: 'Германия',
     '1810': 'Хонконг',
     MONB: 'България',
 };
+
+function fillMissingIsins(holdings: Holding[]): void {
+    for (const holding of holdings) {
+        if (!holding.isin) {
+            holding.isin = resolveIsinSync(holding.symbol);
+        }
+    }
+}
 
 function resolveCountryWithFigi(symbol: string): string {
     return resolveCountry(symbol) || FIGI_COUNTRIES[symbol] || '';
@@ -137,9 +149,20 @@ async function buildSampleState() {
         ...ibStatementHoldings,
     ];
 
+    fillMissingIsins(holdingsAfterIb);
+
     const investCsv = readFileSync(join(SAMPLES, 'revolut-investments.csv'), 'utf-8');
     const { trades: revTrades, holdings: revParsedHoldings } = parseRevolutInvestmentsCsv(investCsv);
+
+    fillMissingIsins(revParsedHoldings);
     const revCountryMap = buildCountryMap(revTrades.map(t => ({ ticker: t.ticker })));
+
+    for (const holding of revParsedHoldings) {
+        if (!holding.country) {
+            holding.country = revCountryMap[holding.symbol] ?? '';
+        }
+    }
+
     const revSellTrades = revTrades
         .filter(t => t.type.includes('SELL'))
         .map(t => ({
@@ -162,6 +185,34 @@ async function buildSampleState() {
         ...revParsedHoldings,
     ];
 
+    // E*TRADE
+    const etradePdfBuf = readFileSync(join(SAMPLES, 'ClientStatements_9999_2025.pdf'));
+    const pdfParser = new PDFParse({ data: new Uint8Array(etradePdfBuf) });
+    const pdfResult = await pdfParser.getText();
+    const etradeText = pdfResult.pages.map((p: { text: string }) => p.text).join('\n');
+    const etrade = parseEtradePdf(etradeText);
+    const etradeCountryMap = buildCountryMap((etrade.openPositions ?? []).map(p => ({ symbol: p.symbol })));
+    const etradeHoldings = splitOpenPositions(etrade.openPositions ?? [], [], {
+        broker: 'E*TRADE',
+        countryMap: etradeCountryMap,
+        taxYear: 2025,
+        symbolAliases: {},
+        skipPreExisting: true,
+        existingHoldings: finalHoldings.map(h => ({ symbol: h.symbol, broker: h.broker })),
+    });
+
+    fillMissingIsins(etradeHoldings);
+
+    const finalHoldingsWithEtrade = [
+        ...finalHoldings.filter(h => h.source?.type !== 'E*TRADE'),
+        ...etradeHoldings,
+    ];
+    const etradeDividends = (etrade.dividends ?? []).map(d => {
+        const { bgTaxDue, whtCredit } = calcDividendTax(d.grossAmount, d.withholdingTax);
+
+        return { ...d, country: resolveCountryWithFigi(d.symbol) || 'US', bgTaxDue, whtCredit };
+    });
+
     const eurInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-eur.csv'), 'utf-8'));
     const gbpInterest = parseRevolutCsv(readFileSync(join(SAMPLES, 'revolut-savings-gbp.csv'), 'utf-8'));
     const revolutAccount = parseRevolutAccountStatement(
@@ -177,21 +228,48 @@ async function buildSampleState() {
         amountEndOfYear: b.amountEndOfYear,
     }));
 
+    // Load FX rates from existing reference file (already has full year rates)
+    const existingRef = readFileSync(join(SAMPLES, 'Данъчна_2025.xlsx'));
+    const refImport = await importFullExcel(existingRef.buffer as ArrayBuffer);
+
     return {
         taxYear: 2025 as const,
         baseCurrency: 'BGN' as const,
         language: 'bg' as const,
-        holdings: finalHoldings,
+        holdings: finalHoldingsWithEtrade,
         sales: [...ibSales, ...revSales],
-        dividends: allDividends,
+        dividends: [...allDividends, ...etradeDividends],
         stockYield: parsed.stockYield,
         brokerInterest: [
-            ...groupInterestByCurrency('IB', parsed.interest),
-            eurInterest,
             gbpInterest,
+            eurInterest,
+            {
+                broker: 'E*TRADE',
+                currency: 'USD',
+                entries: etrade.interest ?? [],
+            },
+            ...groupInterestByCurrency('IB', parsed.interest),
         ],
-        foreignAccounts: [...ibForeignAccounts, revolutAccount],
-        fxRates: {},
+        foreignAccounts: [
+            revolutAccount,
+            ...ibForeignAccounts,
+            ...(etrade.foreignAccounts ?? []),
+            { broker: 'Revolut Savings', type: '02' as const, maturity: 'L' as const, country: 'IE', currency: 'GBP', amountStartOfYear: 0, amountEndOfYear: 200 },
+            { broker: 'Revolut Savings', type: '02' as const, maturity: 'L' as const, country: 'IE', currency: 'EUR', amountStartOfYear: 0, amountEndOfYear: 300 },
+        ],
+        yearEndPrices: {
+            ...refImport.yearEndPrices,
+            // Synthetic prices for securities that need them (matches test buildReferenceSampleState)
+            US02079K1079: 178.25, // GOOG
+            NL0010273215: 720.00, // ASML
+            US5949181045: 420.00, // MSFT
+            US2473617023: 55.00, // DAL
+            US7672041008: 62.00, // RIO
+            US0378331005: 195.00, // AAPL
+            KYG9830T1067: 25.00, // 1810
+            US19260Q1076: 250.00, // COIN
+        },
+        fxRates: refImport.fxRates,
         manualEntries: [],
     };
 }

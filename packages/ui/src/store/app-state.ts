@@ -12,7 +12,7 @@ import { create } from 'zustand';
 
 export interface ImportedFile {
     name: string;
-    type: 'ib' | 'revolut' | 'revolut-investments' | 'revolut-account' | 'etrade';
+    type: 'ib' | 'revolut' | 'revolut-investments' | 'revolut-account' | 'etrade' | 'bondora';
     status: 'success' | 'error';
     message: string;
 }

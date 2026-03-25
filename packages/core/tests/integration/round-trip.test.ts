@@ -24,6 +24,7 @@ import {
     importPreviousSpb8,
     type InterestEntry,
     matchWhtToDividends,
+    parseBondoraPdf,
     parseEtradePdf,
     parseIBCsv,
     parseRevolutAccountStatement,
@@ -3308,6 +3309,121 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                     }
                 }
             }
+        });
+    });
+
+    describe('Test 34: Bondora PDF end-to-end — import PDF, export both Excel files, reimport, verify', () => {
+        it('reads actual TaxReport.pdf, produces tax declaration + SPB-8, and round-trips', async () => {
+            // Step 1: Parse the actual sample PDF binary (same as Import.tsx would)
+            const pdfBuf = readFileSync(join(SAMPLES, 'TaxReport.pdf'));
+            const pdfParser = new PDFParse({ data: new Uint8Array(pdfBuf) });
+            const pdfResult = await pdfParser.getText();
+            const fullText = pdfResult.pages.map((p: { text: string }) => p.text).join('\n');
+
+            const parsed = parseBondoraPdf(fullText);
+
+            // Verify parsed data
+            expect(parsed.interest.broker).toBe('Bondora');
+            expect(parsed.interest.currency).toBe('EUR');
+            expect(parsed.interest.entries.length).toBeGreaterThan(0);
+
+            const interestTotal = parsed.interest.entries.reduce((s, e) => s + e.amount, 0);
+
+            expect(interestTotal).toBeCloseTo(26.42, 2);
+
+            expect(parsed.foreignAccount.broker).toBe('Bondora');
+            expect(parsed.foreignAccount.country).toBe('EE');
+            expect(parsed.foreignAccount.amountStartOfYear).toBeCloseTo(350.20, 2);
+            expect(parsed.foreignAccount.amountEndOfYear).toBeCloseTo(376.62, 2);
+
+            // Step 2: Build app state and export tax declaration Excel
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings: [],
+                sales: [],
+                dividends: [],
+                stockYield: [],
+                brokerInterest: [parsed.interest],
+                fxRates: { EUR: { '2025-12-31': 1 / 1.95583 } },
+                manualEntries: [],
+                foreignAccounts: [parsed.foreignAccount],
+            };
+
+            const taxExcelBuf = await generateExcel(state);
+
+            expect(taxExcelBuf.byteLength).toBeGreaterThan(0);
+
+            // Verify the tax Excel has the Bondora interest sheet
+            const taxWb = new ExcelJS.Workbook();
+
+            await taxWb.xlsx.load(taxExcelBuf.buffer as ArrayBuffer);
+
+            const interestSheet = taxWb.getWorksheet('Bondora Лихви EUR');
+
+            expect(interestSheet).toBeDefined();
+            expect(interestSheet!.rowCount).toBeGreaterThan(1); // header + data rows
+
+            // Verify the tax Excel has the SPB-8 accounts sheet with Bondora
+            const accountsSheet = taxWb.getWorksheet('СПБ-8 Сметки');
+
+            expect(accountsSheet).toBeDefined();
+
+            // Step 3: Export SPB-8 Excel
+            const personalData = { name: 'Test User', egn: '1234567890' };
+            const spb8 = assembleSpb8(state, personalData, 'P');
+
+            // Verify SPB-8 has Bondora account in section 03
+            expect(spb8.accounts.length).toBeGreaterThan(0);
+
+            const bondoraAccount = spb8.accounts.find(a => a.broker === 'Bondora');
+
+            expect(bondoraAccount).toBeDefined();
+            expect(bondoraAccount!.currency).toBe('EUR');
+            expect(bondoraAccount!.type).toBe('03');
+            expect(bondoraAccount!.maturity).toBe('S');
+            expect(bondoraAccount!.country).toBe('EE');
+
+            const spb8Buf = await generateSpb8Excel(spb8);
+
+            expect(spb8Buf.byteLength).toBeGreaterThan(0);
+
+            // Step 4: Reimport the tax declaration Excel
+            const reimported = await importFullExcel(taxExcelBuf.buffer as ArrayBuffer);
+
+            // Verify interest survived
+            expect(reimported.brokerInterest).toHaveLength(1);
+            expect(reimported.brokerInterest[0].broker).toBe('Bondora');
+            expect(reimported.brokerInterest[0].currency).toBe('EUR');
+            expect(reimported.brokerInterest[0].entries).toHaveLength(parsed.interest.entries.length);
+
+            const reimportedSum = reimported.brokerInterest[0].entries.reduce((s, e) => s + e.amount, 0);
+
+            expect(reimportedSum).toBeCloseTo(interestTotal, 2);
+
+            // Verify foreign account survived
+            expect(reimported.foreignAccounts).toHaveLength(1);
+
+            const reimportedAcc = reimported.foreignAccounts[0];
+
+            expect(reimportedAcc.broker).toBe('Bondora');
+            expect(reimportedAcc.type).toBe('03');
+            expect(reimportedAcc.maturity).toBe('S');
+            expect(reimportedAcc.country).toBe('EE');
+            expect(reimportedAcc.currency).toBe('EUR');
+            expect(reimportedAcc.amountStartOfYear).toBeCloseTo(350.20, 2);
+            expect(reimportedAcc.amountEndOfYear).toBeCloseTo(376.62, 2);
+
+            // Step 5: Re-export from reimported state and verify identical
+            const state2 = { ...state, ...reimported };
+            const taxExcelBuf2 = await generateExcel(state2);
+            const reimported2 = await importFullExcel(taxExcelBuf2.buffer as ArrayBuffer);
+
+            expect(reimported2.brokerInterest).toHaveLength(1);
+            expect(reimported2.brokerInterest[0].entries).toHaveLength(reimported.brokerInterest[0].entries.length);
+            expect(reimported2.foreignAccounts).toHaveLength(1);
+            expect(reimported2.foreignAccounts[0].amountEndOfYear).toBeCloseTo(reimportedAcc.amountEndOfYear, 2);
         });
     });
 });

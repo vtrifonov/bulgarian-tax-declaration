@@ -17,7 +17,6 @@ import {
 import { useAppStore } from '../store/app-state';
 
 function getPriceFetch(): typeof fetch {
-    // Always proxy through Vite in dev, or use Tauri HTTP plugin in desktop
     return (async (url: RequestInfo | URL, init?: RequestInit) => {
         const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.href : (url as Request).url;
         const isTauri = '__TAURI_INTERNALS__' in window;
@@ -28,10 +27,8 @@ function getPriceFetch(): typeof fetch {
             return mod.fetch(urlStr, init);
         }
 
-        // Browser dev mode — proxy through Vite
-        const proxied = urlStr
-            .replace('https://stooq.com', '/api/stooq')
-            .replace('https://query1.finance.yahoo.com', '/api/yahoo');
+        // Browser (dev + production) — use CORS proxy for APIs that don't support CORS
+        const proxied = `https://corsproxy.io/?${encodeURIComponent(urlStr)}`;
 
         return fetch(proxied, init);
     }) as typeof fetch;
@@ -124,7 +121,10 @@ export function Spb8() {
             const toBase = (ccy: string) => fxToBaseCurrency(ccy, taxYear, fxRates);
 
             for (const sec of assembled.securities) {
-                const price = sec.priceEndOfYear ?? holdings.find(h => h.isin === sec.isin)?.unitPrice ?? 0;
+                const holding = holdings.find(h => h.isin === sec.isin && !h.consumedByFifo);
+                // Money market funds (e.g. Revolut savings) have no matching holding — 1 unit = 1 currency unit
+                const defaultPrice = holding ? 0 : 1;
+                const price = sec.priceEndOfYear ?? holding?.unitPrice ?? defaultPrice;
 
                 sec.amountEndOfYearBgn = sec.quantityEndOfYear * price * toBase(sec.currency);
             }
@@ -1008,25 +1008,37 @@ export function Spb8() {
                                         <td style={tdM}>{sec.quantityStartOfYear.toFixed(4)}</td>
                                         <td style={tdM}>{sec.quantityEndOfYear.toFixed(4)}</td>
                                         <td style={tdM}>
-                                            <input
-                                                type='number'
-                                                step='0.01'
-                                                value={yearEndPrices[sec.isin] ?? sec.priceEndOfYear ?? ''}
-                                                placeholder={String(holdings.find(h => h.isin === sec.isin)?.unitPrice ?? '—')}
-                                                onChange={e => setYearEndPrices({ ...yearEndPrices, [sec.isin]: parseFloat(e.target.value) || 0 })}
-                                                aria-label={`${t('spb8.securities.tableHeader.yearEndPrice')} (${sec.isin})`}
-                                                style={{
-                                                    width: '80px',
-                                                    padding: '0.2rem 0.4rem',
-                                                    textAlign: 'right',
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '0.85rem',
-                                                    backgroundColor: 'var(--bg)',
-                                                    color: 'var(--text)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '3px',
-                                                }}
-                                            />
+                                            {(() => {
+                                                const hasHolding = holdings.some(h => h.isin === sec.isin && !h.consumedByFifo);
+                                                const fxRate = fxToBaseCurrency(sec.currency, taxYear, fxRates);
+
+                                                if (!hasHolding) {
+                                                    // Money market fund — show FX rate as the "price"
+                                                    return <span style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{fxRate.toFixed(4)}</span>;
+                                                }
+
+                                                return (
+                                                    <input
+                                                        type='number'
+                                                        step='0.01'
+                                                        value={yearEndPrices[sec.isin] ?? sec.priceEndOfYear ?? ''}
+                                                        placeholder={String(holdings.find(h => h.isin === sec.isin)?.unitPrice ?? '—')}
+                                                        onChange={e => setYearEndPrices({ ...yearEndPrices, [sec.isin]: parseFloat(e.target.value) || 0 })}
+                                                        aria-label={`${t('spb8.securities.tableHeader.yearEndPrice')} (${sec.isin})`}
+                                                        style={{
+                                                            width: '80px',
+                                                            padding: '0.2rem 0.4rem',
+                                                            textAlign: 'right',
+                                                            fontFamily: 'monospace',
+                                                            fontSize: '0.85rem',
+                                                            backgroundColor: 'var(--bg)',
+                                                            color: 'var(--text)',
+                                                            border: '1px solid var(--border)',
+                                                            borderRadius: '3px',
+                                                        }}
+                                                    />
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ ...tdM, color: 'var(--text-secondary)' }}>{(sec.amountEndOfYearBgn ?? 0).toFixed(2)}</td>
                                     </tr>

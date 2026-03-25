@@ -51,12 +51,21 @@ export function setFxRateCell(
         }
     }
 
-    // Dynamic VLOOKUP into the currency's FX sheet
+    // Dynamic VLOOKUP into the currency's FX sheet (ECB rate: 1 EUR = X currency)
     // Column refs are 1-2 letters (A-XFD); currency codes are 3 letters (USD, EUR)
     const isColumnRef = ccyCol.length <= 2 && /^[A-Z]+$/.test(ccyCol);
     const ccyRef = isColumnRef
         ? `${ccyCol}${rowNum}` // column reference like D2
         : `"${ccyCol}"`; // literal currency string like "USD"
 
-    cell.value = { formula: `IFERROR(VLOOKUP(${dateCol}${rowNum},INDIRECT(${ccyRef}&"!A:B"),2,FALSE),"")` };
+    const vlookup = `VLOOKUP(${dateCol}${rowNum},INDIRECT(${ccyRef}&"!A:B"),2,FALSE)`;
+
+    // ECB rates are EUR-native. Convert to base currency rate:
+    // BGN: 1 unit = 1.95583 / ecbRate BGN
+    // EUR: 1 unit = 1 / ecbRate EUR
+    if (baseCurrency === 'BGN') {
+        cell.value = { formula: `IFERROR(1.95583/${vlookup},"")` };
+    } else {
+        cell.value = { formula: `IFERROR(1/${vlookup},"")` };
+    }
 }

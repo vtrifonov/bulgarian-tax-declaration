@@ -304,10 +304,17 @@ export async function generateSpb8Excel(formData: Spb8FormData): Promise<Uint8Ar
     addLabeledValueRow(sheet, 17, 1, 6, 7, 15, 'Населено място:', formData.personalData?.address?.city ?? '');
     addLabeledValueRow(sheet, 17, 16, 18, 19, 22, 'Пощенски код:', toExcelAddressValue(formData.personalData?.address?.postalCode));
     addLabeledValueRow(sheet, 18, 1, 3, 4, 7, 'Кв./ж.к', formData.personalData?.address?.district ?? '');
-    addLabeledValueRow(sheet, 18, 8, 10, 11, 16, 'Улица:', formData.personalData?.address?.street ?? '');
-    addLabeledValueRow(sheet, 18, 17, 17, 18, 18, '№', toExcelAddressValue(formData.personalData?.address?.number));
+    addLabeledValueRow(sheet, 18, 8, 10, 11, 15, 'Улица:', formData.personalData?.address?.street ?? '');
+    addLabeledValueRow(sheet, 18, 16, 16, 17, 18, '№', toExcelAddressValue(formData.personalData?.address?.number));
     addLabeledValueRow(sheet, 18, 19, 19, 20, 22, 'вх./ап.', toExcelAddressValue(formData.personalData?.address?.entrance));
-    addLabeledValueRow(sheet, 19, 1, 4, 5, 22, 'Телефон:', formData.personalData?.phone ?? '');
+    // Phone: use RichText to force text type and avoid Excel "Number Stored as Text" warning
+    mergeAndSet(sheet, 19, 19, 1, 4, 'Телефон:', NORMAL_FONT, LEFT_WRAP);
+    mergeAndSet(sheet, 19, 19, 5, 22, '', NORMAL_FONT, LEFT_WRAP, BOTTOM_BORDER);
+    const phoneCell = sheet.getCell(19, 5);
+    const phoneVal = formData.personalData?.phone ?? '';
+
+    phoneCell.value = { richText: [{ font: NORMAL_FONT, text: phoneVal }] };
+    phoneCell.numFmt = '@';
     mergeAndSet(
         sheet,
         20,

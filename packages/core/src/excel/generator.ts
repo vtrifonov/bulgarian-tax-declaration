@@ -1,5 +1,6 @@
 import * as ExcelJS from 'exceljs';
 
+import { gapFillRates } from '../fx/gap-fill.js';
 import type { AppState } from '../types/index.js';
 import { addBrokerInterestSheets } from './sheets/broker-interest-sheet.js';
 import { addDividendsSheet } from './sheets/dividends-sheet.js';
@@ -35,7 +36,10 @@ export async function generateExcel(state: AppState): Promise<Uint8Array> {
     for (const ccy of currencies) {
         const rates = state.fxRates[ccy] ?? {};
 
-        addFxSheet(workbook, ccy, rates, state.taxYear);
+        // Gap-fill: ensure every day has a rate (weekends/holidays copy previous day)
+        const filled = gapFillRates(rates, `${state.taxYear}-01-01`, `${state.taxYear}-12-31`);
+
+        addFxSheet(workbook, ccy, filled, state.taxYear);
     }
 
     const buf = await workbook.xlsx.writeBuffer();

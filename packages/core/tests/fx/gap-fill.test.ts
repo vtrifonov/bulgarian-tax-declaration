@@ -53,14 +53,14 @@ describe('gapFillRates', () => {
         expect(filled['2025-01-04']).toBe(1.05);
     });
 
-    it('does not backfill before first known rate', () => {
+    it('backfills before first known rate with earliest available rate', () => {
         const rates: Record<string, number> = {
             '2025-01-03': 1.0400,
         };
         const filled = gapFillRates(rates, '2025-01-01', '2025-01-03');
 
-        expect(filled['2025-01-01']).toBeUndefined();
-        expect(filled['2025-01-02']).toBeUndefined();
+        expect(filled['2025-01-01']).toBe(1.0400);
+        expect(filled['2025-01-02']).toBe(1.0400);
         expect(filled['2025-01-03']).toBe(1.0400);
     });
 });

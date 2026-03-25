@@ -59,6 +59,8 @@ vi.mock('@bg-tax/core', () => ({
     parseIBCsv: vi.fn(),
     parseRevolutAccountStatement: vi.fn(),
     parseEtradePdf: vi.fn(),
+    parseBondoraPdf: vi.fn(),
+    detectBondoraPdf: vi.fn(() => false),
     splitOpenPositions: vi.fn(),
     FifoEngine: vi.fn(),
     isBinaryHandler: vi.fn(() => false),

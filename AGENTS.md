@@ -29,7 +29,7 @@
 - **Holdings semantics**: active holdings represent end-of-period open positions. Lots that are bought and fully sold within the same imported statement must produce `sales`, but must not remain in `holdings`. Only previously imported holdings may be carried forward as `consumedByFifo` rows for traceability.
 - **FIFO matching scope**: match by `symbol` + `currency`, and only against lots from the same broker or brokerless legacy holdings. Do not match a provider's current-statement trades against the same statement's end-of-period holdings snapshot (`Open Positions`, broker holdings summary, etc.).
 - **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
-- **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`.
+- **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`, then `Bondora`.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
 
 ## Testing Requirements
@@ -233,7 +233,7 @@ export const yourProvider: BrokerProvider = {
 };
 ```
 
-Examples of implemented providers: Interactive Brokers, Revolut, E*TRADE.
+Examples of implemented providers: Interactive Brokers, Revolut, E*TRADE, Bondora.
 
 ### Step 2: Handle dividends and tax (if applicable)
 If your provider parses dividends, you MUST:

@@ -56,7 +56,6 @@ function getCorsFetch(): typeof fetch {
     const isTauri = '__TAURI_INTERNALS__' in window;
 
     if (isTauri) {
-        // Lazy wrapper that dynamically imports Tauri HTTP plugin on first call
         return (async (url: RequestInfo | URL, init?: RequestInit) => {
             const mod = await import('@tauri-apps/plugin-http');
 
@@ -64,10 +63,10 @@ function getCorsFetch(): typeof fetch {
         }) as typeof fetch;
     }
 
-    // In browser dev mode, proxy OpenFIGI through Vite to avoid CORS
+    // Browser — proxy through corsproxy.io to avoid CORS
     return ((url: RequestInfo | URL, init?: RequestInit) => {
         const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
-        const proxied = urlStr.replace('https://api.openfigi.com', '/api/openfigi');
+        const proxied = `https://corsproxy.io/?${encodeURIComponent(urlStr)}`;
 
         return fetch(proxied, init);
     }) as typeof fetch;
@@ -199,6 +198,7 @@ export function Import() {
             if (f.type === 'ib') brokers.add('Interactive Brokers');
             if (f.type === 'revolut' || f.type === 'revolut-investments' || f.type === 'revolut-account') brokers.add('Revolut');
             if (f.type === 'etrade') brokers.add('E*TRADE');
+            if (f.type === 'bondora') brokers.add('Bondora');
         }
         return Array.from(brokers).sort();
     }, [importedFiles]);
@@ -483,6 +483,79 @@ export function Import() {
         });
     }, [importHoldings, importBrokerInterest, addImportedFile, setForeignAccounts]);
 
+    const processBondoraResult = useCallback(async (
+        result: BrokerProviderResult,
+        file: File,
+    ) => {
+        const interest = result.savingsInterest;
+
+        if (interest && interest.entries.length > 0) {
+            for (const e of interest.entries) {
+                e.source = { type: 'Bondora', file: file.name };
+            }
+
+            // Merge with existing Bondora interest (multiple CSV files for H1+H2)
+            const allBrokerInterest = useAppStore.getState().brokerInterest;
+            const existingBondora = allBrokerInterest.find(bi => bi.broker === 'Bondora' && bi.currency === interest.currency);
+            const otherBrokers = allBrokerInterest.filter(bi => !(bi.broker === 'Bondora' && bi.currency === interest.currency));
+
+            // Deduplicate by date+amount to avoid double-counting overlapping periods
+            const existingKeys = new Set((existingBondora?.entries ?? []).map(e => `${e.date}|${e.amount}`));
+            const newEntries = interest.entries.filter(e => !existingKeys.has(`${e.date}|${e.amount}`));
+            const mergedEntries = [...(existingBondora?.entries ?? []), ...newEntries];
+
+            const mergedInterest = {
+                broker: 'Bondora' as const,
+                currency: 'EUR',
+                entries: mergedEntries,
+            };
+
+            importBrokerInterest([...otherBrokers, mergedInterest]);
+        }
+
+        if (result.foreignAccounts && result.foreignAccounts.length > 0) {
+            const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
+            const existingBondora = currentAccounts.find(a => a.broker === 'Bondora' && a.currency === result.foreignAccounts![0].currency);
+            const newAcc = result.foreignAccounts[0];
+
+            // Merge: keep earliest start (H1), latest end (H2)
+            const mergedAcc = existingBondora
+                ? {
+                    ...newAcc,
+                    amountStartOfYear: Math.min(existingBondora.amountStartOfYear, newAcc.amountStartOfYear),
+                    amountEndOfYear: Math.max(existingBondora.amountEndOfYear, newAcc.amountEndOfYear),
+                }
+                : newAcc;
+
+            const filtered = currentAccounts.filter(a => !(a.broker === 'Bondora' && a.currency === newAcc.currency));
+
+            setForeignAccounts([...filtered, mergedAcc]);
+        }
+
+        const parts: string[] = [];
+
+        if (interest?.entries.length) {
+            const total = interest.entries.reduce((s, e) => s + e.amount, 0);
+
+            parts.push(`${interest.entries.length} interest entries (€${total.toFixed(2)})`);
+        }
+
+        if (result.foreignAccounts?.length) {
+            const acc = result.foreignAccounts[0];
+
+            parts.push(`balance: €${acc.amountStartOfYear.toFixed(2)} → €${acc.amountEndOfYear.toFixed(2)}`);
+        }
+
+        if (result.warnings?.length) parts.push(`${result.warnings.length} warnings`);
+
+        addImportedFile({
+            name: file.name,
+            type: 'bondora',
+            status: 'success',
+            message: parts.join(', ') || 'No data found',
+        });
+    }, [importBrokerInterest, addImportedFile, setForeignAccounts]);
+
     const processFile = useCallback(async (file: File) => {
         // Binary file path (PDF)
         if (file.name.toLowerCase().endsWith('.pdf')) {
@@ -503,7 +576,13 @@ export function Import() {
                     for (const handler of provider.fileHandlers) {
                         if (isBinaryHandler(handler) && handler.detectBinary(buffer, file.name)) {
                             const result = await handler.parseBinary(buffer);
-                            await processEtradeResult(result, file);
+
+                            if (provider.name === 'Bondora') {
+                                await processBondoraResult(result, file);
+                            } else {
+                                await processEtradeResult(result, file);
+                            }
+
                             return;
                         }
                     }
@@ -514,7 +593,7 @@ export function Import() {
                     name: file.name,
                     type: 'etrade',
                     status: 'error',
-                    message: 'Unrecognized PDF format. Only E*TRADE Client Statements (PDF) are currently supported.',
+                    message: 'Unrecognized PDF format. Supported: E*TRADE Client Statements, Bondora Tax Report.',
                 });
                 return;
             } catch (err) {
@@ -537,7 +616,7 @@ export function Import() {
                 name: file.name,
                 type: 'ib',
                 status: 'error',
-                message: 'Unrecognized file format. Expected IB activity statement, Revolut savings CSV, or Revolut investments CSV.',
+                message: 'Unrecognized CSV format. Expected IB activity statement, Revolut savings/investments/account CSV.',
             });
 
             return;
@@ -590,7 +669,7 @@ export function Import() {
                         allSymbols.push({ symbol: h.symbol, currency: h.currency });
                     }
                 }
-                const countryMap = await resolveCountries(allSymbols, getCorsFetch(), parsed.symbolExchanges);
+                const countryMap = await resolveCountries(allSymbols, getCorsFetch(), parsed.symbolExchanges, parsed.isinMap ?? {});
 
                 // Calculate BG tax for dividends
                 for (const d of allDividends) {
@@ -918,7 +997,18 @@ export function Import() {
                 message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
             });
         }
-    }, [importHoldings, importSales, importDividends, importStockYield, importBrokerInterest, addImportedFile, taxYear, setForeignAccounts, processEtradeResult]);
+    }, [
+        importHoldings,
+        importSales,
+        importDividends,
+        importStockYield,
+        importBrokerInterest,
+        addImportedFile,
+        taxYear,
+        setForeignAccounts,
+        processEtradeResult,
+        processBondoraResult,
+    ]);
 
     const processFiles = useCallback((files: FileList | File[]) => {
         void (async () => {

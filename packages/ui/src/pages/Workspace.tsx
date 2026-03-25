@@ -1783,7 +1783,7 @@ export function Workspace() {
             },
             {
                 accessorKey: 'rate',
-                header: `Rate (to ${baseCurrency})`,
+                header: 'ECB Rate (1 EUR =)',
                 cell: (info) => (info.getValue() as number).toFixed(6),
                 meta: { align: 'right' },
             },

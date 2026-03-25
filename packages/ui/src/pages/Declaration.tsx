@@ -55,10 +55,7 @@ export function Declaration() {
     const capitalGainsResult = calculator.calcCapitalGains(sales);
     const dividendsTaxResult = calculator.calcDividendsTax(dividends, fxRates);
 
-    // Calculate stock yield tax
-    const stockYieldResult = calculator.calcStockYieldTax(stockYield, fxRates);
-
-    // Calculate broker interest tax (all brokers)
+    // Calculate broker interest tax (all brokers — includes IB Stock Yield/SYEP entries)
     let brokerInterestTotalGross = 0;
     let brokerInterestTotalTax = 0;
 
@@ -74,8 +71,21 @@ export function Declaration() {
         }
     }
 
-    const totalInterestGross = stockYieldResult.totalGross + brokerInterestTotalGross;
-    const totalInterestTax = stockYieldResult.totalTax + brokerInterestTotalTax;
+    // Stock yield (SYEP) entries are already included in brokerInterest (IB EUR/USD tabs),
+    // so don't add stockYieldResult to avoid double-counting
+    const totalInterestGross = brokerInterestTotalGross;
+    const totalInterestTax = brokerInterestTotalTax;
+
+    // Build dynamic broker list for interest label
+    const interestBrokers = new Set<string>();
+
+    if (stockYield.length > 0) interestBrokers.add('IB');
+
+    for (const bi of brokerInterest) {
+        if (bi.entries.length > 0) interestBrokers.add(bi.broker);
+    }
+
+    const interestBrokersLabel = interestBrokers.size > 0 ? ` — ${[...interestBrokers].join(' + ')}` : '';
 
     // Calculate total tax due
     const totalTaxDue = capitalGainsResult.taxDue
@@ -452,7 +462,7 @@ export function Declaration() {
                             </tr>
                             <tr style={{ ...rowBorder, backgroundColor: 'var(--bg)' }}>
                                 <td style={tdL}>3</td>
-                                <td style={{ ...tdL, fontWeight: 500 }}>Обща сума на доходите с код 603 (Лихви) — Revolut + IB</td>
+                                <td style={{ ...tdL, fontWeight: 500 }}>Обща сума на доходите с код 603 (Лихви){interestBrokersLabel}</td>
                                 <td style={{ ...tdM, textAlign: 'center', fontWeight: 600 }}>603</td>
                                 <td style={{ ...tdM, fontWeight: 700, color: 'var(--accent)' }}>{interestBgn.toFixed(2)}</td>
                             </tr>

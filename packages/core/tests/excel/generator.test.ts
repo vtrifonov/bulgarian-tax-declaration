@@ -430,7 +430,8 @@ describe('Excel Generator', () => {
             }
         }
 
-        expect(dates.length).toBe(3);
+        // Gap-filled: every day of the year has a rate
+        expect(dates.length).toBe(365);
         expect(rates).toContain(1.82);
         expect(rates).toContain(1.90);
         expect(rates).toContain(1.95);

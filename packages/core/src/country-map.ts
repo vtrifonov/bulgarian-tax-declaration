@@ -12,6 +12,43 @@ const COUNTRY_MAP: Record<string, string> = {};
 /** Provider listing exchange → Bulgarian country name.
  *  Supports both OpenFIGI codes (US, GY, LN...) and IB exchange names (NASDAQ, IBIS, SEHK...).
  *  Any broker/provider can contribute exchange→country mappings here. */
+/** ISIN country prefix (ISO 3166-1 alpha-2) → Bulgarian country name.
+ *  Used to derive domicile from ISIN when available — more accurate than exchange for ETFs. */
+export const ISIN_COUNTRY: Record<string, string> = {
+    US: 'САЩ',
+    IE: 'Ирландия',
+    LU: 'Люксембург',
+    DE: 'Германия',
+    GB: 'Великобритания',
+    FR: 'Франция',
+    NL: 'Нидерландия (Холандия)',
+    CH: 'Швейцария',
+    IT: 'Италия',
+    ES: 'Испания',
+    SE: 'Швеция',
+    DK: 'Дания',
+    NO: 'Норвегия',
+    AT: 'Австрия',
+    BE: 'Белгия',
+    FI: 'Финландия',
+    PT: 'Португалия',
+    PL: 'Полша',
+    JP: 'Япония',
+    HK: 'Хонконг',
+    AU: 'Австралия',
+    CA: 'Канада',
+    KR: 'Южна Корея',
+    TW: 'Тайван',
+    SG: 'Сингапур',
+    KY: 'Кайманови острови',
+    BM: 'Бермуда',
+    JE: 'Джърси',
+    GG: 'Гърнси',
+};
+
+/** Provider listing exchange → Bulgarian country name.
+ *  Supports both OpenFIGI codes (US, GY, LN...) and IB exchange names (NASDAQ, IBIS, SEHK...).
+ *  Any broker/provider can contribute exchange→country mappings here. */
 export const EXCHANGE_COUNTRY: Record<string, string> = {
     // IB exchange names
     NASDAQ: 'САЩ',
@@ -115,6 +152,8 @@ export async function resolveCountries(
     fetchFn: typeof fetch = fetch,
     /** Provider-supplied symbol → exchange mapping (e.g. from IB's Financial Instrument Info) */
     symbolExchanges: Record<string, string> = {},
+    /** Provider-supplied symbol → ISIN mapping (domicile is more accurate than exchange for ETFs) */
+    isinMap: Record<string, string> = {},
 ): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
 
@@ -127,7 +166,7 @@ export async function resolveCountries(
         }
     }
 
-    // 2. Check hardcoded map + cache + provider exchanges, collect unknowns
+    // 2. Check hardcoded map + cache + ISIN domicile + provider exchanges, collect unknowns
     const unknowns: { symbol: string; currency: string }[] = [];
 
     for (const [symbol, entry] of unique) {
@@ -136,6 +175,20 @@ export async function resolveCountries(
         if (known) {
             result[symbol] = known;
             continue;
+        }
+
+        // Try ISIN country prefix (domicile) — more accurate than exchange for ETFs
+        const isin = isinMap[symbol];
+
+        if (isin && isin.length >= 2) {
+            const prefix = isin.substring(0, 2);
+            const fromIsin = ISIN_COUNTRY[prefix];
+
+            if (fromIsin) {
+                result[symbol] = fromIsin;
+                resolvedCache[symbol] = fromIsin;
+                continue;
+            }
         }
 
         // Try provider-supplied exchange mapping
