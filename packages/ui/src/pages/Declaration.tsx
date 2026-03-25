@@ -95,7 +95,7 @@ export function Declaration() {
     // Приложение 5, Част I — Holdings as of Dec 31
     const holdingsForDeclaration = useMemo(() => {
         return holdings
-            .filter(h => h.symbol && h.quantity > 0)
+            .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България')
             .map(h => {
                 const totalCcy = h.quantity * h.unitPrice;
                 const totalBgn = toBaseCurrency(totalCcy, h.currency, h.dateAcquired, 'BGN', fxRates);
@@ -300,7 +300,8 @@ export function Declaration() {
         setNraSuccess(null);
         setNraError(null);
         try {
-            const buffer = await generateNraAppendix8(holdings, fxRates);
+            const foreignHoldings = holdings.filter(h => h.country !== 'България');
+            const buffer = await generateNraAppendix8(foreignHoldings, fxRates);
             const blob = new Blob([buffer.buffer as ArrayBuffer], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             });
@@ -373,6 +374,26 @@ export function Declaration() {
                     </button>
                 </div>
             </div>
+
+            {(holdings.length > 0 || (foreignAccounts && foreignAccounts.length > 0)) && (
+                <div
+                    style={{
+                        padding: '0.75rem 1rem',
+                        marginBottom: '1rem',
+                        backgroundColor: 'rgba(255, 193, 7, 0.12)',
+                        border: '1px solid rgba(255, 193, 7, 0.4)',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        color: 'var(--text)',
+                    }}
+                >
+                    ⚠ Не забравяйте да подадете и{' '}
+                    <a href='#/spb8' style={{ color: '#ffc107', fontWeight: 600 }}>
+                        форма СПБ-8 към БНБ
+                    </a>{' '}
+                    — годишен отчет за притежаваните финансови активи в чужбина (срок: 31 март).
+                </div>
+            )}
 
             <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
                 Данъчна година {taxYear} • Базова валута {baseCurrency}

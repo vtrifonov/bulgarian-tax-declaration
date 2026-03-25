@@ -160,7 +160,7 @@ export function Spb8() {
             return;
         }
         const symbols = spb8Data.securities
-            .filter(s => s.isin)
+            .filter(s => s.isin && holdings.some(h => h.isin === s.isin && !h.consumedByFifo))
             .map(s => {
                 // Collect all symbol aliases for this ISIN
                 const allSymbols = [...new Set(holdings.filter(h => h.isin === s.isin).map(h => h.symbol))];
@@ -282,52 +282,68 @@ export function Spb8() {
 
     return (
         <div style={{ padding: '2rem' }}>
-            <div
-                style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '2rem',
-                }}
-            >
-                <h1>{t('spb8.title')}</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    {exportError && (
-                        <span style={{ color: '#dc3545', fontSize: '0.9rem' }}>
-                            {exportError}
-                        </span>
-                    )}
-                    {exportSuccess && (
-                        <span
+            <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h1 style={{ margin: '0 0 0.5rem' }}>{t('spb8.title')}</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
+                        {exportError && (
+                            <span style={{ color: '#dc3545', fontSize: '0.9rem' }}>
+                                {exportError}
+                            </span>
+                        )}
+                        {exportSuccess && (
+                            <span
+                                style={{
+                                    color: '#28a745',
+                                    fontSize: '0.9rem',
+                                    padding: '0.3rem 0.75rem',
+                                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                    borderRadius: '4px',
+                                }}
+                            >
+                                ✓ Downloaded {exportSuccess}
+                            </span>
+                        )}
+                        <button
+                            onClick={handleExportExcel}
+                            disabled={exporting || !spb8Data}
                             style={{
-                                color: '#28a745',
-                                fontSize: '0.9rem',
-                                padding: '0.3rem 0.75rem',
-                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                padding: '0.75rem 1.5rem',
+                                backgroundColor: exporting || !spb8Data ? 'var(--text-secondary)' : 'var(--accent)',
+                                color: 'white',
+                                border: 'none',
                                 borderRadius: '4px',
+                                cursor: exporting || !spb8Data ? 'wait' : 'pointer',
+                                fontSize: '1rem',
+                                fontWeight: 500,
+                                opacity: exporting || !spb8Data ? 0.7 : 1,
                             }}
                         >
-                            ✓ Downloaded {exportSuccess}
-                        </span>
-                    )}
-                    <button
-                        onClick={handleExportExcel}
-                        disabled={exporting || !spb8Data}
-                        style={{
-                            padding: '0.75rem 1.5rem',
-                            backgroundColor: exporting || !spb8Data ? 'var(--text-secondary)' : 'var(--accent)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: exporting || !spb8Data ? 'wait' : 'pointer',
-                            fontSize: '1rem',
-                            fontWeight: 500,
-                            opacity: exporting || !spb8Data ? 0.7 : 1,
-                        }}
-                    >
-                        {exporting ? 'Exporting...' : t('spb8.export')}
-                    </button>
+                            {exporting ? 'Exporting...' : t('spb8.export')}
+                        </button>
+                    </div>
                 </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
+                    {t('spb8.description')}{' '}
+                    <a
+                        href={t('spb8.guideUrl')}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        style={{ color: 'var(--accent)' }}
+                    >
+                        {t('spb8.guideLink')} ↗
+                    </a>
+                    {' | '}
+                    <a
+                        href={t('spb8.portalUrl')}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        style={{ color: 'var(--accent)' }}
+                    >
+                        {t('spb8.portalLink')} ↗
+                    </a>{' '}
+                    <span style={{ fontSize: '0.8rem' }}>{t('spb8.portalNote')}</span>
+                </p>
             </div>
 
             {spb8Data && (

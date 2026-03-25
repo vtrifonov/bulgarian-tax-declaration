@@ -57,22 +57,18 @@ export async function generateNraAppendix8(
 
     // Data rows — only complete holdings with quantity > 0
     const validHoldings = holdings
-        .filter(h => h.symbol && h.quantity > 0);
+        .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България');
 
     for (const h of validHoldings) {
         const totalCcy = h.quantity * h.unitPrice;
         const totalBgn = toBaseCurrency(totalCcy, h.currency, h.dateAcquired, 'BGN', fxRates);
         const bgnValue = isNaN(totalBgn) ? 0 : totalBgn;
 
-        // Format date as DD.MM.YYYY
-        const dateParts = h.dateAcquired.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        const dateStr = dateParts ? `${dateParts[3]}.${dateParts[2]}.${dateParts[1]}` : h.dateAcquired;
-
         const row = sheet.addRow([
             'Акции',
             h.country,
             h.quantity,
-            dateStr,
+            h.dateAcquired,
             totalCcy,
             bgnValue,
         ]);
@@ -86,6 +82,8 @@ export async function generateNraAppendix8(
         row.getCell(5).numFmt = '#,##0.00';
         row.getCell(5).alignment = { horizontal: 'right' };
         row.getCell(6).numFmt = '#,##0.00';
+        row.getCell(6).alignment = { horizontal: 'right' };
+        row.getCell(5).alignment = { horizontal: 'right' };
         row.getCell(6).alignment = { horizontal: 'right' };
 
         // Borders
