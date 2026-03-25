@@ -12,6 +12,7 @@ azvl
 badsym
 bgn
 bgtax
+bondora
 brokerless
 bvme
 cccies
@@ -25,6 +26,7 @@ conid
 cqxs
 cspx
 czk
+dedup
 dtf
 elana
 estc
@@ -92,6 +94,7 @@ pltr
 prgs
 pritezhaniya
 reimports
+repaiment
 remittance
 residentincome
 rgba
@@ -113,6 +116,7 @@ topup
 trifonov
 twelvedata
 undoable
+unparseable
 unknowna
 unknownb
 unstub
