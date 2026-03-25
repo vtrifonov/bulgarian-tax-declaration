@@ -17,7 +17,7 @@ Add a Bondora provider that parses the Bondora Account Statement CSV to extract 
 | Decision | Choice | Rationale |
 |---|---|---|
 | CSV format variant | Support both old (`TransferDate`, `Amount`, `Description`) and new (`Date`, `Turnover`, `Details`) column names | Bondora changed their export format around 2019; users may have either version |
-| Interest classification | `TransferInterestRepaiment*` and `TransferExtraInterestRepaiment*` descriptions | Matches Bondora's naming convention for interest payments on loans |
+| Interest classification | `TransferInterestRepaiment*` and `TransferExtraInterestRepaiment*` descriptions | Matches Bondora's naming convention — note "Repaiment" is Bondora's actual typo, not "Repayment" |
 | Go & Grow interest | `TransferGoGrowInterest*` | Separate regex for Go & Grow product interest income |
 | Account balance for SPB-8 | Derive from running sum of all `Turnover`/`Amount` values | The CSV is a full transaction log; the running sum at year boundaries gives start/end balances |
 | SPB-8 Section | **03** (foreign bank accounts / payment accounts) | Bondora is a payment account, not a securities account |
@@ -124,7 +124,9 @@ Each interest transaction becomes an `InterestEntry`:
    - `amountStartOfYear` = 0 (or sum up to first transaction, if previous year data present)
    - `amountEndOfYear` = running sum at last transaction
 
-**Important:** Since Variant B may not include a starting balance, users should be warned that start-of-year balance may need manual adjustment if the statement doesn't cover the full year from account opening.
+**Important — partial year and multi-year CSVs:**
+- For **both variants**: if the CSV doesn't start from January 1 (partial year export), `amountStartOfYear` will reflect the balance before the first transaction in the file, NOT the actual Jan 1 balance. Users should be warned to verify/adjust manually.
+- For **multi-year CSVs**: balances use the first/last transaction overall, not per tax year. The export instructions ask users to set the period to a single tax year to avoid this.
 
 ### `BrokerProviderResult`
 
@@ -145,21 +147,30 @@ Each interest transaction becomes an `InterestEntry`:
 The parser detects a Bondora CSV by checking the header row:
 
 ```typescript
-function detectFile(content: string): boolean {
-    const firstLine = content.split('\n')[0] ?? '';
-    // Variant A: old format
-    if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
-        return true;
+function detectFile(content: string, _filename: string): boolean {
+    try {
+        const firstLine = content.split('\n')[0] ?? '';
+        // Variant A: old format
+        if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
+            return true;
+        }
+        // Variant B: new format — require all four columns to avoid false positives with generic CSVs
+        if (firstLine.includes('Date') && firstLine.includes('Details')
+            && firstLine.includes('Turnover') && firstLine.includes('Transaction ID')) {
+            return true;
+        }
+        return false;
+    } catch {
+        return false;
     }
-    // Variant B: new format — require all three to avoid false positives
-    if (firstLine.includes('Date') && firstLine.includes('Details') && firstLine.includes('Turnover')) {
-        return true;
-    }
-    return false;
 }
 ```
 
-**Note:** Variant B detection must be strict (require all 3 columns) to avoid matching other CSV formats that contain a generic `Date` column.
+**Notes:**
+- `detectFile` must accept `(content, filename)` to match the `TextFileHandler` interface, even if `filename` is unused.
+- `detectFile` must NEVER throw (AGENTS.md rule) — wrap in try-catch, return `false` on error.
+- Variant B detection requires all 4 columns (`Date`, `Details`, `Turnover`, `Transaction ID`) to avoid matching generic CSVs that happen to use common column names.
+- Detection ordering in `Import.tsx` must come AFTER IB and Revolut checks.
 
 ## 6. Parser Module
 
@@ -176,9 +187,10 @@ export function parseBondoraCsv(content: string): BondoraParseResult;
 ```
 
 **Implementation strategy:**
-1. Parse header row → detect variant (A or B) by column names
-2. Map column names to a unified accessor (date, description, amount, balance)
-3. Iterate rows:
+1. Strip UTF-8 BOM if present: `content.replace(/^\uFEFF/, '')`
+2. Parse header row → detect variant (A or B) by column names
+3. Map column names to a unified accessor (date, description, amount, balance)
+4. Iterate rows:
    - Parse date → ISO format
    - Classify description via regex → interest / deposit / withdrawal / etc.
    - If interest → push to `InterestEntry[]`
@@ -205,7 +217,7 @@ export const bondoraProvider: BrokerProvider = {
     fileHandlers: [{
         id: 'bondora-account-statement',
         kind: 'text',
-        detectFile(content: string): boolean { ... },
+        detectFile(content: string, _filename: string): boolean { /* try-catch wrapped */ },
         parseFile(content: string): BrokerProviderResult { ... },
     }],
     exportInstructions: [{
@@ -273,6 +285,21 @@ Fixture should contain a realistic mix of transaction types:
 8. Date parsing — both DD.MM.YYYY and YYYY-MM-DD formats
 9. Empty CSV → throws error
 10. Warning emitted when start-of-year balance cannot be determined
+11. File detection — `detectFile` returns `true` for both variants, `false` for IB/Revolut CSVs
+12. BOM prefix — CSV with `\uFEFF` prefix parses correctly
+13. Negative interest amount — reversal entry included with negative amount
+14. Zero interest entries — CSV with only deposits/withdrawals returns empty entries array gracefully
+15. Malformed date — row with invalid date is skipped (not thrown)
+
+### Integration Round-Trip Test
+
+Per AGENTS.md, add a test case in `tests/integration/round-trip.test.ts` verifying:
+- Parse Bondora CSV → export Excel → re-import Excel → export Excel produces identical results
+- Both `brokerInterest` (→ `Bondora Лихви EUR` sheet) and `foreignAccounts` (→ `СПБ-8 Сметки` sheet) survive the round-trip
+
+### Sample File
+
+Create `samples/bondora-account-statement.csv` (synthetic data covering all transaction types) per AGENTS.md requirements.
 
 ### Coverage Target: ≥ 70%
 
@@ -307,12 +334,16 @@ Import.tsx changes required — the Import page uses **hardcoded file detection*
 1. **`detectFileType()`** — Add a `'bondora'` case that checks the header for Bondora column names (must be ordered after IB/Revolut checks to avoid false positives)
 2. **Processing branch** — Add an `else if (fileType === 'bondora')` block that:
    - Calls `parseBondoraCsv(content)`
-   - Adds the `BrokerInterest` result to `state.brokerInterest` (dedup by broker+currency, same pattern as Revolut savings at line ~860)
+   - Sets `source: { type: 'Bondora', file: file.name }` on each interest entry (matching Revolut pattern)
+   - Adds the `BrokerInterest` result to `state.brokerInterest` using `importBrokerInterest([...existing, entry])` (NOT `addBrokerInterest` — must follow Revolut pattern of replacing the full array)
+   - On duplicate (same broker+currency already exists): records error status and returns early (matching Revolut dedup pattern)
    - Adds the `ForeignAccountBalance` to `state.foreignAccounts`
    - Records the imported file with summary message
 3. **`importPriority()`** — Add `'bondora'` with priority 55 (after E*TRADE)
 4. **`importedBrokers` memo** — Add `'bondora'` → `'Bondora'` mapping
 5. **`ImportedFile['type']`** — Add `'bondora'` to the union type in `app-state.ts`
+6. **`import.supported` i18n** — Update both `en.ts` and `bg.ts` to include Bondora in the supported formats string shown in the drag-and-drop area
+7. **Error message** — Update unrecognized file message to include Bondora (but NOT E*TRADE PDF, since PDFs go through a separate binary handler path)
 
 Other UI pages need no changes:
 - Workspace interest table already shows all `brokerInterest` entries
@@ -322,7 +353,9 @@ Other UI pages need no changes:
 ## 12. Known Limitations (v1)
 
 - **No secondary market P&L:** Bondora secondary market profits/losses are not parsed (rarely used by Bulgarian investors)
-- **Start-of-year balance for Variant B:** If the CSV doesn't include a `BalanceAfterPayment` column and doesn't start from account opening, the start-of-year balance will be 0 and needs manual correction
+- **Partial-year balance:** For both variants, if the CSV doesn't cover the full year from Jan 1, `amountStartOfYear` reflects the pre-first-transaction balance, not the actual Jan 1 balance. Users must verify/adjust manually.
+- **Multi-year CSV:** If the statement spans multiple years, all interest entries are imported (no year filtering at parse time) and balance uses first/last overall transaction. Users should export single-year statements.
+- **No year-mismatch validation:** The validator does not currently warn when interest entry dates don't match the selected tax year (pre-existing gap for all `brokerInterest`, not Bondora-specific).
 - **Go & Grow only:** Most Bulgarian Bondora investors use Go & Grow; Portfolio Manager loan-level data (individual loan IDs, default tracking) is out of scope for v1
 - **Single currency:** Only EUR is supported (Bondora operates exclusively in EUR)
 
@@ -354,6 +387,11 @@ packages/core/tests/
   fixtures/
     bondora-statement.csv       — Test fixture (Variant A)
     bondora-statement-new.csv   — Test fixture (Variant B)
+  integration/
+    round-trip.test.ts          — Add Bondora round-trip test case (modify)
+
+samples/
+  bondora-account-statement.csv — Synthetic sample for integration tests (create)
 
 packages/ui/src/
   pages/

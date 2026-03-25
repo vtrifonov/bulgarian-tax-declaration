@@ -27,6 +27,9 @@
 | Create | `packages/core/tests/fixtures/bondora-statement-new.csv` | Test fixture (Variant B — new format) |
 | Modify | `packages/ui/src/pages/Import.tsx` | Add Bondora file detection, processing branch, and import priority |
 | Modify | `packages/ui/src/store/app-state.ts` | Add `'bondora'` to `ImportedFile['type']` union |
+| Create | `samples/bondora-account-statement.csv` | Synthetic sample for integration tests |
+| Modify | `packages/core/tests/integration/round-trip.test.ts` | Add Bondora round-trip test case |
+| Modify | `cspell-dict.txt` | Add `Bondora`, `Repaiment` |
 
 ---
 
@@ -53,17 +56,20 @@ export function parseBondoraCsv(content: string): BondoraParseResult;
 ```
 
 Implementation:
-1. Split content into lines, filter empty
-2. Parse header row → detect variant by checking for `TransferDate` (variant A) vs `Date` + `Details` + `Turnover` (variant B)
-3. Build column index map for: date, description, amount, balance (optional)
-4. Define interest regex: `/^Transfer(Extra)?InterestRepaiment|^TransferGoGrowInterest/`
-5. Iterate data rows:
+1. Strip UTF-8 BOM if present: `content = content.replace(/^\uFEFF/, '')`
+2. Split content into lines, filter empty
+3. Parse header row → detect variant by checking for `TransferDate` (variant A) vs `Date` + `Details` + `Turnover` (variant B)
+4. Build column index map for: date, description, amount, balance (optional)
+5. Define interest regex: `/^Transfer(Extra)?InterestRepaiment|^TransferGoGrowInterest/` (note: "Repaiment" is Bondora's actual typo — add a code comment explaining this)
+6. Iterate data rows:
    - Parse date to ISO `YYYY-MM-DD`
    - Classify description: if matches interest regex → create `InterestEntry`
+   - Skip rows with malformed/unparseable dates (don't throw — AGENTS.md error handling rule)
    - Track balance: use `BalanceAfterPayment` column if present, otherwise compute running sum of amount values
-6. Compute `amountStartOfYear` and `amountEndOfYear` from balance tracking
-7. Emit warning if no balance column found and start-of-year balance defaults to 0
-8. Return `{ interest, foreignAccount, warnings }`
+7. Compute `amountStartOfYear` and `amountEndOfYear` from balance tracking
+8. Emit warning if no balance column found and start-of-year balance defaults to 0
+9. Emit warning if zero interest entries found: "No interest income found in this statement"
+10. Return `{ interest, foreignAccount, warnings }`
 
 - [ ] **Step 2: Implement date parsing for both variants**
 
@@ -98,17 +104,22 @@ export const bondoraProvider: BrokerProvider = {
     fileHandlers: [{
         id: 'bondora-account-statement',
         kind: 'text' as const,
-        detectFile(content: string): boolean {
-            const firstLine = content.split('\n')[0] ?? '';
-            // Variant A
-            if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
-                return true;
+        detectFile(content: string, _filename: string): boolean {
+            try {
+                const firstLine = content.split('\n')[0] ?? '';
+                // Variant A
+                if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
+                    return true;
+                }
+                // Variant B — strict: require all four columns to avoid false positives with generic CSVs
+                if (firstLine.includes('Date') && firstLine.includes('Details')
+                    && firstLine.includes('Turnover') && firstLine.includes('Transaction ID')) {
+                    return true;
+                }
+                return false;
+            } catch {
+                return false;
             }
-            // Variant B — strict: require all three columns
-            if (firstLine.includes('Date') && firstLine.includes('Details') && firstLine.includes('Turnover')) {
-                return true;
-            }
-            return false;
         },
         parseFile(content: string): BrokerProviderResult {
             const result = parseBondoraCsv(content);
@@ -159,6 +170,11 @@ Add after the E*TRADE instructions block:
 'provider.bondora.instructions.account.step4': 'Click Create report and download the CSV file',
 ```
 
+Also update the `import.supported` string to include Bondora:
+```typescript
+'import.supported': 'Supported: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV, Revolut Account CSV, E*TRADE PDF, Bondora Account Statement CSV',
+```
+
 - [ ] **Step 2: Add Bulgarian strings**
 
 ```typescript
@@ -169,13 +185,21 @@ Add after the E*TRADE instructions block:
 'provider.bondora.instructions.account.step4': 'Натиснете Create report и изтеглете CSV файла',
 ```
 
+Also update the `import.supported` string to include Bondora:
+```typescript
+'import.supported': 'Поддържани: Interactive Brokers CSV, Revolut Savings CSV, Revolut Investments CSV, Revolut Account CSV, E*TRADE PDF, Bondora Account Statement CSV',
+```
+
+- [ ] **Step 3: Add `Bondora` and `Repaiment` to `cspell-dict.txt`**
+
 ---
 
-### Task 4: Create Test Fixtures
+### Task 4: Create Test Fixtures and Sample File
 
 **Files:**
 - Create: `packages/core/tests/fixtures/bondora-statement.csv`
 - Create: `packages/core/tests/fixtures/bondora-statement-new.csv`
+- Create: `samples/bondora-account-statement.csv`
 
 - [ ] **Step 1: Create Variant A fixture**
 
@@ -183,6 +207,7 @@ Old-format CSV with realistic data covering a full year. Include:
 - 2+ deposit transactions
 - 5+ interest transactions (`TransferInterestRepaiment`, `TransferExtraInterestRepaiment`)
 - 1+ Go & Grow interest (`TransferGoGrowInterest`)
+- 1+ negative interest amount (reversal)
 - 2+ principal repayments
 - 1 withdrawal
 - 1 fee transaction
@@ -193,6 +218,10 @@ Use dates spanning Jan–Dec of 2025. Realistic EUR amounts (interest 0.01–5.0
 - [ ] **Step 2: Create Variant B fixture**
 
 New-format CSV with same transaction mix but using `Date`, `Details`, `Turnover`, `Transaction ID` columns. No `BalanceAfterPayment` column.
+
+- [ ] **Step 3: Create sample file**
+
+Copy Variant A fixture to `samples/bondora-account-statement.csv` (per AGENTS.md requirement for integration tests).
 
 ---
 
@@ -216,6 +245,10 @@ Test cases (minimum):
 9. **Date parsing — Variant B**: `YYYY-MM-DD HH:MM:SS` → `YYYY-MM-DD`
 10. **Empty CSV**: Throws descriptive error
 11. **File detection**: Provider's `detectFile` returns `true` for both variants, `false` for IB/Revolut CSVs
+12. **BOM handling**: CSV with `\uFEFF` prefix parses correctly
+13. **Negative interest**: Reversal entry with negative amount is included in entries (reduces total)
+14. **Zero interest entries**: CSV with only deposits/withdrawals returns empty entries array + warning
+15. **Malformed date**: Row with unparseable date is skipped, not thrown
 
 - [ ] **Step 2: Run tests and verify ≥ 70% coverage**
 
@@ -239,7 +272,7 @@ In `app-state.ts`, find the `ImportedFile` type and add `'bondora'` to the `type
 
 - [ ] **Step 2: Add Bondora detection to `detectFileType()`**
 
-In `Import.tsx`, add after the Revolut investments check and before `return null`:
+In `Import.tsx`, add after the Revolut investments check and before `return null`. **Must come AFTER IB and Revolut checks** to avoid false positives. Also note: the existing `else { /* revolut savings */ }` block must be restructured to `else if (fileType === 'revolut')` to accommodate the new Bondora branch.
 
 ```typescript
 // Bondora Account Statement (old or new format)
@@ -247,12 +280,12 @@ const firstLine = content.split('\n')[0] ?? '';
 if (firstLine.includes('TransferDate') && firstLine.includes('Description') && firstLine.includes('Amount')) {
     return 'bondora';
 }
-if (firstLine.includes('Date') && firstLine.includes('Details') && firstLine.includes('Turnover')) {
+// Variant B — require all 4 columns to avoid false positives with generic CSVs
+if (firstLine.includes('Date') && firstLine.includes('Details')
+    && firstLine.includes('Turnover') && firstLine.includes('Transaction ID')) {
     return 'bondora';
 }
 ```
-
-**Important:** Must come AFTER IB and Revolut checks to avoid false positives (IB CSVs also start with text headers).
 
 - [ ] **Step 3: Add `'bondora'` to `importPriority()`**
 
@@ -269,20 +302,35 @@ if (f.type === 'bondora') brokers.add('Bondora');
 
 - [ ] **Step 5: Add Bondora processing branch**
 
-Add an `else if (fileType === 'bondora')` block in the file processing section. Follow the same pattern as Revolut savings (line ~860):
+Add an `else if (fileType === 'bondora')` block in the file processing section. **Follow the exact Revolut savings pattern** (line ~860) for state management:
 
 ```typescript
 } else if (fileType === 'bondora') {
     const result = parseBondoraCsv(content);
 
-    // Add interest to brokerInterest (dedup by broker+currency)
-    const existing = useAppStore.getState().brokerInterest;
-    const isDuplicate = existing.some(bi => bi.broker === 'Bondora' && bi.currency === result.interest.currency);
-    if (!isDuplicate) {
-        addBrokerInterest(result.interest);
+    // Set source on each interest entry (matching Revolut pattern at line ~877)
+    const source = { type: 'Bondora', file: file.name };
+    for (const e of result.interest.entries) {
+        e.source = source;
     }
 
-    // Add foreign account balance
+    // Dedup by broker+currency — show error on duplicate (matching Revolut pattern at line ~866)
+    const existing = useAppStore.getState().brokerInterest;
+    const isDuplicate = existing.some(bi => bi.broker === 'Bondora' && bi.currency === result.interest.currency);
+    if (isDuplicate) {
+        addImportedFile({
+            name: file.name,
+            type: 'bondora',
+            status: 'error',
+            message: 'This file appears to already be imported (Bondora EUR interest exists). Skipping to prevent duplicates.',
+        });
+        return;
+    }
+
+    // Use importBrokerInterest (replaces full array) — NOT addBrokerInterest (appends)
+    importBrokerInterest([...existing, result.interest]);
+
+    // Add foreign account balance (replace if same broker+currency already exists)
     const currentAccounts = useAppStore.getState().foreignAccounts ?? [];
     const existingBondoraIdx = currentAccounts.findIndex(
         a => a.broker === 'Bondora' && a.currency === result.foreignAccount.currency
@@ -293,11 +341,6 @@ Add an `else if (fileType === 'bondora')` block in the file processing section. 
         setForeignAccounts(updated);
     } else {
         setForeignAccounts([...currentAccounts, result.foreignAccount]);
-    }
-
-    // Warnings
-    if (result.warnings.length > 0) {
-        // Show warnings in import status
     }
 
     const netInterest = result.interest.entries.reduce((s, e) => s + e.amount, 0);
@@ -311,6 +354,8 @@ Add an `else if (fileType === 'bondora')` block in the file processing section. 
 }
 ```
 
+**Note:** `importBrokerInterest` is already in the destructured store actions (line ~179). No dependency array change needed since `importBrokerInterest` is already listed in the `processFile` callback deps (line ~921).
+
 - [ ] **Step 6: Add `parseBondoraCsv` import**
 
 Add to the core imports at the top of `Import.tsx`:
@@ -321,15 +366,34 @@ import { parseBondoraCsv } from '@bg-tax/core';
 
 - [ ] **Step 7: Update unrecognized file error message**
 
-Update the error message at line ~540 to include Bondora:
+Update the error message at line ~540 to include Bondora. Note: do NOT mention E*TRADE PDF here — PDFs go through the separate binary handler path and never reach this error:
 
 ```typescript
-'Unrecognized file format. Expected IB activity statement, Revolut savings/investments/account CSV, E*TRADE PDF, or Bondora account statement CSV.'
+'Unrecognized CSV format. Expected IB activity statement, Revolut savings/investments/account CSV, or Bondora account statement CSV.'
 ```
 
 ---
 
-### Task 7: Verify Integration
+### Task 7: Round-Trip Integration Test
+
+**Files:**
+- Modify: `packages/core/tests/integration/round-trip.test.ts`
+
+- [ ] **Step 1: Add Bondora round-trip test case**
+
+Per AGENTS.md requirement, add a test that verifies the invariant: parse CSV → export Excel → re-import Excel → export Excel produces identical results.
+
+The test should:
+1. Parse `samples/bondora-account-statement.csv` via `parseBondoraCsv()`
+2. Build minimal AppState with the resulting `brokerInterest` and `foreignAccounts`
+3. Export to Excel workbook
+4. Verify the `Bondora Лихви EUR` sheet exists with correct data
+5. Re-import the Excel via `importFullExcel()`
+6. Verify `brokerInterest` and `foreignAccounts` match the original
+
+---
+
+### Task 8: Verify Integration
 
 - [ ] **Step 1: Run full test suite**
 
@@ -341,8 +405,12 @@ Ensure no regressions in existing provider tests.
 
 - [ ] **Step 2: Verify provider detection ordering**
 
-Confirm that Bondora's `detectFile` does not false-positive on IB or Revolut CSVs by checking the test fixtures from other providers.
+Confirm that Bondora's `detectFile` does not false-positive on IB or Revolut CSVs by checking the test fixtures from other providers. Also verify that generic CSVs with `Date` column are not matched (Variant B requires all 4 columns including `Transaction ID`).
 
 - [ ] **Step 3: Verify tax declaration flow**
 
 Confirm that Bondora interest stored in `state.brokerInterest` is automatically picked up by the Declaration page's interest tax calculation (Appendix 8, Table 6). The existing code at `Declaration.tsx` lines 65-78 iterates all `brokerInterest` entries — no code changes needed, just verify the data flows correctly end-to-end.
+
+- [ ] **Step 4: Verify undo/redo**
+
+Confirm that `importBrokerInterest` and `setForeignAccounts` are tracked by the undo middleware. Import a Bondora file, then undo — the state should revert.
