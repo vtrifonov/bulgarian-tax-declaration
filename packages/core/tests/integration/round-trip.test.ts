@@ -920,7 +920,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             // Row 1 = header, Row 2 = column numbers, data starts at row 3
             const validHoldings = state.holdings
-                .filter(h => h.symbol && h.quantity > 0);
+                .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България');
 
             expect(validHoldings.length).toBeGreaterThan(0);
             const dataRowCount = sheet!.rowCount - 2; // subtract header + number row
@@ -943,14 +943,8 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
                 expect(qty).toBeCloseTo(h.quantity, 6);
 
-                // Column 4: Date in DD.MM.YYYY format
-                const dateParts = h.dateAcquired.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-                if (dateParts) {
-                    const expectedDate = `${dateParts[3]}.${dateParts[2]}.${dateParts[1]}`;
-
-                    expect(row.getCell(4).value).toBe(expectedDate);
-                }
+                // Column 4: Date as ISO string
+                expect(row.getCell(4).value).toBe(h.dateAcquired);
 
                 // Column 5: total in currency (quantity * unitPrice)
                 const totalCcy = Number(row.getCell(5).value);
@@ -1008,7 +1002,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             // Sort holdings alphabetically by symbol (simulating UI sort)
             const sorted = [...state.holdings]
-                .filter(h => h.symbol && h.quantity > 0)
+                .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България')
                 .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
             const nraBuf = await generateNraAppendix8(sorted, state.fxRates);
@@ -1030,7 +1024,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const state = buildFullState();
 
             const sorted = [...state.holdings]
-                .filter(h => h.symbol && h.quantity > 0)
+                .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България')
                 .sort((a, b) => b.symbol.localeCompare(a.symbol));
 
             const nraBuf = await generateNraAppendix8(sorted, state.fxRates);
@@ -1946,7 +1940,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const state = buildFullState();
 
             const validHoldings = state.holdings
-                .filter(h => h.symbol && h.quantity > 0)
+                .filter(h => h.symbol && h.quantity > 0 && h.country !== 'България')
                 .sort((a, b) => a.unitPrice - b.unitPrice);
 
             const nraBuf = await generateNraAppendix8(validHoldings, state.fxRates);

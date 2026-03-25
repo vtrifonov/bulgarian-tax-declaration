@@ -249,6 +249,13 @@ export const en = {
     // SPB-8
     'nav.spb8': 'SPB-8',
     'spb8.title': 'Form SPB-8 — Annual Report to BNB',
+    'spb8.description':
+        'Form SPB-8 is filed annually with the Bulgarian National Bank (BNB) by individuals holding financial assets abroad — stocks, funds, bank accounts, and other investments. Filing is mandatory when total asset value exceeds 50,000 BGN (or EUR equivalent from 2026), but recommended even at lower values. The deadline is March 31 of the following year.',
+    'spb8.guideLink': 'Detailed guide for filling SPB-8 (Bulgarian)',
+    'spb8.guideUrl': 'https://taxwizzard.net/2025/10/27/spb-8-palnoto-rakovodstvo-za-deklaracziya-na-investiczii-pred-bnb/',
+    'spb8.portalLink': 'BNB Portal',
+    'spb8.portalUrl': 'https://stat.bnb.bg/BNBStatPortal/',
+    'spb8.portalNote': '(requires hardware electronic signature device)',
     'spb8.threshold.met': 'Filing is mandatory (total {total} {ccy} ≥ 50,000 BGN)',
     'spb8.threshold.notMet': 'Filing is not mandatory (total {total} {ccy} < 50,000 BGN)',
     'spb8.reportType': 'Report Type',
