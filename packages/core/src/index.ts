@@ -30,6 +30,11 @@ export {
 export { parseRevolutInvestmentsCsv } from './parsers/revolut-investments.js';
 export { parseRevolutAccountStatement } from './parsers/revolut-account.js';
 export { parseEtradePdf } from './parsers/etrade-pdf.js';
+export {
+    detectBondoraPdf,
+    parseBondoraPdf,
+} from './parsers/bondora-pdf.js';
+export type { BondoraPdfResult } from './parsers/bondora-pdf.js';
 export { matchWhtToDividends } from './parsers/wht-matcher.js';
 export {
     importHoldingsFromCsv,

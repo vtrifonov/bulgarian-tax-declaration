@@ -240,10 +240,8 @@ export async function fetchYearEndPrices(
     onProgress?: (done: number, total: number, symbol: string) => void,
     existingPrices?: Record<string, number>,
 ): Promise<YearEndPrice[]> {
-    // Filter to only securities that don't already have prices
-    const toFetch = existingPrices
-        ? securities.filter(s => !existingPrices[s.isin])
-        : securities;
+    // Filter to only securities that don't already have prices and have a symbol to look up
+    const toFetch = securities.filter(s => s.symbol && (!existingPrices || !existingPrices[s.isin]));
 
     const results: YearEndPrice[] = [];
     const tried = new Set<string>();

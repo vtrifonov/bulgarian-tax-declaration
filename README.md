@@ -8,7 +8,7 @@
 
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
-Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency and fund positions for SPB-8 Section 04), Revolut investments (trades), and E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration. The Import page also allows manual entry of foreign bank account balances (e.g. Revolut, Wise current accounts) for SPB-8 Section 03.
+Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency and fund positions for SPB-8 Section 04), Revolut investments (trades), E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements), and Bondora (P2P lending interest and account balances from Tax Report PDF or Account Statement CSV). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration. The Import page also allows manual entry of foreign bank account balances (e.g. Revolut, Wise current accounts) for SPB-8 Section 03.
 
 Holdings in the workspace represent end-of-period open positions. Trades that open and close within the same imported statement generate sales, but do not remain in holdings. FIFO matching is scoped to the same `symbol` and `currency`, and only against lots from the same broker or brokerless legacy holdings.
 
@@ -225,6 +225,7 @@ WHT credit formula: `tax_due = max(0, bg_rate × gross - wht_paid)` — excess f
 - **Revolut Savings**: Statement per currency fund — interest paid, service fees
 - **Revolut Investments**: Account statement — trades (buys/sells)
 - **E*TRADE/Morgan Stanley**: PDF statement — holdings, interest, cash balances
+- **Bondora**: Tax Report PDF or Account Statement CSV — P2P lending interest, account balances
 - **FX Rates**: Auto-fetched from ECB API (cached locally)
 
 ## Excel Round-trip

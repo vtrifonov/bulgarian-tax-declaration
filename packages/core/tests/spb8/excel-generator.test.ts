@@ -101,9 +101,11 @@ describe('generateSpb8Excel', () => {
         expect(sheet.getCell('T17').value).toBe(1000);
         expect(sheet.getCell('D18').value).toBe('Лозенец');
         expect(sheet.getCell('K18').value).toBe('Черни връх');
-        expect(sheet.getCell('R18').value).toBe(12);
-        expect(sheet.getCell('U18').value).toBe('A, 5');
-        expect(sheet.getCell('E19').value).toBe(`'+359888123456`);
+        expect(sheet.getCell('Q18').value).toBe(12);
+        expect(sheet.getCell('T18').value).toBe('A, 5');
+        const phoneValue = sheet.getCell('E19').value as { richText: Array<{ text: string }> };
+
+        expect(phoneValue.richText[0].text).toBe('+359888123456');
         expect(String(sheet.getCell('A20').value ?? '')).toContain('test@example.com');
     });
 
