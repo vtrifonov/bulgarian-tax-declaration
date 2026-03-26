@@ -1,6 +1,3 @@
-import { fetchYearRates } from '../../src/fx/ecb-api.js';
-import { InMemoryFxCache } from '../../src/fx/fx-cache.js';
-import { FxService } from '../../src/fx/fx-service.js';
 import {
     beforeEach,
     describe,
@@ -8,6 +5,10 @@ import {
     it,
     vi,
 } from 'vitest';
+
+import { fetchYearRates } from '../../src/fx/ecb-api.js';
+import { InMemoryFxCache } from '../../src/fx/fx-cache.js';
+import { FxService } from '../../src/fx/fx-service.js';
 
 // Mock ECB API
 vi.mock('../../src/fx/ecb-api.js', () => ({
