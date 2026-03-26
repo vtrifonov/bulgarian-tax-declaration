@@ -89,6 +89,7 @@ vi.mock('@bg-tax/core', () => ({
             'button.save': 'Save',
             'button.continue': 'Continue',
             'button.delete': 'Delete',
+            'button.edit': 'Edit',
         };
 
         return labels[key] ?? key;
@@ -179,7 +180,7 @@ describe('Import page — foreign bank accounts', () => {
                 broker: 'Revolut',
                 type: '03',
                 maturity: 'L',
-                country: 'IE',
+                country: 'LT',
                 currency: 'USD',
                 amountStartOfYear: 100,
                 amountEndOfYear: 500.50,

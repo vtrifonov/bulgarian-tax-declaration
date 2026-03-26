@@ -194,14 +194,26 @@ export function Import() {
     // Derive broker names from imported files
     const importedBrokers = useMemo(() => {
         const brokers = new Set<string>();
+
         for (const f of importedFiles) {
             if (f.type === 'ib') brokers.add('Interactive Brokers');
             if (f.type === 'revolut' || f.type === 'revolut-investments' || f.type === 'revolut-account') brokers.add('Revolut');
             if (f.type === 'etrade') brokers.add('E*TRADE');
             if (f.type === 'bondora') brokers.add('Bondora');
         }
+
+        // Also include brokers from existing foreign accounts (e.g. restored from Excel)
+        for (const acc of foreignAccounts ?? []) {
+            if (acc.broker) brokers.add(acc.broker);
+        }
+
+        // And from broker interest entries
+        for (const bi of brokerInterest) {
+            if (bi.broker) brokers.add(bi.broker);
+        }
+
         return Array.from(brokers).sort();
-    }, [importedFiles]);
+    }, [importedFiles, foreignAccounts, brokerInterest]);
 
     // Common currencies + any seen in imported data
     const availableCurrencies = useMemo(() => {
@@ -1426,7 +1438,34 @@ export function Import() {
                                 </span>
                                 <button
                                     onClick={() => {
+                                        // Move to editable form
+                                        setBankAccounts(prev => [...prev, {
+                                            broker: acc.broker,
+                                            currency: acc.currency,
+                                            country: acc.country,
+                                            openingBalance: String(acc.amountStartOfYear),
+                                            closingBalance: String(acc.amountEndOfYear),
+                                        }]);
                                         const updated = (foreignAccounts ?? []).filter((_, i) => i !== idx);
+
+                                        setForeignAccounts(updated);
+                                    }}
+                                    style={{
+                                        padding: '0.2rem 0.5rem',
+                                        backgroundColor: 'var(--accent)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                    }}
+                                >
+                                    {t('button.edit')}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const updated = (foreignAccounts ?? []).filter((_, i) => i !== idx);
+
                                         setForeignAccounts(updated);
                                     }}
                                     style={{
@@ -1575,7 +1614,7 @@ export function Import() {
                                                 broker: acc.broker,
                                                 type: '03' as const,
                                                 maturity: 'L' as const,
-                                                country: acc.country || 'IE',
+                                                country: acc.country || 'LT',
                                                 currency: acc.currency,
                                                 amountStartOfYear: opening,
                                                 amountEndOfYear: closing,
@@ -1613,7 +1652,7 @@ export function Import() {
                         ))}
 
                         <button
-                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', country: 'IE', openingBalance: '', closingBalance: '' }])}
+                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', country: 'LT', openingBalance: '', closingBalance: '' }])}
                             style={{
                                 padding: '0.4rem 1rem',
                                 backgroundColor: 'var(--bg-secondary)',

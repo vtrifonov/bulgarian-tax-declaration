@@ -218,7 +218,7 @@ describe('generateSpb8Excel', () => {
             ...formData,
             securities: [
                 ...formData.securities,
-                { isin: 'US19260Q1076', currency: 'USD', quantityStartOfYear: 0.0004, quantityEndOfYear: 0.0076 },
+                { isin: 'US19260Q1076', currency: 'USD', quantityStartOfYear: 0.0004, quantityEndOfYear: 0.004 },
             ],
         });
         const wb = new ExcelJS.Workbook();
