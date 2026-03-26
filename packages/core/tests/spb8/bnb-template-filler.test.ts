@@ -168,9 +168,7 @@ describe('fillBnbTemplate', () => {
     });
 
     it('caps accounts at 47 rows (maxInvRows)', () => {
-        const accounts = Array.from({ length: 50 }, (_, i) =>
-            makeAccount({ country: `C${i}`, currency: 'USD' }),
-        );
+        const accounts = Array.from({ length: 50 }, (_, i) => makeAccount({ country: `C${i}`, currency: 'USD' }));
         const formData = makeFormData({ accounts });
         const output = fillBnbTemplate(templateBuffer, formData);
 
@@ -180,9 +178,7 @@ describe('fillBnbTemplate', () => {
     });
 
     it('caps securities at 47 rows (maxSecRows)', () => {
-        const securities = Array.from({ length: 50 }, (_, i) =>
-            makeSecurity({ isin: `US${String(i).padStart(10, '0')}`, quantityStartOfYear: i + 1, quantityEndOfYear: i + 2 }),
-        );
+        const securities = Array.from({ length: 50 }, (_, i) => makeSecurity({ isin: `US${String(i).padStart(10, '0')}`, quantityStartOfYear: i + 1, quantityEndOfYear: i + 2 }));
         const formData = makeFormData({ securities });
         const output = fillBnbTemplate(templateBuffer, formData);
 

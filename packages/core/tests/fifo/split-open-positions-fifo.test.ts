@@ -121,7 +121,7 @@ describe('splitOpenPositions — FIFO sell matching', () => {
     it('skips non-tax-year trades', () => {
         const trades: Trade[] = [
             mkTrade('AAPL', '2024-12-15', 100, 140), // Previous year — ignored
-            mkTrade('AAPL', '2025-03-10', 50, 160),  // This year
+            mkTrade('AAPL', '2025-03-10', 50, 160), // This year
         ];
 
         const positions = [mkPosition('AAPL', 200, 145)];
