@@ -103,6 +103,12 @@ export const bg = {
     'label.validationWarnings': 'Предупреждения',
     'label.allDismissed': 'Всички предупреждения са скрити',
     'label.totalTax': 'Общ дължим данък',
+    'label.sellsAndInterestTax': 'Данък продажби и лихви (10%)',
+    'label.dividendsTaxLabel': 'Данък дивиденти (5%)',
+    'label.earlyFilingDiscount': '5% отстъпка върху данък продажби и лихви при подаване преди 31.03',
+    'label.earlyFilingDiscountShort': '5% отстъпка преди 31.03',
+    'label.earlyFilingDiscountedAmount': 'С отстъпка',
+    'label.withEarlyFilingDiscount': 'С отстъпка (подаване преди 31.03)',
 
     // Warnings
     'warning.consumedHoldings': 'Имате {count} притежания маркирани като продадени. Премахнете ги от раздел „Притежания" преди експорт.',
@@ -292,6 +298,9 @@ export const bg = {
     'spb8.securities.startQty': 'Начало година',
     'spb8.securities.endQty': 'Край година',
     'spb8.export': 'Изтегли СПБ-8',
+    'spb8.exportBnb': 'Изтегли за БНБ (.xls)',
+    'spb8.uploadGuide':
+        'За да подадете файла в портала на БНБ: 1) Статистическа отчетност → Опционални входни форми → Подаване на данни чрез файл. Изберете Формат: plain, Съдържание: xls, качете .xls файла и натиснете „Провери". 2) Подпишете .xls файла с електронен подпис (CAdES, BASELINE_B, DETACHED, SHA256) — получавате .p7s файл. 3) Отново в Подаване на данни чрез файл — изберете Тип: binary, качете .p7s подписа и натиснете „Подай".',
     'spb8.importPrevious': 'Импорт от предходна СПБ-8',
     'spb8.missingIsin': 'Липсващ ISIN',
     'spb8.fetchPrices': 'Зареди актуални цени ({date})',

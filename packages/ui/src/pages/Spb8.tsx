@@ -1,6 +1,7 @@
 import {
     assembleSpb8,
     fetchYearEndPrices,
+    fillBnbTemplate,
     fxToBaseCurrency,
     generateSpb8Excel,
     resolveIsinSync,
@@ -252,6 +253,48 @@ export function Spb8() {
         }
     };
 
+    const handleExportBnb = async () => {
+        if (!spb8Data) {
+            setExportError('Failed to assemble SPB-8 data');
+
+            return;
+        }
+
+        setExporting(true);
+        setExportError(null);
+        setExportSuccess(null);
+        try {
+            // Fetch the BNB template
+            const basePath = import.meta.env.BASE_URL || '/';
+            const templateResponse = await fetch(`${basePath}templates/SPB8_BPM6_meta.xls`);
+
+            if (!templateResponse.ok) {
+                throw new Error(`Failed to load BNB template: ${templateResponse.status}`);
+            }
+
+            const templateBuffer = await templateResponse.arrayBuffer();
+            const buffer = fillBnbTemplate(templateBuffer, spb8Data);
+            const blob = new Blob([buffer.buffer as ArrayBuffer], { type: 'application/vnd.ms-excel' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const filename = `SPB8_BPM6_${taxYear}.xls`;
+
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setExportSuccess(filename);
+            setTimeout(() => setExportSuccess(null), 5000);
+        } catch (error) {
+            console.error('Failed to export BNB template:', error);
+            setExportError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setExporting(false);
+        }
+    };
+
     const renderSection = (key: string, title: string, subtitle: string, show: boolean, content: () => React.ReactNode) => {
         if (!show) {
             return null;
@@ -321,8 +364,28 @@ export function Spb8() {
                         >
                             {exporting ? 'Exporting...' : t('spb8.export')}
                         </button>
+                        <button
+                            onClick={handleExportBnb}
+                            disabled={exporting || !spb8Data}
+                            style={{
+                                padding: '0.75rem 1.5rem',
+                                backgroundColor: exporting || !spb8Data ? 'var(--text-secondary)' : '#28a745',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: exporting || !spb8Data ? 'wait' : 'pointer',
+                                fontSize: '1rem',
+                                fontWeight: 500,
+                                opacity: exporting || !spb8Data ? 0.7 : 1,
+                            }}
+                        >
+                            {exporting ? 'Exporting...' : t('spb8.exportBnb')}
+                        </button>
                     </div>
                 </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0.5rem 0 0.75rem' }}>
+                    💡 {t('spb8.uploadGuide')}
+                </p>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
                     {t('spb8.description')}{' '}
                     <a

@@ -379,6 +379,7 @@ BNB Form SPB-8 reports foreign financial assets. Core modules in `packages/core/
 - **`excel-generator.ts`** — Generates .xlsx matching BNB template (22 columns, merged cells, Times New Roman)
 - **`import.ts`** — Reads previous SPB-8 .xlsx to extract start-of-year data
 - **`price-service.ts`** — Fetches year-end market prices: Stooq (primary) + Yahoo Finance (fallback). Derives exchange suffix from ISIN country prefix (no hardcoded ticker maps). Detects rate limiting from both providers.
+- **`bnb-template-filler.ts`** — Binary BIFF8 record patcher for the official BNB SPB-8 template (.xls). Preserves formatting (green headers, borders, column widths, hidden column A) by patching cell records in-place. Modifies SST (string table), <!-- cspell:disable-line -->LABELSST, BOUNDSHEET records; uses CFB library to read/write OLE compound file.
 
 UI modules:
 - **`pages/Spb8.tsx`** — Full SPB-8 page: threshold banner, personal data form, accounts/securities tables, price fetch, export

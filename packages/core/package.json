@@ -10,8 +10,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "cfb": "^1.2.2",
     "exceljs": "^4.4.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",

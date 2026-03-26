@@ -111,6 +111,7 @@ export {
     assembleSpb8,
     fxToBaseCurrency,
 } from './spb8/assemble.js';
+export { fillBnbTemplate } from './spb8/bnb-template-filler.js';
 export { generateSpb8Excel } from './spb8/excel-generator.js';
 export { fetchYearEndPrices } from './spb8/price-service.js';
 export type { YearEndPrice } from './spb8/price-service.js';
