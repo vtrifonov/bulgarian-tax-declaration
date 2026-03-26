@@ -812,8 +812,8 @@ export function Spb8() {
                                         <td style={tdL}>{account.currency}</td>
                                         <td style={tdM}>{account.amountStartOfYear.toFixed(2)}</td>
                                         <td style={tdM}>{account.amountEndOfYear.toFixed(2)}</td>
-                                        <td style={{ ...tdM, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{Math.round(account.amountStartOfYear / 1000)}</td>
-                                        <td style={{ ...tdM, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{Math.round(account.amountEndOfYear / 1000)}</td>
+                                        <td style={{ ...tdM, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{(account.amountStartOfYear / 1000).toFixed(2)}</td>
+                                        <td style={{ ...tdM, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{(account.amountEndOfYear / 1000).toFixed(2)}</td>
                                         <td style={{ ...tdM, color: 'var(--text-secondary)' }}>
                                             {(spb8Data?.accounts.find(a => a.currency === account.currency && a.country === account.country)?.amountEndOfYearBgn ?? 0).toFixed(2)}
                                         </td>

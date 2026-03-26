@@ -85,7 +85,7 @@ export const en = {
     'button.addDividend': 'Add Dividend',
     'button.addInterest': 'Add Interest Entry',
     'button.delete': 'Delete',
-    'button.edit': 'Edit row',
+    'button.edit': 'Edit',
     'button.split': 'Split row',
     'confirm.deleteRow': 'Are you sure you want to delete this row?',
     'button.addRow': 'Add Row',

@@ -45,13 +45,15 @@ export function addSpb8AccountsSheet(workbook: Workbook, state: AppState): Works
             account.currency,
             account.amountStartOfYear,
             account.amountEndOfYear,
-            Math.round(account.amountStartOfYear / 1000),
-            Math.round(account.amountEndOfYear / 1000),
+            Math.round(account.amountStartOfYear / 10) / 100,
+            Math.round(account.amountEndOfYear / 10) / 100,
             endBase,
         ]);
 
         row.getCell(6).numFmt = CCY_FORMAT;
         row.getCell(7).numFmt = CCY_FORMAT;
+        row.getCell(8).numFmt = '0.00';
+        row.getCell(9).numFmt = '0.00';
         row.getCell(10).numFmt = CCY_FORMAT;
         row.font = FONT;
     }

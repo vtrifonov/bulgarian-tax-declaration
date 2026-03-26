@@ -52,14 +52,14 @@ describe('i18n', () => {
     });
 
     it('translates button labels in English', () => {
-        expect(t('button.edit')).toBe('Edit row');
+        expect(t('button.edit')).toBe('Edit');
         expect(t('button.split')).toBe('Split row');
         expect(t('button.delete')).toBe('Delete');
     });
 
     it('translates button labels in Bulgarian', () => {
         setLanguage('bg');
-        expect(t('button.edit')).toBe('Редактирай ред');
+        expect(t('button.edit')).toBe('Редактирай');
         expect(t('button.split')).toBe('Раздели ред');
         expect(t('button.delete')).toBe('Изтрий');
     });

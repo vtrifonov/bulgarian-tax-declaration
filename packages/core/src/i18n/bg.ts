@@ -85,7 +85,7 @@ export const bg = {
     'button.addDividend': 'Добави дивидент',
     'button.addInterest': 'Добави лихва',
     'button.delete': 'Изтрий',
-    'button.edit': 'Редактирай ред',
+    'button.edit': 'Редактирай',
     'button.split': 'Раздели ред',
     'confirm.deleteRow': 'Сигурни ли сте, че искате да изтриете този ред?',
     'button.addRow': 'Добави ред',

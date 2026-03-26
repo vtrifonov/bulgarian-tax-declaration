@@ -402,7 +402,7 @@ If the broker's data includes ISIN codes, return `isinMap` in `BrokerProviderRes
 - Value: 12-character ISIN code
 
 ### Manual Foreign Bank Accounts (Import Page)
-The Import page includes a "Foreign Bank Accounts" section where users can manually enter bank account balances (e.g. Revolut, Wise current accounts). These are stored as `ForeignAccountBalance` with `type: '01'` and appear in SPB-8 Section 03. The broker dropdown auto-populates from imported files, and selecting a new currency triggers FX rate fetching from ECB.
+The Import page includes a "Foreign Bank Accounts" section where users can manually enter bank account balances (e.g. Revolut, Wise current accounts). These are stored as `ForeignAccountBalance` with `type: '03'` and appear in SPB-8 Section 03. Default country for Revolut is Lithuania (LT). Existing accounts can be edited or deleted. The broker dropdown auto-populates from imported files, and selecting a new currency triggers FX rate fetching from ECB. SPB-8 Section 03 amounts are displayed in thousands with 2 decimal places, Section 04 quantities use 2 decimal places. Country resolution uses ISIN domicile prefix (e.g. IE → Ireland) before exchange fallback.
 
 ### Revolut Savings Pattern
 Revolut "savings" are money market fund shares (ISINs: IE0002RUHW32 GBP, IE000H9J0QX4 USD, IE000AZVL3K0 EUR). These are Section 04 securities, NOT Section 03 accounts. The savings balance prompt on the Import page includes an editable ISIN field (auto-populated from CSV) and stores positions as `savingsSecurities` in AppState. The `assembleSecurities()` function merges these with stock holdings for SPB-8 output.

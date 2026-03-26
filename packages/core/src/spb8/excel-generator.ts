@@ -436,13 +436,15 @@ export async function generateSpb8Excel(formData: Spb8FormData): Promise<Uint8Ar
             mergeAndSet(sheet, r, r, 11, 12, sanitizeForExcel(account.country), NORMAL_FONT, CENTER, THIN_BORDER);
             mergeAndSet(sheet, r, r, 13, 14, sanitizeForExcel(account.currency), NORMAL_FONT, CENTER, THIN_BORDER);
 
-            const startK = Math.round(account.amountStartOfYear / 1000);
+            const startK = account.amountStartOfYear / 1000;
 
-            mergeAndSet(sheet, r, r, 15, 18, startK, NORMAL_FONT, CENTER, THIN_BORDER);
+            mergeAndSet(sheet, r, r, 15, 18, Math.round(startK * 100) / 100, NORMAL_FONT, CENTER, THIN_BORDER);
+            sheet.getCell(r, 15).numFmt = '0.00';
 
-            const endK = Math.round(account.amountEndOfYear / 1000);
+            const endK = account.amountEndOfYear / 1000;
 
-            mergeAndSet(sheet, r, r, 19, 22, endK, NORMAL_FONT, CENTER, THIN_BORDER);
+            mergeAndSet(sheet, r, r, 19, 22, Math.round(endK * 100) / 100, NORMAL_FONT, CENTER, THIN_BORDER);
+            sheet.getCell(r, 19).numFmt = '0.00';
 
             nextRow = r + 1;
         }
@@ -460,8 +462,8 @@ export async function generateSpb8Excel(formData: Spb8FormData): Promise<Uint8Ar
     const h1 = nextRow + 1;
     const h2 = h1 + 1;
     const exportableSecurities = formData.securities.filter((security) => {
-        const startQty = Math.round(security.quantityStartOfYear);
-        const endQty = Math.round(security.quantityEndOfYear);
+        const startQty = Math.round(security.quantityStartOfYear * 100) / 100;
+        const endQty = Math.round(security.quantityEndOfYear * 100) / 100;
 
         return startQty !== 0 || endQty !== 0;
     });
@@ -538,22 +540,24 @@ export async function generateSpb8Excel(formData: Spb8FormData): Promise<Uint8Ar
             row,
             15,
             18,
-            Math.round(security.quantityStartOfYear),
+            Math.round(security.quantityStartOfYear * 100) / 100,
             NORMAL_FONT,
             CENTER,
             THIN_BORDER,
         );
+        sheet.getCell(row, 15).numFmt = '0.00';
         mergeAndSet(
             sheet,
             row,
             row,
             19,
             22,
-            Math.round(security.quantityEndOfYear),
+            Math.round(security.quantityEndOfYear * 100) / 100,
             NORMAL_FONT,
             CENTER,
             THIN_BORDER,
         );
+        sheet.getCell(row, 19).numFmt = '0.00';
         row++;
     }
 
