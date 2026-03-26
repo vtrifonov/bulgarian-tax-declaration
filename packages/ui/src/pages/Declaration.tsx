@@ -92,6 +92,16 @@ export function Declaration() {
         + dividendsTaxResult.totalBgTax
         + totalInterestTax;
 
+    // Split into two buckets: sells+interest (10%) and dividends (5%)
+    const sellsAndInterestTax = capitalGainsResult.taxDue + totalInterestTax;
+    const dividendsTax = dividendsTaxResult.totalBgTax;
+
+    // Early-filing 5% discount: applies to sells+interest only, deadline March 31 of the year after taxYear
+    const earlyFilingDeadline = new Date(taxYear + 1, 2, 31); // month 0-indexed; 2 = March
+    const isEarlyFiling = new Date() < earlyFilingDeadline;
+    const discountedSellsInterestTax = +(sellsAndInterestTax * 0.95).toFixed(2);
+    const totalWithDiscount = discountedSellsInterestTax + dividendsTax;
+
     // Приложение 5, Част I — Holdings as of Dec 31
     const holdingsForDeclaration = useMemo(() => {
         return holdings
@@ -800,13 +810,69 @@ export function Declaration() {
                     border: '1px solid var(--border)',
                     borderRadius: '4px',
                     padding: '2rem',
-                    textAlign: 'center',
                     marginTop: '1rem',
                 }}
             >
-                <h2 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Част IV — Дължим данък</h2>
-                <p style={{ marginTop: 0, marginBottom: '1rem', opacity: 0.9 }}>{t('label.totalTax')}</p>
-                <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>{totalTaxDue.toFixed(2)} {baseCurrency}</div>
+                <h2 style={{ marginTop: 0, marginBottom: '0.5rem', textAlign: 'center' }}>Част IV — Дължим данък</h2>
+                {isEarlyFiling && (
+                    <div
+                        style={{
+                            backgroundColor: '#4CAF50',
+                            borderRadius: '6px',
+                            padding: '0.6rem 1rem',
+                            marginBottom: '1.25rem',
+                            textAlign: 'center',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.02em',
+                        }}
+                    >
+                        {t('label.earlyFilingDiscount')}
+                    </div>
+                )}
+
+                {/* Sells & interest row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span>{t('label.sellsAndInterestTax')}</span>
+                    <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                            {sellsAndInterestTax.toFixed(2)} {baseCurrency}
+                        </span>
+                        {isEarlyFiling && sellsAndInterestTax > 0 && (
+                            <div style={{ fontSize: '0.9rem', opacity: 0.85 }}>
+                                {t('label.earlyFilingDiscountedAmount')}: {discountedSellsInterestTax.toFixed(2)} {baseCurrency}{' '}
+                                <span style={{ fontSize: '0.8rem' }}>({t('label.earlyFilingDiscountShort')})</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <hr style={{ borderColor: 'rgba(255,255,255,0.3)', margin: '0.75rem 0' }} />
+
+                {/* Dividends row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span>{t('label.dividendsTaxLabel')}</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                        {dividendsTax.toFixed(2)} {baseCurrency}
+                    </span>
+                </div>
+
+                <hr style={{ borderColor: 'rgba(255,255,255,0.3)', margin: '0.75rem 0' }} />
+
+                {/* Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('label.totalTax')}</span>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>
+                            {totalTaxDue.toFixed(2)} {baseCurrency}
+                        </div>
+                        {isEarlyFiling && sellsAndInterestTax > 0 && (
+                            <div style={{ fontSize: '1rem', opacity: 0.85 }}>
+                                {t('label.withEarlyFilingDiscount')}: {totalWithDiscount.toFixed(2)} {baseCurrency}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

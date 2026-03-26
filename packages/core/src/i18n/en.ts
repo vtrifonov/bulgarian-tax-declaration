@@ -103,6 +103,12 @@ export const en = {
     'label.validationWarnings': 'Validation Warnings',
     'label.allDismissed': 'All warnings dismissed',
     'label.totalTax': 'Total Tax Due',
+    'label.sellsAndInterestTax': 'Sells & Interest Tax (10%)',
+    'label.dividendsTaxLabel': 'Dividends Tax (5%)',
+    'label.earlyFilingDiscount': '5% discount on sells & interest tax if filed before March 31',
+    'label.earlyFilingDiscountShort': '5% discount before March 31',
+    'label.earlyFilingDiscountedAmount': 'With discount',
+    'label.withEarlyFilingDiscount': 'With discount (filed before March 31)',
 
     // Warnings
     'warning.consumedHoldings': 'You have {count} holding(s) marked as sold. Remove them from the Holdings tab before exporting.',
@@ -292,6 +298,9 @@ export const en = {
     'spb8.securities.startQty': 'Year Start',
     'spb8.securities.endQty': 'Year End',
     'spb8.export': 'Download SPB-8',
+    'spb8.exportBnb': 'Download for BNB (.xls)',
+    'spb8.uploadGuide':
+        'To submit on the BNB portal: 1) Статистическа отчетност → Опционални входни форми → Подаване на данни чрез файл. Select Format: plain, Content: xls, upload the .xls file and click "Провери". 2) Sign the .xls file with an electronic signature (CAdES, BASELINE_B, DETACHED, SHA256) — you get a .p7s file. 3) Again in Подаване на данни чрез файл — select Type: binary, upload the .p7s signature and click "Подай".',
     'spb8.importPrevious': 'Import from Previous SPB-8',
     'spb8.missingIsin': 'Missing ISIN',
     'spb8.fetchPrices': 'Fetch actual prices ({date})',

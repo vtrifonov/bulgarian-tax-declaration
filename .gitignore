@@ -11,3 +11,4 @@ coverage/
 docs/superpowers/
 /.superpowers/
 packages/ui/src-tauri/gen/
+.understand-anything/
