@@ -1,3 +1,6 @@
+import { fetchYearRates } from '../../src/fx/ecb-api.js';
+import { InMemoryFxCache } from '../../src/fx/fx-cache.js';
+import { FxService } from '../../src/fx/fx-service.js';
 import {
     beforeEach,
     describe,
@@ -6,15 +9,10 @@ import {
     vi,
 } from 'vitest';
 
-import { InMemoryFxCache } from '../../src/fx/fx-cache.js';
-import { FxService } from '../../src/fx/fx-service.js';
-
 // Mock ECB API
 vi.mock('../../src/fx/ecb-api.js', () => ({
     fetchYearRates: vi.fn(),
 }));
-
-import { fetchYearRates } from '../../src/fx/ecb-api.js';
 
 const mockFetchYearRates = vi.mocked(fetchYearRates);
 
@@ -61,6 +59,7 @@ describe('FxService.fetchRates', () => {
     it('deduplicates currencies', async () => {
         mockFetchYearRates.mockResolvedValue({ '2025-01-02': 1.04 });
         const svc = new FxService(new InMemoryFxCache(), 'BGN');
+
         await svc.fetchRates(['USD', 'USD', 'USD'], 2025);
 
         expect(mockFetchYearRates).toHaveBeenCalledTimes(1);
@@ -68,8 +67,13 @@ describe('FxService.fetchRates', () => {
 
     it('fetches multiple currencies in parallel', async () => {
         mockFetchYearRates.mockImplementation(async (ccy) => {
-            if (ccy === 'USD') return { '2025-01-02': 1.04 };
-            if (ccy === 'GBP') return { '2025-01-02': 0.83 };
+            if (ccy === 'USD') {
+                return { '2025-01-02': 1.04 };
+            }
+
+            if (ccy === 'GBP') {
+                return { '2025-01-02': 0.83 };
+            }
 
             return {};
         });
