@@ -158,7 +158,7 @@ describe('fillBnbTemplate', () => {
         const securities = [
             makeSecurity({ isin: 'US0378331005' }),
             makeSecurity({ isin: 'US5949181045' }),
-            makeSecurity({ isin: 'IE00B4BNMY34' }),
+            makeSecurity({ isin: 'IE00BK5BQT80' }),
         ];
         const formData = makeFormData({ accounts, securities });
         const output = fillBnbTemplate(templateBuffer, formData);
