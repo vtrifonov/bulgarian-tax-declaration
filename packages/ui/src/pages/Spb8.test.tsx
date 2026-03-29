@@ -109,7 +109,6 @@ function restoreProperty(target: object, key: PropertyKey, descriptor?: Property
     Reflect.deleteProperty(target, key);
 }
 
-
 describe('Spb8 page', () => {
     beforeEach(() => {
         vi.clearAllMocks();
