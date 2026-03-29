@@ -3,6 +3,7 @@
   "include": [
     "packages/core/src/**/*.ts",
     "packages/core/tests/**/*.ts",
+    "packages/ui/build/**/*.ts",
     "scripts/**/*.ts"
   ]
 }

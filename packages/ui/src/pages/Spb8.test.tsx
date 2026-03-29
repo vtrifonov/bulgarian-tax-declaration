@@ -4,6 +4,7 @@ import {
     screen,
 } from '@testing-library/react';
 import {
+    afterEach,
     beforeEach,
     describe,
     expect,
@@ -12,6 +13,10 @@ import {
 } from 'vitest';
 
 import { Spb8 } from './Spb8';
+
+const { fillBnbTemplateMock } = vi.hoisted(() => ({
+    fillBnbTemplateMock: vi.fn(() => new Uint8Array([1, 2, 3])),
+}));
 
 const mockStore = {
     holdings: [],
@@ -60,6 +65,7 @@ vi.mock('@bg-tax/core', () => ({
         totalBgn: 0,
     })),
     fetchYearEndPrices: vi.fn(),
+    fillBnbTemplate: fillBnbTemplateMock,
     fxToBaseCurrency: vi.fn(() => 1),
     generateSpb8Excel: vi.fn(),
     resolveIsinSync: vi.fn(() => ''),
@@ -83,15 +89,49 @@ vi.mock('@bg-tax/core', () => ({
             'spb8.personalData.entrance': 'вх./ап.',
             'button.save': 'Запази',
             'button.cancel': 'Отмени',
+            'spb8.exportBnb': 'Изтегли BNB шаблон',
         };
 
         return labels[key] ?? key;
     }),
 }));
 
+const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+const originalAnchorClick = Object.getOwnPropertyDescriptor(HTMLAnchorElement.prototype, 'click');
+
+function restoreProperty(target: object, key: PropertyKey, descriptor?: PropertyDescriptor) {
+    if (descriptor) {
+        Object.defineProperty(target, key, descriptor);
+        return;
+    }
+
+    Reflect.deleteProperty(target, key);
+}
+
 describe('Spb8 page', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.stubGlobal('fetch', vi.fn());
+        Object.defineProperty(URL, 'createObjectURL', {
+            configurable: true,
+            value: vi.fn(() => 'blob:spb8'),
+        });
+        Object.defineProperty(URL, 'revokeObjectURL', {
+            configurable: true,
+            value: vi.fn(),
+        });
+        Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
+            configurable: true,
+            value: vi.fn(),
+        });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        restoreProperty(URL, 'createObjectURL', originalCreateObjectURL);
+        restoreProperty(URL, 'revokeObjectURL', originalRevokeObjectURL);
+        restoreProperty(HTMLAnchorElement.prototype, 'click', originalAnchorClick);
     });
 
     it('shows saved address fields in the collapsed personal data summary', () => {
@@ -126,5 +166,15 @@ describe('Spb8 page', () => {
                 }),
             }),
         );
+    });
+
+    it('exports the BNB template without fetching over the network', () => {
+        render(<Spb8 />);
+
+        fireEvent.click(screen.getByText('Изтегли BNB шаблон'));
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(fillBnbTemplateMock).toHaveBeenCalledTimes(1);
+        expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     });
 });

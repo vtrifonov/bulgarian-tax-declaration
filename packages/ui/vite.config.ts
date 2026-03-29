@@ -3,6 +3,7 @@ import {
     type Plugin,
 } from 'vite';
 import react from '@vitejs/plugin-react';
+import { bundledBnbTemplatePlugin } from './build/bundled-bnb-template-plugin';
 
 /** Tauri plugins are only available inside the Tauri desktop shell.
  *  In browser-only dev mode, resolve them to empty stubs so Vite doesn't error. */
@@ -27,7 +28,7 @@ function tauriStubPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-    plugins: [react(), tauriStubPlugin()],
+    plugins: [react(), tauriStubPlugin(), bundledBnbTemplatePlugin()],
     server: {
         port: 5115,
         strictPort: true,
