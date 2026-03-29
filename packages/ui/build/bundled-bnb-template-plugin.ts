@@ -18,7 +18,8 @@ export function bundledBnbTemplatePlugin(): Plugin {
                 return;
             }
 
-            const templatePath = new URL('../../../templates/SPB-8.xls', import.meta.url);
+            // Bundle the same public template the UI used to fetch at runtime.
+            const templatePath = new URL('../public/templates/SPB8_BPM6_meta.xls', import.meta.url);
             const templateBase64 = readFileSync(templatePath).toString('base64');
             const dataUrl = `data:application/vnd.ms-excel;base64,${templateBase64}`;
 

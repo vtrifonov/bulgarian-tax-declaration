@@ -4,6 +4,7 @@ import {
     screen,
 } from '@testing-library/react';
 import {
+    afterEach,
     beforeEach,
     describe,
     expect,
@@ -95,6 +96,20 @@ vi.mock('@bg-tax/core', () => ({
     }),
 }));
 
+const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+const originalAnchorClick = Object.getOwnPropertyDescriptor(HTMLAnchorElement.prototype, 'click');
+
+function restoreProperty(target: object, key: PropertyKey, descriptor?: PropertyDescriptor) {
+    if (descriptor) {
+        Object.defineProperty(target, key, descriptor);
+        return;
+    }
+
+    Reflect.deleteProperty(target, key);
+}
+
+
 describe('Spb8 page', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -111,6 +126,13 @@ describe('Spb8 page', () => {
             configurable: true,
             value: vi.fn(),
         });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        restoreProperty(URL, 'createObjectURL', originalCreateObjectURL);
+        restoreProperty(URL, 'revokeObjectURL', originalRevokeObjectURL);
+        restoreProperty(HTMLAnchorElement.prototype, 'click', originalAnchorClick);
     });
 
     it('shows saved address fields in the collapsed personal data summary', () => {
