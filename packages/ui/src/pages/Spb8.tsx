@@ -14,8 +14,26 @@ import {
     useMemo,
     useState,
 } from 'react';
+import bnbTemplateDataUrl from 'virtual:spb8-bnb-template';
 
 import { useAppStore } from '../store/app-state';
+
+function decodeInlineAsset(dataUrl: string): ArrayBuffer {
+    const [header, payload] = dataUrl.split(',', 2);
+
+    if (!header || !payload || !header.includes(';base64')) {
+        throw new Error('Bundled BNB template is invalid');
+    }
+
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes.buffer;
+}
 
 function getPriceFetch(): typeof fetch {
     return (async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -264,15 +282,7 @@ export function Spb8() {
         setExportError(null);
         setExportSuccess(null);
         try {
-            // Fetch the BNB template
-            const basePath = import.meta.env.BASE_URL || '/';
-            const templateResponse = await fetch(`${basePath}templates/SPB8_BPM6_meta.xls`);
-
-            if (!templateResponse.ok) {
-                throw new Error(`Failed to load BNB template: ${templateResponse.status}`);
-            }
-
-            const templateBuffer = await templateResponse.arrayBuffer();
+            const templateBuffer = decodeInlineAsset(bnbTemplateDataUrl);
             const buffer = fillBnbTemplate(templateBuffer, spb8Data);
             const blob = new Blob([buffer.buffer as ArrayBuffer], { type: 'application/vnd.ms-excel' });
             const url = URL.createObjectURL(blob);
