@@ -56,6 +56,18 @@ describe('FileHandler detection', () => {
         expect(handler.detectFile('Date,Ticker,Type,Quantity,Price per share,Total Amount,Currency,FX Rate\n...', 'investments.csv')).toBe(true);
     });
 
+    it('Trading 212: detects by "Action,Time,ISIN,Ticker" header', () => {
+        const trading212 = providers.find(p => p.name === 'Trading 212')!;
+        const handler = trading212.fileHandlers[0];
+
+        expect(
+            handler.detectFile(
+                'Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\n...',
+                'statement.csv',
+            ),
+        ).toBe(true);
+    });
+
     it('returns false for empty file content', () => {
         for (const p of providers) {
             for (const h of p.fileHandlers) {

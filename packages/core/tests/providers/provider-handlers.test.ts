@@ -6,6 +6,7 @@ import {
 
 import { ibProvider } from '../../src/providers/ib.js';
 import { revolutProvider } from '../../src/providers/revolut.js';
+import { trading212Provider } from '../../src/providers/trading212.js';
 import {
     isBinaryHandler,
     isTextHandler,
@@ -133,5 +134,26 @@ describe('Revolut investments — parseFile trade conversion', () => {
         expect(result.trades).toHaveLength(1);
         expect(result.trades![0].quantity).toBe(-5);
         expect(result.trades![0].proceeds).toBe(900);
+    });
+});
+
+describe('Trading 212 provider — handler detection', () => {
+    const handler = trading212Provider.fileHandlers[0];
+
+    if (!isTextHandler(handler)) {
+        throw new Error('Expected text handler');
+    }
+
+    it('detects CSV with Action, Time, ISIN, Ticker columns', () => {
+        expect(
+            handler.detectFile(
+                'Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\nInterest on cash,2025-01-01 00:00:00,,,,,,,,,,,,1.00,EUR,,,,',
+                'trading212.csv',
+            ),
+        ).toBe(true);
+    });
+
+    it('rejects CSV without required columns', () => {
+        expect(handler.detectFile('Date,Amount\n2025-01-01,100', 'test.csv')).toBe(false);
     });
 });

@@ -2,6 +2,7 @@ import {
     fireEvent,
     render,
     screen,
+    waitFor,
 } from '@testing-library/react';
 import {
     beforeEach,
@@ -11,9 +12,31 @@ import {
     vi,
 } from 'vitest';
 
+import type {
+    BrokerInterest,
+    Dividend,
+    Holding,
+    Sale,
+} from '@bg-tax/core';
 import { Import } from './Import';
+import * as core from '@bg-tax/core';
 
 const mockNavigate = vi.fn();
+
+function uploadFile(container: HTMLElement, file: File): void {
+    const input = container.querySelector('input[type="file"]');
+
+    if (!(input instanceof HTMLInputElement)) {
+        throw new Error('File input not found');
+    }
+
+    Object.defineProperty(input, 'files', {
+        configurable: true,
+        value: [file],
+    });
+
+    fireEvent.change(input);
+}
 
 vi.mock('react-router-dom', () => ({
     useNavigate: () => mockNavigate,
@@ -28,11 +51,11 @@ const mockStore = {
     setFxRates: vi.fn(),
     taxYear: 2025,
     baseCurrency: 'BGN' as const,
-    holdings: [],
-    sales: [],
-    dividends: [],
+    holdings: [] as Holding[],
+    sales: [] as Sale[],
+    dividends: [] as Dividend[],
     stockYield: [],
-    brokerInterest: [],
+    brokerInterest: [] as BrokerInterest[],
     importedFiles: [
         { name: 'revolut-savings-gbp.csv', type: 'revolut' as const, status: 'success' as const, message: 'GBP: 10 entries' },
     ],
@@ -56,6 +79,7 @@ vi.mock('@bg-tax/core', () => ({
     parseRevolutCsv: vi.fn(),
     parseRevolutSavingsPositions: vi.fn(),
     parseRevolutInvestmentsCsv: vi.fn(),
+    parseTrading212Csv: vi.fn(),
     parseIBCsv: vi.fn(),
     parseRevolutAccountStatement: vi.fn(),
     parseEtradePdf: vi.fn(),
@@ -66,7 +90,9 @@ vi.mock('@bg-tax/core', () => ({
     isBinaryHandler: vi.fn(() => false),
     calcDividendTax: vi.fn(),
     matchWhtToDividends: vi.fn(),
+    classifySaleByExchange: vi.fn((exchange?: string) => exchange ? 'taxable' : 'taxable'),
     resolveCountries: vi.fn(),
+    resolveExchangeCodes: vi.fn(),
     resolveIsinSync: vi.fn(() => ''),
     populateSaleFxRates: vi.fn(),
     providers: [],
@@ -78,6 +104,7 @@ vi.mock('@bg-tax/core', () => ({
             'import.closingBalance': 'Closing balance',
             'import.foreignAccountsTitle': 'Foreign Bank Accounts',
             'import.foreignAccountsHint': 'Add foreign bank account balances',
+            'import.trading212BalanceWarning': 'Trading 212 CSV does not include opening and closing cash balances. Enter them here for SPB-8 Section 03.',
             'import.addAccount': 'Add account',
             'import.broker': 'Broker',
             'import.currency': 'Currency',
@@ -100,6 +127,29 @@ describe('Import page — foreign bank accounts', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockStore.foreignAccounts = [];
+        mockStore.holdings = [];
+        mockStore.sales = [];
+        mockStore.dividends = [];
+        mockStore.stockYield = [];
+        mockStore.brokerInterest = [];
+        mockStore.fxRates = {};
+        vi.mocked(core.populateSaleFxRates).mockImplementation((sales) => sales);
+        vi.mocked(core.resolveCountries).mockResolvedValue({});
+        vi.mocked(core.resolveExchangeCodes).mockResolvedValue({});
+        vi.mocked(core.calcDividendTax).mockImplementation((gross, wht) => ({
+            bgTaxDue: Number(gross) * 0.05 - Number(wht),
+            whtCredit: Number(wht),
+        }));
+        vi.mocked(core.FifoEngine).mockImplementation(() =>
+            ({
+                processTrades: vi.fn(() => ({
+                    holdings: [],
+                    consumedHoldings: [],
+                    sales: [],
+                    warnings: [],
+                })),
+            }) as unknown as InstanceType<typeof core.FifoEngine>
+        );
     });
 
     it('renders the foreign bank accounts section', () => {
@@ -255,5 +305,371 @@ describe('Import page — savings balance ISIN field', () => {
 
         // The foreign accounts section should always be visible
         expect(screen.getByText('Foreign Bank Accounts')).toBeTruthy();
+    });
+});
+
+describe('Import page — Trading 212 import', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStore.foreignAccounts = [];
+        mockStore.holdings = [];
+        mockStore.sales = [];
+        mockStore.dividends = [];
+        mockStore.stockYield = [];
+        mockStore.brokerInterest = [];
+        mockStore.fxRates = {};
+        vi.mocked(core.populateSaleFxRates).mockImplementation((sales) => sales);
+        vi.mocked(core.resolveCountries).mockResolvedValue({ AAPL: 'САЩ' });
+        vi.mocked(core.resolveExchangeCodes).mockResolvedValue({ AAPL: 'NASDAQ' });
+        vi.mocked(core.calcDividendTax).mockReturnValue({ bgTaxDue: 0.5, whtCredit: 0.1 });
+    });
+
+    it('imports a BOM-prefixed Trading 212 CSV and enriches sales metadata', async () => {
+        const trading212Holding = {
+            id: 't212-1',
+            broker: 'Trading 212',
+            country: 'САЩ',
+            symbol: 'AAPL',
+            dateAcquired: '2025-01-01',
+            quantity: 1,
+            currency: 'USD',
+            unitPrice: 100,
+        };
+        const trading212Sale = {
+            id: 'sale-1',
+            broker: 'Trading 212',
+            country: 'САЩ',
+            symbol: 'AAPL',
+            dateAcquired: '2025-01-01',
+            dateSold: '2025-02-01',
+            quantity: 1,
+            currency: 'USD',
+            buyPrice: 100,
+            sellPrice: 110,
+            fxRateBuy: null,
+            fxRateSell: null,
+        };
+        const processTrades = vi.fn(() => ({
+            holdings: [trading212Holding],
+            consumedHoldings: [],
+            sales: [trading212Sale],
+            warnings: [],
+        }));
+
+        vi.mocked(core.FifoEngine).mockImplementation(() =>
+            ({
+                processTrades,
+            }) as unknown as InstanceType<typeof core.FifoEngine>
+        );
+        vi.mocked(core.parseTrading212Csv).mockReturnValue({
+            trades: [{
+                symbol: 'AAPL',
+                dateTime: '2025-02-01, 10:00:00',
+                quantity: -1,
+                price: 110,
+                proceeds: 110,
+                commission: 0,
+                currency: 'USD',
+            }],
+            dividends: [{
+                symbol: 'AAPL',
+                country: '',
+                date: '2025-03-01',
+                currency: 'USD',
+                grossAmount: 10,
+                withholdingTax: 2,
+                bgTaxDue: 0,
+                whtCredit: 0,
+            }],
+            interest: [{
+                date: '2025-01-31',
+                currency: 'EUR',
+                description: 'Interest on cash',
+                amount: 1.23,
+            }],
+            isinMap: { AAPL: 'US0378331005' },
+            cashAccountCurrencies: ['EUR'],
+        });
+
+        const { container } = render(<Import />);
+        const file = new File(
+            ['\uFEFFAction,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\n'],
+            'trading212.csv',
+            { type: 'text/csv' },
+        );
+        Object.defineProperty(file, 'text', {
+            value: vi.fn().mockResolvedValue(
+                '\uFEFFAction,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\n',
+            ),
+        });
+        uploadFile(container, file);
+
+        await waitFor(() => {
+            expect(mockStore.importHoldings).toHaveBeenCalled();
+        });
+
+        expect(screen.getByText('Trading 212 CSV does not include opening and closing cash balances. Enter them here for SPB-8 Section 03.')).toBeTruthy();
+        expect(screen.getByDisplayValue('Trading 212')).toBeTruthy();
+        expect(screen.getByDisplayValue('EUR')).toBeTruthy();
+        const countrySelect = screen.getAllByRole('combobox').find(
+            (element) => element instanceof HTMLSelectElement && Array.from(element.options).some(option => option.value === 'CY'),
+        );
+
+        expect(countrySelect).toBeTruthy();
+        expect((countrySelect as HTMLSelectElement).value).toBe('CY');
+
+        expect(core.parseTrading212Csv).toHaveBeenCalled();
+        expect(core.resolveCountries).toHaveBeenCalledWith(
+            [{ symbol: 'AAPL', currency: 'USD' }, { symbol: 'AAPL', currency: 'USD' }],
+            expect.any(Function),
+            {},
+            { AAPL: 'US0378331005' },
+        );
+        expect(core.resolveExchangeCodes).toHaveBeenCalledWith(
+            [{ symbol: 'AAPL', currency: 'USD' }],
+            expect.any(Function),
+        );
+        expect(processTrades).toHaveBeenCalled();
+        const processTradesCalls = processTrades.mock.calls as unknown[][];
+
+        expect(processTradesCalls[0]?.[0]).toEqual([
+            expect.objectContaining({
+                symbol: 'AAPL',
+                exchange: 'NASDAQ',
+                saleTaxClassification: 'taxable',
+            }),
+        ]);
+        expect(processTradesCalls[0]?.[1]).toBe('Trading 212');
+        expect(processTradesCalls[0]?.[2]).toEqual({ AAPL: 'САЩ' });
+        expect(mockStore.importHoldings).toHaveBeenCalledWith([
+            expect.objectContaining({
+                broker: 'Trading 212',
+                source: { type: 'Trading 212', file: 'trading212.csv' },
+                isin: 'US0378331005',
+            }),
+        ]);
+        expect(mockStore.importSales).toHaveBeenCalledWith([
+            expect.objectContaining({
+                source: { type: 'Trading 212', file: 'trading212.csv' },
+            }),
+        ]);
+        expect(mockStore.importDividends).toHaveBeenCalledWith([
+            expect.objectContaining({
+                country: 'САЩ',
+                bgTaxDue: 0.5,
+                whtCredit: 0.1,
+                source: { type: 'Trading 212', file: 'trading212.csv' },
+            }),
+        ]);
+        expect(mockStore.importBrokerInterest).toHaveBeenCalledWith([
+            {
+                broker: 'Trading 212',
+                currency: 'EUR',
+                entries: [
+                    expect.objectContaining({
+                        source: { type: 'Trading 212', file: 'trading212.csv' },
+                    }),
+                ],
+            },
+        ]);
+    });
+
+    it('re-import replaces old Trading 212 holdings, sales, dividends, and interest', async () => {
+        mockStore.holdings = [
+            {
+                id: 'old-t212',
+                broker: 'Trading 212',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                dateAcquired: '2024-01-01',
+                quantity: 10,
+                currency: 'USD',
+                unitPrice: 90,
+                source: { type: 'Trading 212', file: 'old.csv' },
+            },
+            {
+                id: 'ib-1',
+                broker: 'IB',
+                country: 'САЩ',
+                symbol: 'MSFT',
+                dateAcquired: '2024-01-01',
+                quantity: 2,
+                currency: 'USD',
+                unitPrice: 200,
+                source: { type: 'IB', file: 'ib.csv' },
+            },
+        ];
+        mockStore.sales = [
+            {
+                id: 'old-sale',
+                broker: 'Trading 212',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                dateAcquired: '2024-01-01',
+                dateSold: '2024-02-01',
+                quantity: 1,
+                currency: 'USD',
+                buyPrice: 90,
+                sellPrice: 100,
+                fxRateBuy: null,
+                fxRateSell: null,
+                source: { type: 'Trading 212', file: 'old.csv' },
+            },
+            {
+                id: 'ib-sale',
+                broker: 'IB',
+                country: 'САЩ',
+                symbol: 'MSFT',
+                dateAcquired: '2024-01-01',
+                dateSold: '2024-02-01',
+                quantity: 1,
+                currency: 'USD',
+                buyPrice: 200,
+                sellPrice: 210,
+                fxRateBuy: null,
+                fxRateSell: null,
+                source: { type: 'IB', file: 'ib.csv' },
+            },
+        ];
+        mockStore.dividends = [
+            {
+                symbol: 'AAPL',
+                country: 'САЩ',
+                date: '2024-03-01',
+                currency: 'USD',
+                grossAmount: 1,
+                withholdingTax: 0,
+                bgTaxDue: 0.05,
+                whtCredit: 0,
+                source: { type: 'Trading 212', file: 'old.csv' },
+            },
+            {
+                symbol: 'MSFT',
+                country: 'САЩ',
+                date: '2024-03-01',
+                currency: 'USD',
+                grossAmount: 2,
+                withholdingTax: 0,
+                bgTaxDue: 0.1,
+                whtCredit: 0,
+                source: { type: 'IB', file: 'ib.csv' },
+            },
+        ];
+        mockStore.brokerInterest = [
+            {
+                broker: 'Trading 212',
+                currency: 'EUR',
+                entries: [{ date: '2024-01-01', currency: 'EUR', description: 'Interest', amount: 1 }],
+            },
+            {
+                broker: 'IB',
+                currency: 'USD',
+                entries: [{ date: '2024-01-01', currency: 'USD', description: 'Interest', amount: 2 }],
+            },
+        ];
+
+        const processTrades = vi.fn(() => ({
+            holdings: [{
+                id: 'new-t212',
+                broker: 'Trading 212',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                dateAcquired: '2025-01-01',
+                quantity: 5,
+                currency: 'USD',
+                unitPrice: 120,
+            }],
+            consumedHoldings: [],
+            sales: [{
+                id: 'new-sale',
+                broker: 'Trading 212',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                dateAcquired: '2025-01-01',
+                dateSold: '2025-02-01',
+                quantity: 1,
+                currency: 'USD',
+                buyPrice: 120,
+                sellPrice: 130,
+                fxRateBuy: null,
+                fxRateSell: null,
+            }],
+            warnings: [],
+        }));
+
+        vi.mocked(core.FifoEngine).mockImplementation(() =>
+            ({
+                processTrades,
+            }) as unknown as InstanceType<typeof core.FifoEngine>
+        );
+        vi.mocked(core.parseTrading212Csv).mockReturnValue({
+            trades: [{
+                symbol: 'AAPL',
+                dateTime: '2025-02-01, 10:00:00',
+                quantity: -1,
+                price: 130,
+                proceeds: 130,
+                commission: 0,
+                currency: 'USD',
+            }],
+            dividends: [{
+                symbol: 'AAPL',
+                country: '',
+                date: '2025-03-01',
+                currency: 'USD',
+                grossAmount: 3,
+                withholdingTax: 0,
+                bgTaxDue: 0,
+                whtCredit: 0,
+            }],
+            interest: [],
+            isinMap: { AAPL: 'US0378331005' },
+            cashAccountCurrencies: ['EUR'],
+        });
+
+        const { container } = render(<Import />);
+        const file = new File(
+            ['Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\n'],
+            'trading212.csv',
+            { type: 'text/csv' },
+        );
+        Object.defineProperty(file, 'text', {
+            value: vi.fn().mockResolvedValue(
+                'Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Currency conversion fee,Currency (Currency conversion fee)\n',
+            ),
+        });
+        uploadFile(container, file);
+
+        await waitFor(() => {
+            expect(mockStore.importHoldings).toHaveBeenCalled();
+        });
+
+        expect(screen.getAllByDisplayValue('Trading 212')).toHaveLength(1);
+
+        const fifoEngineCalls = vi.mocked(core.FifoEngine).mock.calls as unknown[][];
+        const seededHoldings = fifoEngineCalls[0]?.[0];
+
+        expect(seededHoldings).toEqual([
+            expect.objectContaining({ broker: 'IB', symbol: 'MSFT' }),
+        ]);
+        expect(mockStore.importHoldings).toHaveBeenCalledWith([
+            expect.objectContaining({ broker: 'IB', symbol: 'MSFT' }),
+            expect.objectContaining({ broker: 'Trading 212', symbol: 'AAPL', source: { type: 'Trading 212', file: 'trading212.csv' } }),
+        ]);
+        expect(mockStore.importSales).toHaveBeenCalledWith([
+            expect.objectContaining({ broker: 'IB', symbol: 'MSFT' }),
+            expect.objectContaining({ broker: 'Trading 212', symbol: 'AAPL' }),
+        ]);
+        expect(mockStore.importDividends).toHaveBeenCalledWith([
+            expect.objectContaining({ symbol: 'MSFT', source: { type: 'IB', file: 'ib.csv' } }),
+            expect.objectContaining({ symbol: 'AAPL', source: { type: 'Trading 212', file: 'trading212.csv' } }),
+        ]);
+        expect(mockStore.importBrokerInterest).toHaveBeenCalledWith([
+            {
+                broker: 'IB',
+                currency: 'USD',
+                entries: [{ date: '2024-01-01', currency: 'USD', description: 'Interest', amount: 2 }],
+            },
+        ]);
     });
 });

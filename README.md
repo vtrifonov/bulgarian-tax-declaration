@@ -8,7 +8,7 @@
 
 Desktop application for Bulgarian taxpayers (expats/investors) to prepare their annual tax declaration (Годишна данъчна декларация по чл. 50 от ЗДДФЛ).
 
-Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency and fund positions for SPB-8 Section 04), Revolut investments (trades), E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements), and Bondora (P2P lending interest and account balances from Tax Report PDF). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration. The Import page also allows manual entry of foreign bank account balances (e.g. Revolut, Wise current accounts) for SPB-8 Section 03. Country resolution uses ISIN domicile prefix when available (more accurate than exchange for ETFs).
+Parses Interactive Brokers (trades, dividends, WHT, stock yield, interest), Revolut savings (interest per currency and fund positions for SPB-8 Section 04), Revolut investments (trades), Trading 212 (trades, dividends, cash interest), E*TRADE/Morgan Stanley (holdings, interest, cash balances from PDF statements), and Bondora (P2P lending interest and account balances from Tax Report PDF). Calculates Bulgarian taxes using FIFO lot matching and exports a formatted Excel declaration. The Import page also allows manual entry of foreign bank account balances (e.g. Revolut, Wise current accounts) for SPB-8 Section 03. Country resolution uses ISIN domicile prefix when available (more accurate than exchange for ETFs).
 
 Holdings in the workspace represent end-of-period open positions. Trades that open and close within the same imported statement generate sales, but do not remain in holdings. FIFO matching is scoped to the same `symbol` and `currency`, and only against lots from the same broker or brokerless legacy holdings.
 
@@ -45,7 +45,7 @@ bulgarian-tax-declaration/
 ├── packages/
 │   ├── core/          # Pure TypeScript library (no UI deps)
 │   │   ├── src/
-│   │   │   ├── providers/      # BrokerProvider registry (IB, Revolut, E*TRADE, etc.)
+│   │   │   ├── providers/      # BrokerProvider registry (IB, Revolut, Trading 212, E*TRADE, etc.)
 │   │   │   ├── parsers/       # CSV/Excel parsers, PDF parsers, WHT matcher
 │   │   │   ├── fx/            # ECB API client, FX cache, gap-fill
 │   │   │   ├── fifo/          # FIFO lot matching engine
@@ -225,6 +225,7 @@ WHT credit formula: `tax_due = max(0, bg_rate × gross - wht_paid)` — excess f
 - **Interactive Brokers**: CSV activity statement — trades, dividends, WHT, stock yield, interest
 - **Revolut Savings**: Statement per currency fund — interest paid, service fees
 - **Revolut Investments**: Account statement — trades (buys/sells)
+- **Trading 212**: Annual account statement CSV — trades, dividends, cash interest
 - **E*TRADE/Morgan Stanley**: PDF statement — holdings, interest, cash balances
 - **Bondora**: Tax Report PDF — P2P lending interest, account balances
 - **FX Rates**: Auto-fetched from ECB API (cached locally)
@@ -258,6 +259,7 @@ Current provider behavior:
 
 - Interactive Brokers: classification comes from the statement `Listing Exch`
 - Revolut investments: classification is inferred during import via OpenFIGI exchange resolution
+- Trading 212: classification is inferred during import via OpenFIGI exchange resolution
 - Manual override: the Sales table lets you change `Данъчно третиране` directly if venue detection is missing or wrong
 
 Contributor rule for new providers:
