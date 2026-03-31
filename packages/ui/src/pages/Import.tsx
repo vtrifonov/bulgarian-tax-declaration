@@ -10,6 +10,7 @@ import {
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
     parseRevolutSavingsPositions,
+    parseTrading212Csv,
     populateSaleFxRates,
     providers,
     resolveCountries,
@@ -53,6 +54,17 @@ const COUNTRY_OPTIONS = [
     { code: 'LV', name: 'Latvia' },
     { code: 'MT', name: 'Malta' },
 ];
+
+const TRADING_212_COUNTRY = 'CY';
+
+interface PendingForeignAccountForm {
+    broker: string;
+    currency: string;
+    country: string;
+    openingBalance: string;
+    closingBalance: string;
+    warning?: string;
+}
 
 /** Get a fetch function that bypasses CORS — Tauri HTTP plugin in app, Vite proxy in browser */
 function getCorsFetch(): typeof fetch {
@@ -141,25 +153,55 @@ function mergeFifoResultsWithExistingHoldings(
     return [...survivingOriginals, ...consumedExisting, ...newHoldings];
 }
 
+function enqueueForeignAccountPrompts(
+    existingForms: PendingForeignAccountForm[],
+    existingAccounts: NonNullable<ReturnType<typeof useAppStore.getState>['foreignAccounts']>,
+    additions: PendingForeignAccountForm[],
+): PendingForeignAccountForm[] {
+    const seen = new Set([
+        ...existingForms.map(acc => `${acc.broker}|${acc.currency}`),
+        ...existingAccounts.map(acc => `${acc.broker}|${acc.currency}`),
+    ]);
+    const queued = [...existingForms];
+
+    for (const account of additions) {
+        const key = `${account.broker}|${account.currency}`;
+
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        queued.push(account);
+    }
+
+    return queued;
+}
+
 function detectFileType(content: string, filename: string): ImportedFile['type'] | null {
+    const normalized = content.replace(/^\uFEFF/, '');
+
     // IB Activity statement
-    if (content.startsWith('Statement,Header,Field Name') || content.includes('Trades,Header,DataDiscriminator')) {
+    if (normalized.startsWith('Statement,Header,Field Name') || normalized.includes('Trades,Header,DataDiscriminator')) {
         return 'ib';
     }
 
     // Revolut Savings interest statement
-    if (filename.startsWith('savings-statement') || content.includes('Interest PAID')) {
+    if (filename.startsWith('savings-statement') || normalized.includes('Interest PAID')) {
         return 'revolut';
     }
 
     // Revolut account statement (current account with balance column)
-    if (content.startsWith('Type,Product,Started Date') && content.includes('Balance')) {
+    if (normalized.startsWith('Type,Product,Started Date') && normalized.includes('Balance')) {
         return 'revolut-account';
     }
 
     // Revolut Investments yearly statement
-    if (content.startsWith('Date,Ticker,Type')) {
+    if (normalized.startsWith('Date,Ticker,Type')) {
         return 'revolut-investments';
+    }
+
+    if (normalized.startsWith('Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares')) {
+        return 'trading212';
     }
 
     return null;
@@ -173,6 +215,8 @@ function importPriority(type: ImportedFile['type'] | null): number {
             return 20;
         case 'revolut-account':
             return 30;
+        case 'trading212':
+            return 35;
         case 'revolut':
             return 40;
         case 'etrade':
@@ -203,13 +247,7 @@ export function Import() {
         fileName: string;
     }[]>([]);
 
-    const [bankAccounts, setBankAccounts] = useState<{
-        broker: string;
-        currency: string;
-        country: string;
-        openingBalance: string;
-        closingBalance: string;
-    }[]>([]);
+    const [bankAccounts, setBankAccounts] = useState<PendingForeignAccountForm[]>([]);
 
     const {
         importHoldings,
@@ -239,6 +277,7 @@ export function Import() {
         for (const f of importedFiles) {
             if (f.type === 'ib') brokers.add('Interactive Brokers');
             if (f.type === 'revolut' || f.type === 'revolut-investments' || f.type === 'revolut-account') brokers.add('Revolut');
+            if (f.type === 'trading212') brokers.add('Trading 212');
             if (f.type === 'etrade') brokers.add('E*TRADE');
             if (f.type === 'bondora') brokers.add('Bondora');
         }
@@ -740,7 +779,7 @@ export function Import() {
                 name: file.name,
                 type: 'ib',
                 status: 'error',
-                message: 'Unrecognized CSV format. Expected IB activity statement, Revolut savings/investments/account CSV.',
+                message: 'Unrecognized CSV format. Expected IB, Revolut, or Trading 212 CSV export.',
             });
 
             return;
@@ -966,6 +1005,130 @@ export function Import() {
                     status: 'success',
                     message:
                         `${buys} buys, ${sells} sells → ${newSales.length} matched sales, ${finalHoldings.length} holdings (${holdingsSource}), ${allDividends.length} dividends, ${parsed.stockYield.length} stock yield, ${parsed.interest.length} interest${warnMsg}${dupMsg}`,
+                });
+            } else if (fileType === 'trading212') {
+                const parsed = parseTrading212Csv(content);
+
+                if (parsed.trades.length === 0 && parsed.dividends.length === 0 && parsed.interest.length === 0) {
+                    addImportedFile({
+                        name: file.name,
+                        type: 'trading212',
+                        status: 'error',
+                        message: 'No Trading 212 trades, dividends, or interest entries found in this file.',
+                    });
+
+                    return;
+                }
+
+                const allSymbols = [
+                    ...parsed.trades.map(trade => ({ symbol: trade.symbol, currency: trade.currency })),
+                    ...parsed.dividends.map(dividend => ({ symbol: dividend.symbol, currency: dividend.currency })),
+                ];
+                const countryMap = await resolveCountries(allSymbols, getCorsFetch(), {}, parsed.isinMap);
+                const exchangeMap = await resolveExchangeCodes(
+                    parsed.trades.map(trade => ({ symbol: trade.symbol, currency: trade.currency })),
+                    getCorsFetch(),
+                );
+                const fifoTrades = parsed.trades.map(trade => ({
+                    ...trade,
+                    exchange: exchangeMap[trade.symbol],
+                    saleTaxClassification: classifySaleByExchange(exchangeMap[trade.symbol]),
+                }));
+
+                for (const dividend of parsed.dividends) {
+                    dividend.country = countryMap[dividend.symbol] ?? '';
+                    const { bgTaxDue, whtCredit } = calcDividendTax(dividend.grossAmount, dividend.withholdingTax);
+
+                    dividend.bgTaxDue = bgTaxDue;
+                    dividend.whtCredit = whtCredit;
+                    dividend.source = { type: 'Trading 212', file: file.name };
+                }
+
+                for (const entry of parsed.interest) {
+                    entry.source = { type: 'Trading 212', file: file.name };
+                }
+
+                const currentHoldings = useAppStore.getState().holdings;
+                const existingNonTrading212Holdings = currentHoldings.filter(h => h.source?.type !== 'Trading 212');
+                const fifo = new FifoEngine([...existingNonTrading212Holdings]);
+                const { holdings: fifoHoldings, consumedHoldings, sales: newSales, warnings } = fifo.processTrades(
+                    fifoTrades,
+                    'Trading 212',
+                    countryMap,
+                );
+                const mergedHoldings = mergeFifoResultsWithExistingHoldings(existingNonTrading212Holdings, fifoHoldings, consumedHoldings);
+
+                for (const holding of mergedHoldings) {
+                    if (holding.broker === 'Trading 212' && !holding.source) {
+                        holding.source = { type: 'Trading 212', file: file.name };
+                    }
+                    if (!holding.isin && parsed.isinMap[holding.symbol]) {
+                        holding.isin = parsed.isinMap[holding.symbol];
+                    }
+                }
+                fillMissingIsins(mergedHoldings);
+                importHoldings(mergedHoldings);
+
+                for (const sale of newSales) {
+                    if (!sale.source) {
+                        sale.source = { type: 'Trading 212', file: file.name };
+                    }
+                }
+                const existingSales = useAppStore.getState().sales.filter(s => s.source?.type !== 'Trading 212');
+                const salesWithFx = await hydrateSalesFxRates(newSales);
+
+                importSales([...existingSales, ...salesWithFx]);
+
+                const existingDividends = useAppStore.getState().dividends.filter(d => d.source?.type !== 'Trading 212');
+
+                importDividends([...existingDividends, ...parsed.dividends]);
+
+                const trading212InterestByCurrency = new Map<string, typeof parsed.interest>();
+
+                for (const entry of parsed.interest) {
+                    const list = trading212InterestByCurrency.get(entry.currency) ?? [];
+
+                    list.push(entry);
+                    trading212InterestByCurrency.set(entry.currency, list);
+                }
+
+                const existingInterest = useAppStore.getState().brokerInterest.filter(bi => bi.broker !== 'Trading 212');
+                const groupedInterest = Array.from(trading212InterestByCurrency.entries()).map(([currency, entries]) => ({
+                    broker: 'Trading 212' as const,
+                    currency,
+                    entries,
+                }));
+
+                importBrokerInterest([...existingInterest, ...groupedInterest]);
+
+                if (parsed.cashAccountCurrencies.length > 0) {
+                    const existingAccounts = useAppStore.getState().foreignAccounts ?? [];
+
+                    setBankAccounts(prev =>
+                        enqueueForeignAccountPrompts(
+                            prev,
+                            existingAccounts,
+                            parsed.cashAccountCurrencies.map(currency => ({
+                                broker: 'Trading 212',
+                                currency,
+                                country: TRADING_212_COUNTRY,
+                                openingBalance: '',
+                                closingBalance: '',
+                                warning: t('import.trading212BalanceWarning'),
+                            })),
+                        )
+                    );
+                }
+
+                const buys = parsed.trades.filter(trade => trade.quantity > 0).length;
+                const sells = parsed.trades.filter(trade => trade.quantity < 0).length;
+                const warnMsg = warnings.length > 0 ? ` (${warnings.length} warnings)` : '';
+
+                addImportedFile({
+                    name: file.name,
+                    type: 'trading212',
+                    status: 'success',
+                    message: `${buys} buys, ${sells} sells → ${newSales.length} sales, ${parsed.dividends.length} dividends, ${parsed.interest.length} interest${warnMsg}`,
                 });
             } else if (fileType === 'revolut-investments') {
                 const { trades, holdings: parsedHoldings } = parseRevolutInvestmentsCsv(content);
@@ -1404,6 +1567,8 @@ export function Import() {
                                                     ? 'var(--accent)'
                                                     : f.type === 'revolut-investments'
                                                     ? '#6f42c1'
+                                                    : f.type === 'trading212'
+                                                    ? '#0ea5a4'
                                                     : f.type === 'etrade'
                                                     ? '#ff6b35'
                                                     : '#28a745',
@@ -1412,7 +1577,15 @@ export function Import() {
                                                 borderRadius: '3px',
                                             }}
                                         >
-                                            {f.type === 'ib' ? 'IB' : f.type === 'revolut-investments' ? 'Revolut Inv.' : f.type === 'etrade' ? 'E*TRADE' : 'Revolut'}
+                                            {f.type === 'ib'
+                                                ? 'IB'
+                                                : f.type === 'revolut-investments'
+                                                ? 'Revolut Inv.'
+                                                : f.type === 'trading212'
+                                                ? 'Trading 212'
+                                                : f.type === 'etrade'
+                                                ? 'E*TRADE'
+                                                : 'Revolut'}
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -1621,6 +1794,11 @@ export function Import() {
                                     border: '1px solid var(--accent)',
                                 }}
                             >
+                                {acc.warning && (
+                                    <div style={{ flexBasis: '100%', fontSize: '0.85rem', color: '#f4c27a' }}>
+                                        {acc.warning}
+                                    </div>
+                                )}
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                     {t('import.broker')}:
                                     <input
@@ -1774,7 +1952,14 @@ export function Import() {
                         ))}
 
                         <button
-                            onClick={() => setBankAccounts(prev => [...prev, { broker: '', currency: '', country: 'LT', openingBalance: '', closingBalance: '' }])}
+                            onClick={() =>
+                                setBankAccounts(prev => [...prev, {
+                                    broker: '',
+                                    currency: '',
+                                    country: 'LT',
+                                    openingBalance: '',
+                                    closingBalance: '',
+                                }])}
                             style={{
                                 padding: '0.4rem 1rem',
                                 backgroundColor: 'var(--bg-secondary)',

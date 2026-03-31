@@ -29,8 +29,8 @@
 - **Holdings semantics**: active holdings represent end-of-period open positions. Lots that are bought and fully sold within the same imported statement must produce `sales`, but must not remain in `holdings`. Only previously imported holdings may be carried forward as `consumedByFifo` rows for traceability.
 - **FIFO matching scope**: match by `symbol` + `currency`, and only against lots from the same broker or brokerless legacy holdings. Do not match a provider's current-statement trades against the same statement's end-of-period holdings snapshot (`Open Positions`, broker holdings summary, etc.).
 - **Sale tax classification**: preserve sale venue metadata whenever possible. Sales executed on regulated EU markets go to `Приложение 13` and must not affect `Приложение 5` tax totals. When venue detection is unavailable, default to taxable and let the user correct the sales row manually.
-- **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
-- **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`, then `Bondora`.
+- **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, Trading 212, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
+- **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `Trading 212`, then `E*TRADE`, then `Bondora`.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
 
 ### EU regulated sales contract
@@ -275,7 +275,7 @@ export const yourProvider: BrokerProvider = {
 };
 ```
 
-Examples of implemented providers: Interactive Brokers, Revolut, E*TRADE, Bondora.
+Examples of implemented providers: Interactive Brokers, Revolut, Trading 212, E*TRADE, Bondora.
 
 ### Step 2: Handle dividends and tax (if applicable)
 If your provider parses dividends, you MUST:
@@ -303,6 +303,7 @@ If your provider parses trades that can become `sales`, you MUST decide whether 
 - Existing patterns in this repo:
   - Interactive Brokers: derive from `Listing Exch`
   - Revolut investments: resolve exchange code through OpenFIGI during import
+  - Trading 212: resolve exchange code through OpenFIGI during import
 - If the provider has no reliable venue field:
   - default to `'taxable'`
   - preserve any best-effort `exchange`
@@ -339,10 +340,10 @@ Add export instructions in `packages/core/src/i18n/bg.ts` and `en.ts`:
 - Verify 70% coverage maintained
 
 ### Step 8: UI integration (if not using provider registry auto-detection)
-The Import page (`packages/ui/src/pages/Import.tsx`) auto-detects files using the provider registry. If your `detectFile()` works correctly, **no UI changes needed** — the file will be matched and parsed automatically.
+The Import page (`packages/ui/src/pages/Import.tsx`) currently uses explicit text-file detection and per-provider processing for CSV imports. Adding a provider to the core registry is necessary, but not always sufficient for UI import support.
 
 If you need custom UI (e.g., currency selection before parsing), update Import.tsx:
-- Detection happens via the provider registry loop (no hardcoded if/else needed)
+- Detection currently happens in `detectFileType()` plus provider-specific branches in `processFile()`
 - Country resolution uses async `resolveCountries()` with OpenFIGI fallback
 - FIFO engine processes trades against existing holdings
 

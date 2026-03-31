@@ -23,6 +23,7 @@ export {
 export { InMemoryFxCache } from './fx/fx-cache.js';
 export type { FxCache } from './fx/fx-cache.js';
 export { parseIBCsv } from './parsers/ib-csv.js';
+export { parseTrading212Csv } from './parsers/trading212.js';
 export {
     parseRevolutCsv,
     parseRevolutSavingsPositions,
@@ -51,6 +52,7 @@ export {
     restoreCountryCache,
 } from './country-map.js';
 export { providers } from './providers/registry.js';
+export { trading212Provider } from './providers/trading212.js';
 export type {
     BinaryFileHandler,
     BrokerProvider,

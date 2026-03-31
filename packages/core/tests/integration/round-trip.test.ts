@@ -31,6 +31,7 @@ import {
     parseRevolutCsv,
     parseRevolutInvestmentsCsv,
     parseRevolutSavingsPositions,
+    parseTrading212Csv,
     populateSaleFxRates,
     resolveCountry,
     resolveIsinSync,
@@ -2322,6 +2323,59 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 expect(reimported.holdings[i].quantity).toBeCloseTo(holdings[i].quantity, 6);
                 expect(reimported.holdings[i].unitPrice).toBeCloseTo(holdings[i].unitPrice, 2);
             }
+        });
+    });
+
+    describe('Test 26b: Trading 212 only (no prior holdings) — trades + dividends + cash interest', () => {
+        it('parses Trading 212 CSV, generates Excel, re-imports and verifies', async () => {
+            const csv = readFileSync(join(SAMPLES, 'trading212.csv'), 'utf-8');
+            const parsed = parseTrading212Csv(csv);
+            const countryMap: Record<string, string> = {};
+
+            for (const trade of parsed.trades) {
+                countryMap[trade.symbol] = resolveCountryWithFigi(trade.symbol);
+            }
+
+            for (const dividend of parsed.dividends) {
+                dividend.country = resolveCountryWithFigi(dividend.symbol);
+                const { bgTaxDue, whtCredit } = calcDividendTax(dividend.grossAmount, dividend.withholdingTax);
+
+                dividend.bgTaxDue = bgTaxDue;
+                dividend.whtCredit = whtCredit;
+                countryMap[dividend.symbol] = dividend.country;
+            }
+
+            const fifo = new FifoEngine([]);
+            const { holdings, sales } = fifo.processTrades(parsed.trades, 'Trading 212', countryMap);
+            const state: AppState = {
+                taxYear: 2025,
+                baseCurrency: 'BGN',
+                language: 'bg',
+                holdings,
+                sales,
+                dividends: parsed.dividends,
+                stockYield: [],
+                brokerInterest: groupInterestByCurrency('Trading 212', parsed.interest),
+                fxRates: {},
+                manualEntries: [],
+            };
+
+            expect(holdings).toHaveLength(2);
+            expect(sales).toHaveLength(1);
+            expect(parsed.dividends).toHaveLength(2);
+            expect(totalInterestEntries(state.brokerInterest)).toBe(1);
+
+            const buffer = await generateExcel(state);
+            const reimported = await importFullExcel(buffer.buffer as ArrayBuffer);
+
+            expect(reimported.holdings).toHaveLength(2);
+            expect(reimported.sales).toHaveLength(1);
+            expect(reimported.dividends).toHaveLength(2);
+            expect(totalInterestEntries(reimported.brokerInterest)).toBe(1);
+            expect(reimported.holdings.find(h => h.symbol === 'AAPL')?.quantity).toBeCloseTo(1, 8);
+            expect(reimported.holdings.find(h => h.symbol === 'SAP')?.quantity).toBeCloseTo(5, 8);
+            expect(reimported.sales[0].symbol).toBe('AAPL');
+            expect(reimported.sales[0].quantity).toBeCloseTo(1, 8);
         });
     });
 
