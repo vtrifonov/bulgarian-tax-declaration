@@ -40,6 +40,7 @@ const EU_REGULATED_EXCHANGES = new Set([
     'SM',
     'TH',
     'WSE',
+    'XAMS',
 ]);
 
 export function classifySaleByExchange(exchange?: string): SaleTaxClassification {

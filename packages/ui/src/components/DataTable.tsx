@@ -4,6 +4,7 @@ import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
+    type Row,
     type SortingState,
     useReactTable,
 } from '@tanstack/react-table';
@@ -358,6 +359,21 @@ export function DataTable<TData extends object>({
         return warningRows?.has(idx) ?? false;
     });
 
+    const getSourceRowIndex = (row: Row<TData>): number => {
+        const original = row.original as Record<string, unknown>;
+        const id = typeof original.id === 'string' ? original.id : null;
+
+        if (id) {
+            return data.findIndex((item) => {
+                const candidate = item as Record<string, unknown>;
+
+                return candidate.id === id;
+            });
+        }
+
+        return data.indexOf(row.original);
+    };
+
     const renderEditInput = (
         columnId: string,
         meta: NonNullable<ColumnDef<TData>['meta']>,
@@ -450,6 +466,9 @@ export function DataTable<TData extends object>({
                         if (e.key === 'Escape') {
                             e.preventDefault();
                             handleCancelRow();
+                        } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveRow();
                         }
                     }}
                 >
@@ -601,7 +620,11 @@ export function DataTable<TData extends object>({
                 </thead>
                 <tbody>
                     {filteredRows.map((row) => {
-                        const rowIndex = row.index;
+                        const rowIndex = getSourceRowIndex(row);
+
+                        if (rowIndex === -1) {
+                            return null;
+                        }
                         const isEditing = editingRowIndex === rowIndex;
                         const hasWarning = warningRows?.has(rowIndex) ?? false;
                         const isConsumed = strikeThroughRows?.has(rowIndex) ?? false;

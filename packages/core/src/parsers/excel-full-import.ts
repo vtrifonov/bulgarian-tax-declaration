@@ -172,7 +172,7 @@ function readSalesSheet(wb: ExcelJS.Workbook): Sale[] {
             symbol,
             country: cellStr(row.getCell(countryCol)),
             exchange: exchangeCol > 0 ? cellStr(row.getCell(exchangeCol)) || undefined : undefined,
-            saleTaxClassification: taxTreatment === 'EU regulated market' ? 'eu-regulated-market' : undefined,
+            saleTaxClassification: taxTreatment === 'EU regulated market' ? 'eu-regulated-market' : 'taxable',
             dateAcquired: cellDate(row.getCell(acquiredCol)),
             dateSold: cellDate(row.getCell(soldCol)),
             quantity,

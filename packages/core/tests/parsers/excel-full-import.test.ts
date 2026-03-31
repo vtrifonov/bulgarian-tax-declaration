@@ -102,4 +102,140 @@ describe('importFullExcel SPB-8 personal data', () => {
             },
         });
     });
+
+    it('defaults missing sales tax treatment column to taxable', async () => {
+        const wb = new ExcelJS.Workbook();
+        const sales = wb.addWorksheet('Продажби');
+
+        sales.addRow([
+            'Брокер',
+            'Символ',
+            'Държава',
+            'Дата покупка',
+            'Дата продажба',
+            'Кол.',
+            'Валута',
+            'Цена покупка',
+            'Цена продажба',
+            'Курс покупка',
+            'Курс продажба',
+            'Приходи',
+            'Разходи',
+        ]);
+        sales.addRow([
+            'IB',
+            'AAPL',
+            'САЩ',
+            '2024-01-15',
+            '2025-03-10',
+            2,
+            'USD',
+            100,
+            150,
+            1.8,
+            1.95,
+            300,
+            200,
+        ]);
+
+        const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+        const imported = await importFullExcel(buffer.buffer as ArrayBuffer);
+
+        expect(imported.sales).toHaveLength(1);
+        expect(imported.sales[0]?.saleTaxClassification).toBe('taxable');
+    });
+
+    it('defaults blank sales tax treatment cell to taxable', async () => {
+        const wb = new ExcelJS.Workbook();
+        const sales = wb.addWorksheet('Продажби');
+
+        sales.addRow([
+            'Брокер',
+            'Символ',
+            'Държава',
+            'Дата покупка',
+            'Дата продажба',
+            'Кол.',
+            'Валута',
+            'Цена покупка',
+            'Цена продажба',
+            'Курс покупка',
+            'Курс продажба',
+            'Приходи',
+            'Разходи',
+            'Борса',
+            'Данъчно третиране',
+        ]);
+        sales.addRow([
+            'Revolut',
+            'ASML',
+            'Нидерландия',
+            '2024-01-15',
+            '2025-03-10',
+            1,
+            'EUR',
+            700,
+            800,
+            1.95583,
+            1.95583,
+            800,
+            700,
+            'XAMS',
+            '',
+        ]);
+
+        const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+        const imported = await importFullExcel(buffer.buffer as ArrayBuffer);
+
+        expect(imported.sales).toHaveLength(1);
+        expect(imported.sales[0]?.saleTaxClassification).toBe('taxable');
+        expect(imported.sales[0]?.exchange).toBe('XAMS');
+    });
+
+    it('restores EU regulated market sales classification from the sales sheet', async () => {
+        const wb = new ExcelJS.Workbook();
+        const sales = wb.addWorksheet('Продажби');
+
+        sales.addRow([
+            'Брокер',
+            'Символ',
+            'Държава',
+            'Дата покупка',
+            'Дата продажба',
+            'Кол.',
+            'Валута',
+            'Цена покупка',
+            'Цена продажба',
+            'Курс покупка',
+            'Курс продажба',
+            'Приходи',
+            'Разходи',
+            'Борса',
+            'Данъчно третиране',
+        ]);
+        sales.addRow([
+            'Revolut',
+            'ASML',
+            'Нидерландия',
+            '2024-01-15',
+            '2025-03-10',
+            1,
+            'EUR',
+            700,
+            800,
+            1.95583,
+            1.95583,
+            800,
+            700,
+            'XAMS',
+            'EU regulated market',
+        ]);
+
+        const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+        const imported = await importFullExcel(buffer.buffer as ArrayBuffer);
+
+        expect(imported.sales).toHaveLength(1);
+        expect(imported.sales[0]?.saleTaxClassification).toBe('eu-regulated-market');
+        expect(imported.sales[0]?.exchange).toBe('XAMS');
+    });
 });
