@@ -10,6 +10,7 @@ import {
     EXCHANGE_COUNTRY,
     resolveCountries,
     resolveCountrySync,
+    resolveExchangeCodes,
 } from '../src/country-map.js';
 
 afterEach(() => {
@@ -120,6 +121,40 @@ describe('resolveCountries (async batch)', () => {
         const result = await resolveCountries([{ symbol: 'OFFLINE1', currency: 'USD' }]);
 
         expect(result['OFFLINE1']).toBe('');
+        vi.unstubAllGlobals();
+    });
+});
+
+describe('resolveExchangeCodes', () => {
+    it('returns exchange codes from OpenFIGI', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                headers: new Headers(),
+                json: () => Promise.resolve([{ data: [{ exchCode: 'US' }] }]),
+            }),
+        );
+
+        const result = await resolveExchangeCodes([{ symbol: 'AAPL', currency: 'USD' }]);
+
+        expect(result['AAPL']).toBe('US');
+        vi.unstubAllGlobals();
+    });
+
+    it('uses provider-supplied exchanges before OpenFIGI', async () => {
+        const mockFetch = vi.fn();
+
+        vi.stubGlobal('fetch', mockFetch);
+
+        const result = await resolveExchangeCodes(
+            [{ symbol: 'CSPX', currency: 'EUR' }],
+            fetch,
+            { CSPX: 'IBIS' },
+        );
+
+        expect(result['CSPX']).toBe('IBIS');
+        expect(mockFetch).not.toHaveBeenCalled();
         vi.unstubAllGlobals();
     });
 });

@@ -4,6 +4,7 @@ import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
+    type Row,
     type SortingState,
     useReactTable,
 } from '@tanstack/react-table';
@@ -15,6 +16,7 @@ import {
 } from 'react';
 
 import { AutocompleteInput } from './AutocompleteInput';
+import type { AutocompleteOption } from './AutocompleteInput';
 import './DataTable.css';
 
 declare module '@tanstack/react-table' {
@@ -22,8 +24,8 @@ declare module '@tanstack/react-table' {
     interface ColumnMeta<TData, TValue> {
         align?: 'left' | 'right' | 'center';
         editable?: boolean;
-        inputType?: 'text' | 'number' | 'date' | 'select';
-        selectOptions?: string[];
+        inputType?: 'text' | 'number' | 'date' | 'select' | 'dropdown';
+        selectOptions?: AutocompleteOption[];
         onSave?: (rowIndex: number, value: string) => void;
         /** Provide initial edit value for columns without accessorKey */
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +106,7 @@ export function DataTable<TData extends object>({
     const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
     const [clickedColumn, setClickedColumn] = useState<string | null>(null);
     const [mountFocusColumn, setMountFocusColumn] = useState<string | null>(null);
-    const firstInputRef = useRef<HTMLInputElement | null>(null);
+    const firstInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
     const consumedNonce = useRef<number | undefined>(undefined);
 
     // Date conversion helpers: ISO (YYYY-MM-DD) ↔ display (DD.MM.YYYY)
@@ -270,7 +272,8 @@ export function DataTable<TData extends object>({
                 continue;
             }
             const rowValues = row as Record<string, unknown>;
-            const raw = key in rowValues ? String(rowValues[key] ?? '') : (meta?.editInitialValue?.(row) ?? '');
+            const rawValue = key in rowValues ? String(rowValues[key] ?? '') : '';
+            const raw = meta?.editInitialValue?.(row) ?? rawValue;
 
             // Store date fields as display format (DD.MM.YYYY)
             values[key] = meta?.inputType === 'date' ? isoToDisplay(raw) : raw;
@@ -356,6 +359,21 @@ export function DataTable<TData extends object>({
         return warningRows?.has(idx) ?? false;
     });
 
+    const getSourceRowIndex = (row: Row<TData>): number => {
+        const original = row.original as Record<string, unknown>;
+        const id = typeof original.id === 'string' ? original.id : null;
+
+        if (id) {
+            return data.findIndex((item) => {
+                const candidate = item as Record<string, unknown>;
+
+                return candidate.id === id;
+            });
+        }
+
+        return data.indexOf(row.original);
+    };
+
     const renderEditInput = (
         columnId: string,
         meta: NonNullable<ColumnDef<TData>['meta']>,
@@ -363,9 +381,16 @@ export function DataTable<TData extends object>({
     ) => {
         const value = editValues[columnId] ?? '';
         const inputType = meta.inputType ?? 'text';
-        const refProp = isFirst
+        const inputRefProp = isFirst
             ? {
                 ref: (el: HTMLInputElement | null) => {
+                    firstInputRef.current = el;
+                },
+            }
+            : {};
+        const selectRefProp = isFirst
+            ? {
+                ref: (el: HTMLSelectElement | null) => {
                     firstInputRef.current = el;
                 },
             }
@@ -427,6 +452,35 @@ export function DataTable<TData extends object>({
             );
         }
 
+        if (inputType === 'dropdown') {
+            const options = meta.selectOptions ?? [];
+
+            return (
+                <select
+                    {...selectRefProp}
+                    data-column={columnId}
+                    className='edit-input'
+                    value={value}
+                    onChange={(e) => updateEditValue(columnId, e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCancelRow();
+                        } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveRow();
+                        }
+                    }}
+                >
+                    {options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+            );
+        }
+
         // Date input as text with DD.MM.YYYY format
         // editValues stores display format (DD.MM.YYYY) for dates; converted to ISO on save
         if (inputType === 'date') {
@@ -435,7 +489,7 @@ export function DataTable<TData extends object>({
 
             return (
                 <input
-                    {...refProp}
+                    {...inputRefProp}
                     type='text'
                     data-column={columnId}
                     className={`edit-input edit-date ${isInvalid ? 'edit-input-error' : ''}`}
@@ -459,7 +513,7 @@ export function DataTable<TData extends object>({
         if (inputType === 'number') {
             return (
                 <input
-                    {...refProp}
+                    {...inputRefProp}
                     type='number'
                     step='any'
                     data-column={columnId}
@@ -474,7 +528,7 @@ export function DataTable<TData extends object>({
         // Default: text input
         return (
             <input
-                {...refProp}
+                {...inputRefProp}
                 type='text'
                 data-column={columnId}
                 className='edit-input'
@@ -566,7 +620,11 @@ export function DataTable<TData extends object>({
                 </thead>
                 <tbody>
                     {filteredRows.map((row) => {
-                        const rowIndex = row.index;
+                        const rowIndex = getSourceRowIndex(row);
+
+                        if (rowIndex === -1) {
+                            return null;
+                        }
                         const isEditing = editingRowIndex === rowIndex;
                         const hasWarning = warningRows?.has(rowIndex) ?? false;
                         const isConsumed = strikeThroughRows?.has(rowIndex) ?? false;

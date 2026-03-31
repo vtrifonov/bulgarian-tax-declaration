@@ -126,31 +126,61 @@ function readSalesSheet(wb: ExcelJS.Workbook): Sale[] {
     }
 
     const sales: Sale[] = [];
+    const headerRow = ws.getRow(1);
+    const headers = headerRow.values as Array<string | undefined>;
+    const headerMap = new Map<string, number>();
+
+    for (let i = 1; i < headers.length; i++) {
+        const header = String(headers[i] ?? '').trim();
+
+        if (header) {
+            headerMap.set(header, i);
+        }
+    }
+
+    const idx = (header: string, fallback: number): number => headerMap.get(header) ?? fallback;
+    const brokerCol = idx('Брокер', 1);
+    const symbolCol = idx('Символ', 2);
+    const countryCol = idx('Държава', 3);
+    const exchangeCol = idx('Борса', 0);
+    const taxTreatmentCol = idx('Данъчно третиране', 0);
+    const acquiredCol = idx('Дата покупка', 4);
+    const soldCol = idx('Дата продажба', 5);
+    const quantityCol = idx('Кол.', 6);
+    const currencyCol = idx('Валута', 7);
+    const buyPriceCol = idx('Цена покупка', 8);
+    const sellPriceCol = idx('Цена продажба', 9);
+    const fxBuyCol = idx('Курс покупка', 10);
+    const fxSellCol = idx('Курс продажба', 11);
 
     ws.eachRow((row, rowNumber) => {
         if (rowNumber <= 1) {
             return;
         }
-        const symbol = cellStr(row.getCell(2));
-        const quantity = cellNum(row.getCell(6));
+        const symbol = cellStr(row.getCell(symbolCol));
+        const quantity = cellNum(row.getCell(quantityCol));
 
         if (!symbol || quantity <= 0) {
             return;
         }
 
+        const taxTreatment = taxTreatmentCol > 0 ? cellStr(row.getCell(taxTreatmentCol)) : '';
+
         sales.push({
             id: randomUUID(),
-            broker: cellStr(row.getCell(1)),
+            broker: cellStr(row.getCell(brokerCol)),
             symbol,
-            country: cellStr(row.getCell(3)),
-            dateAcquired: cellDate(row.getCell(4)),
-            dateSold: cellDate(row.getCell(5)),
+            country: cellStr(row.getCell(countryCol)),
+            exchange: exchangeCol > 0 ? cellStr(row.getCell(exchangeCol)) || undefined : undefined,
+            saleTaxClassification: taxTreatment === 'EU regulated market' ? 'eu-regulated-market' : 'taxable',
+            dateAcquired: cellDate(row.getCell(acquiredCol)),
+            dateSold: cellDate(row.getCell(soldCol)),
             quantity,
-            currency: cellStr(row.getCell(7)),
-            buyPrice: cellNum(row.getCell(8)),
-            sellPrice: cellNum(row.getCell(9)),
-            fxRateBuy: cellNum(row.getCell(10)) || null,
-            fxRateSell: cellNum(row.getCell(11)) || null,
+            currency: cellStr(row.getCell(currencyCol)),
+            buyPrice: cellNum(row.getCell(buyPriceCol)),
+            sellPrice: cellNum(row.getCell(sellPriceCol)),
+            fxRateBuy: cellNum(row.getCell(fxBuyCol)) || null,
+            fxRateSell: cellNum(row.getCell(fxSellCol)) || null,
         });
     });
 

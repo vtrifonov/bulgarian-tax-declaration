@@ -163,13 +163,13 @@ function expectWorkbookSheetsToMatch(generated: ExcelJS.Workbook, reference: Exc
         expect(referenceSheet, `${sheetName} exists in reference workbook`).toBeDefined();
         expect(generatedSheet!.rowCount, `${sheetName} row count`).toBe(referenceSheet!.rowCount);
 
-        const maxColumns = Math.max(generatedSheet!.columnCount, referenceSheet!.columnCount);
+        expect(generatedSheet!.columnCount, `${sheetName} column count`).toBeGreaterThanOrEqual(referenceSheet!.columnCount);
 
         for (let rowIndex = 1; rowIndex <= referenceSheet!.rowCount; rowIndex++) {
             const generatedRow = generatedSheet!.getRow(rowIndex);
             const referenceRow = referenceSheet!.getRow(rowIndex);
 
-            for (let columnIndex = 1; columnIndex <= maxColumns; columnIndex++) {
+            for (let columnIndex = 1; columnIndex <= referenceSheet!.columnCount; columnIndex++) {
                 const generatedValue = cellValueForCompare(generatedRow.getCell(columnIndex));
                 const referenceValue = cellValueForCompare(referenceRow.getCell(columnIndex));
 
@@ -502,6 +502,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             // Verify parsed data has expected content
             expect(state.holdings.length).toBeGreaterThan(0);
+            expect(state.sales.length).toBe(3);
             expect(state.sales.length).toBeGreaterThan(0);
             expect(state.dividends.length).toBeGreaterThan(0);
             expect(state.stockYield.length).toBeGreaterThan(0);
@@ -1999,20 +2000,25 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
                 .map(h => updatedById.get(h.id) ?? h);
             const newRevolutHoldings = fifoHoldings.filter(h => !existingIds.has(h.id));
 
-            // All 8 initial holdings should survive (no sells consume them)
+            // All 8 initial holdings should survive. The Revolut AAPL sell partially reduces
+            // the pre-existing Revolut AAPL holding, but no original lot is fully consumed.
             expect(survivingOriginals).toHaveLength(8);
             expect(newRevolutHoldings).toHaveLength(revBuys.length);
 
             // Build merged holdings: existing first (original order), then Revolut
             const mergedHoldings = [...survivingOriginals, ...revConsumed, ...newRevolutHoldings];
 
-            // No duplicates: total = 8 initial + Revolut buys (no sells in sample)
+            // No duplicates: total = 8 initial + Revolut buys
             expect(mergedHoldings).toHaveLength(8 + revBuys.length);
 
             // First 8 should be the original holdings (same symbols, same order)
             for (let i = 0; i < 8; i++) {
                 expect(mergedHoldings[i].symbol).toBe(initialHoldings[i].symbol);
-                expect(mergedHoldings[i].quantity).toBeCloseTo(initialHoldings[i].quantity, 6);
+                const expectedQty = initialHoldings[i].symbol === 'AAPL'
+                    ? initialHoldings[i].quantity - 0.02
+                    : initialHoldings[i].quantity;
+
+                expect(mergedHoldings[i].quantity).toBeCloseTo(expectedQty, 6);
                 expect(mergedHoldings[i].unitPrice).toBeCloseTo(initialHoldings[i].unitPrice, 2);
             }
 
@@ -2043,7 +2049,11 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             // First 8 rows should still be the original holdings
             for (let i = 0; i < 8; i++) {
                 expect(reimported.holdings[i].symbol).toBe(initialHoldings[i].symbol);
-                expect(reimported.holdings[i].quantity).toBeCloseTo(initialHoldings[i].quantity, 6);
+                const expectedQty = initialHoldings[i].symbol === 'AAPL'
+                    ? initialHoldings[i].quantity - 0.02
+                    : initialHoldings[i].quantity;
+
+                expect(reimported.holdings[i].quantity).toBeCloseTo(expectedQty, 6);
             }
 
             // Remaining rows should be Revolut buys
@@ -2257,12 +2267,18 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const eurInterest = parseRevolutCsv(eurCsv);
             const gbpInterest = parseRevolutCsv(gbpCsv);
 
-            // Revolut sample: 6 buys (GOOG x3, ASML x1, AAPL x1, COIN x1), 0 sells
+            // Revolut sample: 6 buys (GOOG x3, ASML x1, AAPL x1, COIN x1), 2 sells
             const buys = trades.filter(t => t.type.includes('BUY'));
+            const sells = trades.filter(t => t.type.includes('SELL'));
 
             expect(buys).toHaveLength(6);
+            expect(sells).toHaveLength(2);
             expect(holdings).toHaveLength(6);
-            expect(sales).toHaveLength(0);
+            expect(sales).toHaveLength(2);
+
+            const soldSymbols = sales.map(s => s.symbol).sort();
+
+            expect(soldSymbols).toEqual(['AAPL', 'ASML']);
 
             // All holdings should be Revolut
             for (const h of holdings) {
@@ -2297,7 +2313,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const reimported = await importFullExcel(buffer.buffer as ArrayBuffer);
 
             expect(reimported.holdings).toHaveLength(6);
-            expect(reimported.sales).toHaveLength(0);
+            expect(reimported.sales).toHaveLength(2);
             expect(reimported.brokerInterest).toHaveLength(2);
 
             // Holdings values survive round-trip
@@ -2380,9 +2396,9 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const fifo = new FifoEngine([...initialHoldings]);
             const { holdings: fifoHoldings, consumedHoldings: revConsumed, sales: revSales } = fifo.processTrades(fifoTrades, 'Revolut', countryMap);
 
-            // No sells in Revolut sample → no consumed, no sales
+            // No initial lot is fully consumed, but two sells are generated from the Revolut sample.
             expect(revConsumed).toHaveLength(0);
-            expect(revSales).toHaveLength(0);
+            expect(revSales).toHaveLength(2);
 
             // Preserve ordering: initial first, Revolut after
             const existingIds = new Set(initialHoldings.map(h => h.id));
@@ -2420,7 +2436,11 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             // First 8 must be initial holdings
             for (let i = 0; i < 8; i++) {
                 expect(state.holdings[i].symbol).toBe(initialHoldings[i].symbol);
-                expect(state.holdings[i].quantity).toBeCloseTo(initialHoldings[i].quantity, 6);
+                const expectedQty = initialHoldings[i].symbol === 'AAPL'
+                    ? initialHoldings[i].quantity - 0.02
+                    : initialHoldings[i].quantity;
+
+                expect(state.holdings[i].quantity).toBeCloseTo(expectedQty, 6);
             }
 
             // Remaining must be Revolut
@@ -2433,7 +2453,7 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const reimported = await importFullExcel(buffer.buffer as ArrayBuffer);
 
             expect(reimported.holdings).toHaveLength(mergedHoldings.length);
-            expect(reimported.sales).toHaveLength(0);
+            expect(reimported.sales).toHaveLength(2);
             expect(reimported.brokerInterest).toHaveLength(2);
 
             // Order preserved after round-trip
@@ -2488,9 +2508,9 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
             const newRevolutHoldings = revHoldings.filter(h => !existingIds.has(h.id));
             const afterRevolut = [...survivingOriginals, ...revConsumed, ...newRevolutHoldings];
 
-            // No sells in sample → 8 initial + 6 Revolut = 14
+            // 8 initial + 6 Revolut buy lots = 14
             expect(afterRevolut).toHaveLength(14);
-            expect(revSales).toHaveLength(0);
+            expect(revSales).toHaveLength(2);
 
             // Step 2: Import IB activity on top of Revolut state
             const ibCsv = readFileSync(join(SAMPLES, 'ib-activity.csv'), 'utf-8');
@@ -2534,12 +2554,16 @@ describe.concurrent('Integration: round-trip import → export → re-import', (
 
             expect(revInFinal).toHaveLength(7);
 
-            // Verify all sales are IB (no Revolut sales in this scenario)
+            // Both the earlier Revolut sells and the later IB sells should be preserved.
             const allSales = [...revSales, ...ibSales];
+            const salesByBroker = allSales.reduce<Record<string, number>>((acc, sale) => {
+                acc[sale.broker] = (acc[sale.broker] ?? 0) + 1;
 
-            for (const s of allSales) {
-                expect(s.broker).toBe('IB');
-            }
+                return acc;
+            }, {});
+
+            expect(salesByBroker['Revolut']).toBe(2);
+            expect(salesByBroker['IB']).toBe(3);
 
             // Round-trip to verify data survives
             const state: AppState = {

@@ -30,6 +30,8 @@ czk
 dedup
 dtf
 elana
+enxtam
+enxtpa
 estc
 estimatedtax
 etrade
@@ -135,6 +137,7 @@ vwce
 wacc
 whts
 winget
+xams
 withheld
 xetra
 xfer

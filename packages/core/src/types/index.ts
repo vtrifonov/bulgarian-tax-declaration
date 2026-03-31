@@ -26,6 +26,8 @@ export interface Sale {
     broker: string;
     country: string;
     symbol: string;
+    exchange?: string;
+    saleTaxClassification?: SaleTaxClassification;
     dateAcquired: string;
     dateSold: string;
     quantity: number;
@@ -72,6 +74,7 @@ export interface ManualEntry {
 
 export type BaseCurrency = 'BGN' | 'EUR';
 export type Language = 'en' | 'bg';
+export type SaleTaxClassification = 'taxable' | 'eu-regulated-market';
 
 export interface AppState {
     taxYear: number;
@@ -136,6 +139,8 @@ export interface IBParsedData {
 export interface Trade {
     currency: string;
     symbol: string;
+    exchange?: string;
+    saleTaxClassification?: SaleTaxClassification;
     dateTime: string; // YYYY-MM-DD, HH:MM:SS
     quantity: number; // positive=buy, negative=sell
     price: number;

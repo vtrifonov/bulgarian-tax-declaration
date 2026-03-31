@@ -2,6 +2,7 @@ import {
     FxService,
     getFxRate,
     InMemoryFxCache,
+    type SaleTaxClassification,
     t,
     toBaseCurrencyStr,
     validate,
@@ -23,6 +24,7 @@ import {
 } from 'react';
 
 import { DataTable } from '../components/DataTable';
+import type { AutocompleteOption } from '../components/AutocompleteInput';
 import { useAppStore } from '../store/app-state';
 
 type TabType = 'holdings' | 'sales' | 'dividends' | 'brokerInterest' | 'fxRates';
@@ -45,6 +47,16 @@ function formatQuantity(n: number): string {
     return decimals < 2 ? n.toFixed(2) : trimmed;
 }
 
+function parseSaleTaxClassification(value: string): SaleTaxClassification {
+    return value === 'eu-regulated-market' || value === t('sale.tax.euRegulated')
+        ? 'eu-regulated-market'
+        : 'taxable';
+}
+
+function toAutocompleteOptions(values: string[]): AutocompleteOption[] {
+    return values.map((value) => ({ label: value, value }));
+}
+
 // Helper to create an editable column definition
 function createEditableColumn<T extends object, K extends Extract<keyof T, string> = Extract<keyof T, string>>(
     accessorKey: K,
@@ -53,8 +65,9 @@ function createEditableColumn<T extends object, K extends Extract<keyof T, strin
         align?: 'left' | 'right' | 'center';
         format?: (value: unknown) => string;
         onSave?: (rowIndex: number, value: string) => void;
-        inputType?: 'text' | 'number' | 'date' | 'select';
-        selectOptions?: string[];
+        inputType?: 'text' | 'number' | 'date' | 'select' | 'dropdown';
+        selectOptions?: AutocompleteOption[];
+        editInitialValue?: (row: T) => string;
     },
 ): ColumnDef<T> {
     return {
@@ -83,6 +96,7 @@ function createEditableColumn<T extends object, K extends Extract<keyof T, strin
             editable: true,
             inputType: options?.inputType ?? 'text',
             selectOptions: options?.selectOptions,
+            editInitialValue: options?.editInitialValue,
             onSave: options?.onSave,
         },
     };
@@ -434,7 +448,7 @@ export function Workspace() {
         createRowNumColumn<Holding>(),
         createEditableColumn<Holding>('broker', t('col.broker'), {
             inputType: 'select',
-            selectOptions: brokerOptions,
+            selectOptions: toAutocompleteOptions(brokerOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], broker: value };
 
@@ -443,7 +457,7 @@ export function Workspace() {
         }),
         createEditableColumn<Holding>('symbol', t('col.symbol'), {
             inputType: 'select',
-            selectOptions: symbolOptions,
+            selectOptions: toAutocompleteOptions(symbolOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], symbol: value };
 
@@ -452,7 +466,7 @@ export function Workspace() {
         }),
         createEditableColumn<Holding>('country', t('col.country'), {
             inputType: 'select',
-            selectOptions: countryOptions,
+            selectOptions: toAutocompleteOptions(countryOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], country: value };
 
@@ -479,7 +493,7 @@ export function Workspace() {
         }),
         createEditableColumn<Holding>('currency', t('col.currency'), {
             inputType: 'select',
-            selectOptions: currencyOptions,
+            selectOptions: toAutocompleteOptions(currencyOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...holdings[rowIndex], currency: value };
 
@@ -620,7 +634,7 @@ export function Workspace() {
         createRowNumColumn<Sale>(),
         createEditableColumn<Sale>('broker', t('col.broker'), {
             inputType: 'select',
-            selectOptions: brokerOptions,
+            selectOptions: toAutocompleteOptions(brokerOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], broker: value };
 
@@ -629,7 +643,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('symbol', t('col.symbol'), {
             inputType: 'select',
-            selectOptions: symbolOptions,
+            selectOptions: toAutocompleteOptions(symbolOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], symbol: value };
 
@@ -638,9 +652,32 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('country', t('col.country'), {
             inputType: 'select',
-            selectOptions: countryOptions,
+            selectOptions: toAutocompleteOptions(countryOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...sales[rowIndex], country: value };
+
+                updateSale(rowIndex, updated);
+            },
+        }),
+        createEditableColumn<Sale>('exchange', t('col.exchange'), {
+            onSave: (rowIndex, value) => {
+                const updated = { ...sales[rowIndex], exchange: value || undefined };
+
+                updateSale(rowIndex, updated);
+            },
+        }),
+        createEditableColumn<Sale>('saleTaxClassification', t('col.saleTaxClassification'), {
+            inputType: 'dropdown',
+            selectOptions: [
+                { label: t('sale.tax.taxable'), value: 'taxable' },
+                { label: t('sale.tax.euRegulated'), value: 'eu-regulated-market' },
+            ],
+            format: (v) => v === 'eu-regulated-market' ? t('sale.tax.euRegulated') : t('sale.tax.taxable'),
+            onSave: (rowIndex, value) => {
+                const updated = {
+                    ...sales[rowIndex],
+                    saleTaxClassification: parseSaleTaxClassification(value),
+                };
 
                 updateSale(rowIndex, updated);
             },
@@ -685,7 +722,7 @@ export function Workspace() {
         }),
         createEditableColumn<Sale>('currency', t('col.currency'), {
             inputType: 'select',
-            selectOptions: currencyOptions,
+            selectOptions: toAutocompleteOptions(currencyOptions),
             onSave: (rowIndex, value) => {
                 const sale = sales[rowIndex];
                 const fxRateBuy = numericFxRate(value, sale.dateAcquired) ?? sale.fxRateBuy;
@@ -809,7 +846,7 @@ export function Workspace() {
         },
         createEditableColumn<Dividend>('symbol', t('col.symbol'), {
             inputType: 'select',
-            selectOptions: symbolOptions,
+            selectOptions: toAutocompleteOptions(symbolOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], symbol: value };
 
@@ -818,7 +855,7 @@ export function Workspace() {
         }),
         createEditableColumn<Dividend>('country', t('col.country'), {
             inputType: 'select',
-            selectOptions: countryOptions,
+            selectOptions: toAutocompleteOptions(countryOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], country: value };
 
@@ -835,7 +872,7 @@ export function Workspace() {
         }),
         createEditableColumn<Dividend>('currency', t('col.currency'), {
             inputType: 'select',
-            selectOptions: currencyOptions,
+            selectOptions: toAutocompleteOptions(currencyOptions),
             onSave: (rowIndex, value) => {
                 const updated = { ...dividends[rowIndex], currency: value };
 
@@ -965,7 +1002,7 @@ export function Workspace() {
         }),
         createEditableColumn<InterestEntry>('currency', t('col.currency'), {
             inputType: 'select',
-            selectOptions: currencyOptions,
+            selectOptions: toAutocompleteOptions(currencyOptions),
             onSave: (rowIndex, value) => {
                 // Find the broker and position within that broker's entries
                 let currentIdx = 0;
@@ -1360,6 +1397,10 @@ export function Workspace() {
                             broker: values.broker ?? original.broker,
                             country: values.country ?? original.country,
                             symbol: values.symbol ?? original.symbol,
+                            exchange: values.exchange !== undefined ? values.exchange || undefined : original.exchange,
+                            saleTaxClassification: values.saleTaxClassification !== undefined
+                                ? parseSaleTaxClassification(values.saleTaxClassification)
+                                : original.saleTaxClassification,
                             dateAcquired,
                             dateSold,
                             quantity: values.quantity !== undefined ? parseFloat(values.quantity) || 0 : original.quantity,
@@ -1389,6 +1430,8 @@ export function Workspace() {
                             broker: lastBroker,
                             country: '',
                             symbol: '',
+                            exchange: '',
+                            saleTaxClassification: 'taxable',
                             dateAcquired: '',
                             dateSold: '',
                             quantity: 0,

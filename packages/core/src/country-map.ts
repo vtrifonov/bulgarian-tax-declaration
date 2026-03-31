@@ -205,7 +205,7 @@ export async function resolveCountries(
 
     // 3. If unknowns exist, batch call OpenFIGI
     if (unknowns.length > 0) {
-        const resolved = await fetchOpenFigi(unknowns, fetchFn);
+        const resolved = await fetchOpenFigiCountries(unknowns, fetchFn);
 
         for (const [symbol, country] of Object.entries(resolved)) {
             result[symbol] = country;
@@ -226,8 +226,66 @@ export async function resolveCountries(
     return result;
 }
 
+/** Batch async — resolves symbols to exchange codes via provider data + OpenFIGI fallback. */
+export async function resolveExchangeCodes(
+    symbols: { symbol: string; currency: string }[],
+    fetchFn: typeof fetch = fetch,
+    symbolExchanges: Record<string, string> = {},
+): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+    const unique = new Map<string, { symbol: string; currency: string }>();
+
+    for (const s of symbols) {
+        if (!unique.has(s.symbol)) {
+            unique.set(s.symbol, s);
+        }
+    }
+
+    const unknowns: { symbol: string; currency: string }[] = [];
+
+    for (const [symbol, entry] of unique) {
+        const exchange = symbolExchanges[symbol];
+
+        if (exchange) {
+            result[symbol] = exchange;
+        } else {
+            unknowns.push(entry);
+        }
+    }
+
+    if (unknowns.length > 0) {
+        const resolved = await fetchOpenFigiExchangeCodes(unknowns, fetchFn);
+
+        for (const [symbol, exchange] of Object.entries(resolved)) {
+            result[symbol] = exchange;
+        }
+
+        for (const u of unknowns) {
+            if (!(u.symbol in result)) {
+                result[u.symbol] = '';
+            }
+        }
+    }
+
+    return result;
+}
+
 /** Call OpenFIGI API to resolve symbols to countries (max 100 per batch) */
-async function fetchOpenFigi(
+async function fetchOpenFigiCountries(
+    symbols: { symbol: string; currency: string }[],
+    fetchFn: typeof fetch = fetch,
+): Promise<Record<string, string>> {
+    const exchanges = await fetchOpenFigiExchangeCodes(symbols, fetchFn);
+    const result: Record<string, string> = {};
+
+    for (const [symbol, exchange] of Object.entries(exchanges)) {
+        result[symbol] = exchange ? (EXCHANGE_COUNTRY[exchange] ?? '') : '';
+    }
+
+    return result;
+}
+
+async function fetchOpenFigiExchangeCodes(
     symbols: { symbol: string; currency: string }[],
     fetchFn: typeof fetch = fetch,
 ): Promise<Record<string, string>> {
@@ -237,7 +295,6 @@ async function fetchOpenFigi(
         result[s.symbol] = '';
     }
 
-    // OpenFIGI anonymous limit: 10 items per request
     const BATCH_SIZE = 10;
 
     for (let start = 0; start < symbols.length; start += BATCH_SIZE) {
@@ -271,9 +328,8 @@ async function fetchOpenFigi(
             for (let i = 0; i < batch.length && i < data.length; i++) {
                 const entry = data[i];
                 const exchCode = entry.data?.[0]?.exchCode;
-                const country = exchCode ? (EXCHANGE_COUNTRY[exchCode] ?? '') : '';
 
-                result[batch[i].symbol] = country;
+                result[batch[i].symbol] = exchCode ?? '';
             }
         } catch {
             // Network error, timeout — continue with next batch

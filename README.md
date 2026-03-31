@@ -208,7 +208,8 @@ RUST_LOG=debug pnpm --filter @bg-tax/ui dev
 
 The app implements flat tax rates per ЗДДФЛ:
 
-- **Capital gains** (Приложение 5): **10%** on profit from sale of securities
+- **Capital gains** (Приложение 5): **10%** on profit from sale of securities outside regulated EU markets
+- **EU regulated market sales** (Приложение 13): tracked separately and excluded from capital gains tax due
 - **Foreign dividends** (Приложение 8, Таблица 1): **5%** on gross dividend (WHT credit applies)
 - **Foreign interest** (Приложение 8, Таблица 6): **10%** on gross interest
 
@@ -238,6 +239,32 @@ The main workbook is intended to round-trip cleanly:
 - export again with the same workbook data
 
 This round-trip includes holdings, sales, dividends, interest, FX sheets, and the SPB-8 tabs.
+
+Sales round-trip also preserves exchange and tax treatment metadata so Appendix 5 and Appendix 13 stay aligned after re-import. If a broker file cannot determine the venue reliably, review the Sales table and adjust the tax treatment manually before filing.
+
+## EU Regulated Sales Handling
+
+The app treats all sales as one canonical `sales` dataset and derives declaration routing from metadata on each row.
+
+- Source of truth: the `Продажби` sheet and the in-app Sales table
+- Canonical fields on each sale:
+  - `exchange`
+  - `saleTaxClassification = taxable | eu-regulated-market`
+- Declaration behavior:
+  - `taxable` sales go to `Приложение 5` and affect capital gains tax
+  - `eu-regulated-market` sales go to `Приложение 13` and are excluded from capital gains tax
+
+Current provider behavior:
+
+- Interactive Brokers: classification comes from the statement `Listing Exch`
+- Revolut investments: classification is inferred during import via OpenFIGI exchange resolution
+- Manual override: the Sales table lets you change `Данъчно третиране` directly if venue detection is missing or wrong
+
+Contributor rule for new providers:
+
+- if provider data can determine the venue, populate both `exchange` and `saleTaxClassification`
+- if venue cannot be determined reliably, default to `taxable` and let the user correct it in the Sales table
+- preserve this metadata through FIFO, Excel export/import, and declaration rendering
 
 ## Contributing
 

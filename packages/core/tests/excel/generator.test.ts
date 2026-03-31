@@ -45,6 +45,8 @@ describe('Excel Generator', () => {
                     broker: 'IB',
                     country: 'САЩ',
                     symbol: 'MSFT',
+                    exchange: 'NASDAQ',
+                    saleTaxClassification: 'taxable',
                     dateAcquired: '2023-01-10',
                     dateSold: '2025-05-20',
                     quantity: 2,
@@ -170,6 +172,8 @@ describe('Excel Generator', () => {
 
         expect(salesHeader.getCell(1).value).toBe('Брокер');
         expect(salesHeader.getCell(4).value).toBe('Дата покупка');
+        expect(salesHeader.getCell(15).value).toBe('Борса');
+        expect(salesHeader.getCell(16).value).toBe('Данъчно третиране');
 
         // Check for formula in sales data
         const salesDataRow = salesSheet!.getRow(2);
@@ -363,6 +367,8 @@ describe('Excel Generator', () => {
             'Приходи (BGN)',
             'Разходи (BGN)',
             'Печалба/Загуба (BGN)',
+            'Борса',
+            'Данъчно третиране',
         ];
 
         expectedHeaders.forEach((header, index) => {

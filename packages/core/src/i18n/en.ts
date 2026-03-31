@@ -143,6 +143,7 @@ export const en = {
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Broker',
     'col.country': 'Country',
+    'col.exchange': 'Exchange',
     'col.date': 'Date',
     'col.description': 'Description',
     'col.amount': 'Amount',
@@ -174,6 +175,9 @@ export const en = {
     'col.qty': 'Qty',
     'col.source': 'Source',
     'col.consumedBy': 'Consumed By',
+    'col.saleTaxClassification': 'Tax Treatment',
+    'sale.tax.taxable': 'Appendix 5 taxable',
+    'sale.tax.euRegulated': 'EU regulated market',
 
     // Summary labels
     'summary.total': 'Total',
