@@ -16,6 +16,7 @@ import {
 } from 'react';
 import bnbTemplateDataUrl from 'virtual:spb8-bnb-template';
 
+import { Spb8FilingGuide } from '../components/Spb8FilingGuide';
 import { useAppStore } from '../store/app-state';
 
 function decodeInlineAsset(dataUrl: string): ArrayBuffer {
@@ -70,7 +71,7 @@ export function Spb8() {
     } = useAppStore();
 
     const [reportType, setReportType] = useState<'P' | 'R'>('P');
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ filingGuide: true });
     const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
     const [exporting, setExporting] = useState(false);
@@ -460,6 +461,14 @@ export function Spb8() {
                     <span style={{ fontSize: '1.1rem' }}>⚠</span>
                     {missingIsins.length} {t('spb8.missingIsin')} — enter ISIN codes before export
                 </div>
+            )}
+
+            {renderSection(
+                'filingGuide',
+                t('spb8.filingGuide'),
+                t('spb8.filingGuide.subtitle'),
+                true,
+                () => <Spb8FilingGuide />,
             )}
 
             {renderSection(
