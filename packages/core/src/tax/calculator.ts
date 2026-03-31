@@ -51,6 +51,10 @@ export class TaxCalculator {
         let totalCost = 0;
 
         for (const sale of sales) {
+            if (sale.saleTaxClassification === 'eu-regulated-market') {
+                continue;
+            }
+
             // Skip incomplete sales (missing buy date or FX rates)
             if (!sale.dateAcquired || sale.fxRateBuy === undefined || sale.fxRateBuy === null || sale.fxRateSell === undefined || sale.fxRateSell === null) {
                 continue;

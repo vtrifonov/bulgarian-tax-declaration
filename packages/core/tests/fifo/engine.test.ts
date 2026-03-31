@@ -52,6 +52,31 @@ describe('FifoEngine', () => {
         expect(result.holdings.find(h => h.symbol === 'MSFT')?.quantity).toBe(70);
     });
 
+    it('carries exchange classification from trade to sale', () => {
+        const holdings: Holding[] = [
+            { id: '1', broker: 'IB', country: 'Германия', symbol: 'SAP', dateAcquired: '2024-01-01', quantity: 10, currency: 'EUR', unitPrice: 100.00 },
+        ];
+        const trades: Trade[] = [
+            {
+                currency: 'EUR',
+                symbol: 'SAP',
+                exchange: 'IBIS',
+                saleTaxClassification: 'eu-regulated-market',
+                dateTime: '2025-06-01, 10:00:00',
+                quantity: -10,
+                price: 120.00,
+                proceeds: 1200,
+                commission: -1,
+            },
+        ];
+
+        const engine = new FifoEngine(holdings);
+        const result = engine.processTrades(trades, 'IB', { SAP: 'Германия' });
+
+        expect(result.sales[0].exchange).toBe('IBIS');
+        expect(result.sales[0].saleTaxClassification).toBe('eu-regulated-market');
+    });
+
     it('adds buys as new holdings', () => {
         const engine = new FifoEngine([]);
         const trades: Trade[] = [

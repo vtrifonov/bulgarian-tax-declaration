@@ -1,5 +1,6 @@
 import {
     calcDividendTax,
+    classifySaleByExchange,
     FifoEngine,
     FxService,
     InMemoryFxCache,
@@ -12,6 +13,7 @@ import {
     populateSaleFxRates,
     providers,
     resolveCountries,
+    resolveExchangeCodes,
     resolveIsinSync,
     splitOpenPositions,
     t,
@@ -21,6 +23,7 @@ import type {
     BrokerProviderResult,
     Holding,
     IBParsedData,
+    Sale,
 } from '@bg-tax/core';
 import {
     useCallback,
@@ -79,6 +82,44 @@ function fillMissingIsins(holdings: Holding[]): void {
             h.isin = resolveIsinSync(h.symbol);
         }
     }
+}
+
+function collectSaleFxTasks(sales: Sale[], taxYear: number, baseCurrency: 'BGN' | 'EUR'): { currency: string; year: number }[] {
+    const currencies = new Set<string>();
+    const years = new Set<number>([taxYear]);
+
+    const addYear = (dateStr: string): void => {
+        if (!dateStr) {
+            return;
+        }
+        const year = parseInt(dateStr.substring(0, 4), 10);
+
+        if (!isNaN(year)) {
+            years.add(year);
+
+            if (year > 2020) {
+                years.add(year - 1);
+            }
+        }
+    };
+
+    for (const sale of sales) {
+        if (sale.currency && sale.currency !== baseCurrency && !(sale.currency === 'EUR' && baseCurrency === 'BGN')) {
+            currencies.add(sale.currency);
+        }
+        addYear(sale.dateAcquired);
+        addYear(sale.dateSold);
+    }
+
+    const tasks: { currency: string; year: number }[] = [];
+
+    for (const currency of currencies) {
+        for (const year of years) {
+            tasks.push({ currency, year });
+        }
+    }
+
+    return tasks;
 }
 
 function mergeFifoResultsWithExistingHoldings(
@@ -224,11 +265,53 @@ export function Import() {
         return Array.from(ccys).sort();
     }, [holdings, sales, brokerInterest]);
 
+    const hydrateSalesFxRates = useCallback(async (salesToHydrate: Sale[]): Promise<Sale[]> => {
+        if (salesToHydrate.length === 0) {
+            return salesToHydrate;
+        }
+
+        const state = useAppStore.getState();
+        const mergedRates: Record<string, Record<string, number>> = {};
+
+        for (const currency in state.fxRates) {
+            mergedRates[currency] = { ...state.fxRates[currency] };
+        }
+
+        const tasks = collectSaleFxTasks(salesToHydrate, taxYear, baseCurrency);
+
+        if (tasks.length > 0) {
+            const fxService = new FxService(new InMemoryFxCache(), baseCurrency);
+            const fetchedRates: Record<string, Record<string, number>> = {};
+
+            for (const { currency, year } of tasks) {
+                try {
+                    const rates = await fxService.fetchRates([currency], year);
+
+                    for (const [ccy, dateRates] of Object.entries(rates)) {
+                        fetchedRates[ccy] = { ...fetchedRates[ccy], ...dateRates };
+                        mergedRates[ccy] = { ...mergedRates[ccy], ...dateRates };
+                    }
+                } catch {
+                    // Leave missing rates as null — the validation table will surface the gap.
+                }
+            }
+
+            if (Object.keys(fetchedRates).length > 0) {
+                setFxRates(fetchedRates);
+            }
+        }
+
+        const getRate = (currency: string, date: string) => mergedRates[currency]?.[date];
+
+        return populateSaleFxRates(salesToHydrate, getRate, baseCurrency);
+    }, [baseCurrency, setFxRates, taxYear]);
+
     // Auto-fetch FX rates when new currencies are detected — includes prior-year dates
     useEffect(() => {
         const state = useAppStore.getState();
         const currencies = new Set<string>();
         const years = new Set([taxYear]);
+        const requiredDates = new Map<string, Set<string>>();
 
         // Helper to extract year from date string (YYYY-MM-DD)
         function addYear(dateStr: string | undefined): void {
@@ -241,12 +324,24 @@ export function Import() {
             }
         }
 
+        function addRequiredDate(currency: string | undefined, dateStr: string | undefined): void {
+            if (!currency || !dateStr || currency === 'BGN' || currency === 'EUR') {
+                return;
+            }
+
+            const dates = requiredDates.get(currency) ?? new Set<string>();
+
+            dates.add(dateStr);
+            requiredDates.set(currency, dates);
+        }
+
         // Collect all currencies and years from holdings, sales, dividends, etc.
         for (const h of state.holdings) {
             if (h.currency) {
                 currencies.add(h.currency);
             }
             addYear(h.dateAcquired);
+            addRequiredDate(h.currency, h.dateAcquired);
         }
 
         for (const s of state.sales) {
@@ -255,6 +350,8 @@ export function Import() {
             }
             addYear(s.dateAcquired);
             addYear(s.dateSold);
+            addRequiredDate(s.currency, s.dateAcquired);
+            addRequiredDate(s.currency, s.dateSold);
         }
 
         for (const d of state.dividends) {
@@ -262,12 +359,15 @@ export function Import() {
                 currencies.add(d.currency);
             }
             addYear(d.date);
+            addRequiredDate(d.currency, d.date);
         }
 
         for (const s of state.stockYield) {
             if (s.currency) {
                 currencies.add(s.currency);
             }
+            addYear(s.date);
+            addRequiredDate(s.currency, s.date);
         }
 
         for (const bi of state.brokerInterest) {
@@ -277,6 +377,7 @@ export function Import() {
 
             for (const entry of bi.entries) {
                 addYear(entry.date);
+                addRequiredDate(entry.currency, entry.date);
             }
         }
 
@@ -295,17 +396,28 @@ export function Import() {
             return;
         }
 
-        // Check if we need to fetch any missing year+currency combo
+        // Check if we need to fetch any year+currency combo that is missing actual referenced dates
         const yearsArr = [...years].filter(y => y >= 1999 && y <= taxYear + 1).sort();
         let hasMissing = false;
 
         for (const ccy of needed) {
-            for (const yr of yearsArr) {
-                const dateToCheck = `${yr}-06-15`;
+            const dates = requiredDates.get(ccy) ?? new Set<string>();
 
-                if (!state.fxRates[ccy]?.[dateToCheck]) {
-                    hasMissing = true;
-                    break;
+            if (dates.size === 0) {
+                for (const yr of yearsArr) {
+                    const dateToCheck = `${yr}-06-15`;
+
+                    if (!state.fxRates[ccy]?.[dateToCheck]) {
+                        hasMissing = true;
+                        break;
+                    }
+                }
+            } else {
+                for (const date of dates) {
+                    if (!state.fxRates[ccy]?.[date]) {
+                        hasMissing = true;
+                        break;
+                    }
                 }
             }
 
@@ -744,7 +856,9 @@ export function Import() {
                         h.source = { type: 'IB', file: file.name };
                     }
                 }
-                importSales(newSales);
+                const salesWithFx = await hydrateSalesFxRates(newSales);
+
+                importSales(salesWithFx);
 
                 // Use Open Positions as authoritative year-end holdings (if available)
                 // If prior-year holdings exist, only add this year's buy lots (skip pre-existing)
@@ -872,10 +986,16 @@ export function Import() {
                     trades.map(t => ({ symbol: t.ticker, currency: t.currency })),
                     getCorsFetch(),
                 );
+                const exchangeMap = await resolveExchangeCodes(
+                    trades.map(t => ({ symbol: t.ticker, currency: t.currency })),
+                    getCorsFetch(),
+                );
 
                 // Convert trades to the format FifoEngine expects
                 const fifoTrades = trades.map(t => ({
                     symbol: t.ticker,
+                    exchange: exchangeMap[t.ticker],
+                    saleTaxClassification: classifySaleByExchange(exchangeMap[t.ticker]),
                     dateTime: t.date,
                     quantity: t.type.includes('SELL') ? -t.quantity : t.quantity,
                     price: t.pricePerShare,
@@ -920,7 +1040,9 @@ export function Import() {
                 // Merge: keep non-Revolut sales, add Revolut sales
                 const existingSales = useAppStore.getState().sales.filter(s => s.source?.type !== 'Revolut');
 
-                importSales([...existingSales, ...newSales]);
+                const salesWithFx = await hydrateSalesFxRates(newSales);
+
+                importSales([...existingSales, ...salesWithFx]);
 
                 const buys = trades.filter(t => t.type.includes('BUY')).length;
                 const sells = trades.filter(t => t.type.includes('SELL')).length;

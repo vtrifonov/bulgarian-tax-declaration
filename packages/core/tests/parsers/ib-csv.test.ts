@@ -22,6 +22,8 @@ describe('parseIBCsv', () => {
         expect(buy!.quantity).toBe(1);
         expect(buy!.price).toBe(614.28);
         expect(buy!.currency).toBe('EUR');
+        expect(buy!.exchange).toBe('IBIS2');
+        expect(buy!.saleTaxClassification).toBe('eu-regulated-market');
     });
 
     it('distinguishes buys from sells', () => {
@@ -30,6 +32,8 @@ describe('parseIBCsv', () => {
         expect(sell).toBeDefined();
         expect(sell!.symbol).toBe('AAPL');
         expect(sell!.quantity).toBe(-5);
+        expect(sell!.exchange).toBe('NASDAQ');
+        expect(sell!.saleTaxClassification).toBe('taxable');
     });
 
     it('parses dividends and combines same-date BABA entries', () => {

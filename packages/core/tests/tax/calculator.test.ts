@@ -124,6 +124,50 @@ describe('TaxCalculator', () => {
         expect(result.taxDue).toBeCloseTo(105.62, 0);
     });
 
+    it('skips EU regulated market sales from capital gains tax', () => {
+        const sales: Sale[] = [
+            {
+                id: '1',
+                broker: 'IB',
+                country: 'Германия',
+                symbol: 'SAP',
+                exchange: 'IBIS',
+                saleTaxClassification: 'eu-regulated-market',
+                dateAcquired: '2024-01-01',
+                dateSold: '2025-06-15',
+                quantity: 10,
+                currency: 'EUR',
+                buyPrice: 100,
+                sellPrice: 120,
+                fxRateBuy: 1.95583,
+                fxRateSell: 1.95583,
+            },
+            {
+                id: '2',
+                broker: 'IB',
+                country: 'САЩ',
+                symbol: 'AAPL',
+                exchange: 'NASDAQ',
+                saleTaxClassification: 'taxable',
+                dateAcquired: '2024-01-01',
+                dateSold: '2025-06-15',
+                quantity: 10,
+                currency: 'USD',
+                buyPrice: 170,
+                sellPrice: 250,
+                fxRateBuy: 1.889,
+                fxRateSell: 1.811,
+            },
+        ];
+
+        const calc = new TaxCalculator('BGN');
+        const result = calc.calcCapitalGains(sales);
+
+        expect(result.totalProceeds).toBeCloseTo(4527.5, 0);
+        expect(result.totalCost).toBeCloseTo(3211.3, 0);
+        expect(result.taxDue).toBeCloseTo(131.62, 0);
+    });
+
     it('calculates dividend tax with WHT credits', () => {
         const dividends: Dividend[] = [
             {

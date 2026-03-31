@@ -143,6 +143,7 @@ export const bg = {
     // Column headers (for UI display, not data table headers which use mixed language)
     'col.broker': 'Брокер',
     'col.country': 'Страна',
+    'col.exchange': 'Борса',
     'col.date': 'Дата',
     'col.description': 'Описание',
     'col.amount': 'Сума',
@@ -174,6 +175,9 @@ export const bg = {
     'col.qty': 'Кол.',
     'col.source': 'Източник',
     'col.consumedBy': 'Консумирано от',
+    'col.saleTaxClassification': 'Данъчно третиране',
+    'sale.tax.taxable': 'Облагаема по прил. 5',
+    'sale.tax.euRegulated': 'Регулиран пазар в ЕС',
 
     // Summary labels
     'summary.total': 'Общо',

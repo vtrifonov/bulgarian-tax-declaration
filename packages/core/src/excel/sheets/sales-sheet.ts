@@ -33,6 +33,8 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
         `Приходи (${ccy})`,
         `Разходи (${ccy})`,
         `Печалба/Загуба (${ccy})`,
+        'Борса',
+        'Данъчно третиране',
     ];
     const headerRow = sheet.addRow(headers);
 
@@ -65,6 +67,8 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
             null, // L: formula
             null, // M: formula
             null, // N: formula
+            s.exchange ?? '',
+            s.saleTaxClassification === 'eu-regulated-market' ? 'EU regulated market' : 'Taxable',
         ]);
 
         // L: Proceeds = Qty * Sell Price * FX Sell
@@ -89,7 +93,7 @@ export function addSalesSheet(workbook: Workbook, state: AppState): Worksheet {
     }
 
     // Column widths
-    const widths = [12, 14, 10, 14, 14, 8, 10, 12, 12, 12, 12, 12, 12, 12];
+    const widths = [12, 14, 10, 14, 14, 8, 10, 12, 12, 12, 12, 12, 12, 12, 12, 18];
 
     for (let i = 0; i < headers.length; i++) {
         sheet.getColumn(i + 1).width = widths[i];

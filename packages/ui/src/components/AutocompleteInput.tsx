@@ -4,9 +4,14 @@ import {
     useState,
 } from 'react';
 
+export interface AutocompleteOption {
+    label: string;
+    value: string;
+}
+
 interface AutocompleteInputProps {
     value: string;
-    options: string[];
+    options: AutocompleteOption[];
     onChange: (value: string) => void;
     /** Called when an option is explicitly selected (from dropdown), not just typed */
     onSelect?: (value: string) => void;
@@ -33,7 +38,10 @@ export function AutocompleteInput({
 
     // Filter options by current input
     const filtered = value
-        ? options.filter((o) => o.toLowerCase().includes(value.toLowerCase()))
+        ? options.filter((option) =>
+            option.label.toLowerCase().includes(value.toLowerCase())
+            || option.value.toLowerCase().includes(value.toLowerCase())
+        )
         : options;
 
     // Reset highlight when value changes
@@ -64,9 +72,9 @@ export function AutocompleteInput({
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const selectOption = (opt: string) => {
-        onChange(opt);
-        onSelect?.(opt);
+    const selectOption = (option: AutocompleteOption) => {
+        onChange(option.value);
+        onSelect?.(option.value);
         setOpen(false);
     };
 
@@ -130,17 +138,17 @@ export function AutocompleteInput({
             />
             {open && filtered.length > 0 && (
                 <ul ref={listRef} className='autocomplete-dropdown'>
-                    {filtered.map((opt, idx) => (
+                    {filtered.map((option, idx) => (
                         <li
-                            key={`${opt}-${idx}`}
+                            key={`${option.value}-${idx}`}
                             className={`autocomplete-option ${idx === highlightIdx ? 'highlighted' : ''}`}
                             onMouseDown={(e) => {
                                 e.preventDefault(); // Don't blur input
-                                selectOption(opt);
+                                selectOption(option);
                             }}
                             onMouseEnter={() => setHighlightIdx(idx)}
                         >
-                            {opt}
+                            {option.label}
                         </li>
                     ))}
                 </ul>

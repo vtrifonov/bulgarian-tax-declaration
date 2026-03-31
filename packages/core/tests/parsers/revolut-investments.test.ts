@@ -138,4 +138,18 @@ describe('parseRevolutInvestmentsCsv', () => {
         // Country resolved async later via OpenFIGI; sync may return empty
         expect(typeof result.holdings[0].country).toBe('string');
     });
+
+    it('parses sell rows from the same csv format as buys', () => {
+        const result = parseRevolutInvestmentsCsv(csv(
+            '2025-01-10T14:30:00Z,ASML,BUY - MARKET,2,USD 700.00,USD 1400.00,USD,1.08',
+            '2025-02-01T14:30:00Z,ASML,SELL - MARKET,0.5,USD 750.00,USD 375.00,USD,1.07',
+        ));
+
+        expect(result.trades).toHaveLength(2);
+        expect(result.trades[1].type).toBe('SELL - MARKET');
+        expect(result.trades[1].quantity).toBe(0.5);
+        expect(result.trades[1].pricePerShare).toBe(750);
+        expect(result.trades[1].totalAmount).toBe(375);
+        expect(result.holdings[0].quantity).toBe(1.5);
+    });
 });

@@ -2,6 +2,7 @@ import {
     calcDividendRowTax,
     generateExcel,
     generateNraAppendix8,
+    isEuRegulatedSale,
     t,
     TaxCalculator,
     toBaseCurrency,
@@ -44,6 +45,14 @@ export function Declaration() {
         () => applySorting(unsortedSales, tableSorting.sales ?? []),
         [unsortedSales, tableSorting.sales],
     );
+    const taxableSales = useMemo(
+        () => sales.filter(s => !isEuRegulatedSale(s)),
+        [sales],
+    );
+    const euRegulatedSales = useMemo(
+        () => sales.filter(isEuRegulatedSale),
+        [sales],
+    );
     const dividends = useMemo(
         () => applySorting(unsortedDividends, tableSorting.dividends ?? []),
         [unsortedDividends, tableSorting.dividends],
@@ -52,7 +61,7 @@ export function Declaration() {
     // Calculate tax results
     const calculator = new TaxCalculator(baseCurrency);
 
-    const capitalGainsResult = calculator.calcCapitalGains(sales);
+    const capitalGainsResult = calculator.calcCapitalGains(taxableSales);
     const dividendsTaxResult = calculator.calcDividendsTax(dividends, fxRates);
 
     // Calculate broker interest tax (all brokers — includes IB Stock Yield/SYEP entries)
@@ -141,7 +150,7 @@ export function Declaration() {
         let totalGains = 0;
         let totalLosses = 0;
 
-        for (const s of sales) {
+        for (const s of taxableSales) {
             if (!s.symbol || s.quantity === 0) {
                 continue;
             }
@@ -164,7 +173,34 @@ export function Declaration() {
         const row7 = row5 - row6; // taxable income
 
         return { totalProceeds, totalCost, totalGains, totalLosses, row5, row6, row7 };
-    }, [sales, fxRates]);
+    }, [taxableSales, fxRates]);
+
+    const appendix13Rows = useMemo(() => {
+        const toBgn = (amount: number, ccy: string, date: string) => {
+            const v = toBaseCurrency(amount, ccy, date, 'BGN', fxRates);
+
+            return isNaN(v) ? amount : v;
+        };
+
+        return euRegulatedSales
+            .filter(s => s.symbol && s.quantity > 0)
+            .map(s => {
+                const proceeds = toBgn(s.quantity * s.sellPrice, s.currency, s.dateSold);
+                const cost = s.dateAcquired
+                    ? toBgn(s.quantity * s.buyPrice, s.currency, s.dateAcquired)
+                    : 0;
+
+                return {
+                    symbol: s.symbol,
+                    exchange: s.exchange ?? '—',
+                    country: s.country || '—',
+                    dateSold: s.dateSold,
+                    proceeds,
+                    cost,
+                    profit: proceeds - cost,
+                };
+            });
+    }, [euRegulatedSales, fxRates]);
 
     // Приложение 8, Част III — Dividends per-row detail (code 8141)
     const dividendsForDeclaration = useMemo(() => {
@@ -429,7 +465,7 @@ export function Declaration() {
                 </div>
             )}
 
-            {renderSection('p5t2', 'Приложение 5, Таблица 2', 'Доходи от продажба или замяна на финансови активи (код 508)', sales.length > 0, () => (
+            {renderSection('p5t2', 'Приложение 5, Таблица 2', 'Облагаеми продажби извън регулиран пазар в ЕС (код 508)', taxableSales.length > 0, () => (
                 <>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead>
@@ -468,6 +504,43 @@ export function Declaration() {
                     </div>
                 </>
             ))}
+
+            {renderSection(
+                'p13',
+                'Приложение 13',
+                'Продажби на регулиран пазар в ЕС, които не се включват в Приложение 5',
+                appendix13Rows.length > 0,
+                () => (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                <th style={thL}>№</th>
+                                <th style={thL}>Символ</th>
+                                <th style={thL}>Борса</th>
+                                <th style={thL}>Страна</th>
+                                <th style={thL}>Дата продажба</th>
+                                <th style={thR}>Приходи (BGN)</th>
+                                <th style={thR}>Цена на придобиване (BGN)</th>
+                                <th style={thR}>Резултат (BGN)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {appendix13Rows.map((row, index) => (
+                                <tr key={`${row.symbol}-${row.dateSold}-${index}`} style={rowBorder}>
+                                    <td style={tdL}>{index + 1}</td>
+                                    <td style={tdL}>{row.symbol}</td>
+                                    <td style={tdL}>{row.exchange}</td>
+                                    <td style={tdL}>{row.country}</td>
+                                    <td style={tdL}>{formatDate(row.dateSold)}</td>
+                                    <td style={tdM}>{row.proceeds.toFixed(2)}</td>
+                                    <td style={tdM}>{row.cost.toFixed(2)}</td>
+                                    <td style={tdM}>{row.profit.toFixed(2)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ),
+            )}
 
             {renderSection(
                 'p6c1',

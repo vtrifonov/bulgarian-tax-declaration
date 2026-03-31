@@ -1,3 +1,4 @@
+import { classifySaleByExchange } from '../tax/sale-classification.js';
 import type {
     IBDividend,
     IBOpenPosition,
@@ -205,6 +206,8 @@ export function parseIBCsv(csv: string): IBParsedData {
 
     for (const t of trades) {
         t.symbol = normalizeSymbol(t.symbol);
+        t.exchange = symbolExchanges[t.symbol];
+        t.saleTaxClassification = classifySaleByExchange(t.exchange);
     }
 
     for (const d of rawDividends) {

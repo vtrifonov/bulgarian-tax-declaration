@@ -28,6 +28,7 @@
 - Provider-specific internal types stay inside the provider file, not exported
 - **Holdings semantics**: active holdings represent end-of-period open positions. Lots that are bought and fully sold within the same imported statement must produce `sales`, but must not remain in `holdings`. Only previously imported holdings may be carried forward as `consumedByFifo` rows for traceability.
 - **FIFO matching scope**: match by `symbol` + `currency`, and only against lots from the same broker or brokerless legacy holdings. Do not match a provider's current-statement trades against the same statement's end-of-period holdings snapshot (`Open Positions`, broker holdings summary, etc.).
+- **Sale tax classification**: preserve sale venue metadata whenever possible. Sales executed on regulated EU markets go to `Приложение 13` and must not affect `Приложение 5` tax totals. When venue detection is unavailable, default to taxable and let the user correct the sales row manually.
 - **Pre-existing holdings pattern**: When a provider imports holdings, if prior-year holdings already exist in the app state, only add new current-year acquisitions (skip pre-existing). This applies to all providers (IB, Revolut, E*TRADE). The `skipPreExisting` flag in `splitOpenPositions` controls this.
 - **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`, then `Bondora`.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
@@ -131,6 +132,7 @@ Rules:
 4. `importFullExcel` must read sheets back and produce identical arrays (except auto-generated UUIDs)
 5. Integration tests verify the full round-trip
 6. Use `workbook.getWorksheet(name)` — never access sheets by index
+7. Sales rows must round-trip their exchange and tax classification so Appendix 5 vs Appendix 13 routing survives export/import
 
 Floating point: quantities to 8 decimals, amounts to 2. Tests use `toBeCloseTo()`.
 Dates: ISO `YYYY-MM-DD` strings in cells.

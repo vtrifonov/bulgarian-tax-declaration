@@ -47,6 +47,7 @@ export {
     resolveCountries,
     resolveCountry,
     resolveCountrySync,
+    resolveExchangeCodes,
     restoreCountryCache,
 } from './country-map.js';
 export { providers } from './providers/registry.js';
@@ -94,6 +95,10 @@ export {
     calcInterestTax,
     type DividendTaxResult,
 } from './tax/rules.js';
+export {
+    classifySaleByExchange,
+    isEuRegulatedSale,
+} from './tax/sale-classification.js';
 export {
     type CapitalGainsResult,
     type DividendsTaxResult,
