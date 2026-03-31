@@ -242,6 +242,30 @@ This round-trip includes holdings, sales, dividends, interest, FX sheets, and th
 
 Sales round-trip also preserves exchange and tax treatment metadata so Appendix 5 and Appendix 13 stay aligned after re-import. If a broker file cannot determine the venue reliably, review the Sales table and adjust the tax treatment manually before filing.
 
+## EU Regulated Sales Handling
+
+The app treats all sales as one canonical `sales` dataset and derives declaration routing from metadata on each row.
+
+- Source of truth: the `Продажби` sheet and the in-app Sales table
+- Canonical fields on each sale:
+  - `exchange`
+  - `saleTaxClassification = taxable | eu-regulated-market`
+- Declaration behavior:
+  - `taxable` sales go to `Приложение 5` and affect capital gains tax
+  - `eu-regulated-market` sales go to `Приложение 13` and are excluded from capital gains tax
+
+Current provider behavior:
+
+- Interactive Brokers: classification comes from the statement `Listing Exch`
+- Revolut investments: classification is inferred during import via OpenFIGI exchange resolution
+- Manual override: the Sales table lets you change `Данъчно третиране` directly if venue detection is missing or wrong
+
+Contributor rule for new providers:
+
+- if provider data can determine the venue, populate both `exchange` and `saleTaxClassification`
+- if venue cannot be determined reliably, default to `taxable` and let the user correct it in the Sales table
+- preserve this metadata through FIFO, Excel export/import, and declaration rendering
+
 ## Contributing
 
 We welcome contributions, especially new broker providers! See [AGENTS.md](./AGENTS.md) for:

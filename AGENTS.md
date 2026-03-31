@@ -33,6 +33,26 @@
 - **Deterministic provider import order**: When multiple files are imported together, process them in this order: existing in-app holdings/state first, then `IB`, then `Revolut`, then `E*TRADE`, then `Bondora`.
 - When to use **global vs. provider types**: if multiple providers share a type (Trade, Dividend, InterestEntry), it goes in `types/index.ts`. If only one provider needs it (e.g., IB's raw parsed WHT structure), keep it in the provider file.
 
+### EU regulated sales contract
+
+- Canonical sale fields live on `Sale` in `packages/core/src/types/index.ts`:
+  - `exchange?: string`
+  - `saleTaxClassification?: 'taxable' | 'eu-regulated-market'`
+- `Продажби` is the single source of truth for sale routing. Do not create separate persisted arrays for Appendix 5 vs Appendix 13.
+- `Приложение 5` and `Приложение 13` are derived views of the same `sales` array:
+  - `taxable` → included in capital gains tax and shown in `Приложение 5`
+  - `eu-regulated-market` → excluded from capital gains tax and shown in `Приложение 13`
+- Excel keeps this on the existing `Продажби` sheet via extra columns; do not introduce a second source-of-truth sheet for Appendix 13.
+- If a provider can determine venue/exchange, it should set both `exchange` and `saleTaxClassification` before the sale reaches the final app state.
+- If a provider cannot determine venue reliably, set `saleTaxClassification` to `taxable` and leave `exchange` blank or best-effort; the user may correct it in the Sales table.
+- New provider implementations must preserve this metadata through the full path:
+  - parser/import
+  - FIFO-generated sales
+  - tax calculation
+  - declaration rendering
+  - Excel export/import
+  - sample fixtures and round-trip tests
+
 ## Testing Requirements
 
 - **Minimum 70% code coverage** (enforced by vitest threshold in `packages/core/vitest.config.ts`). Override with `SKIP_COVERAGE_CHECK=1` if needed during development — CI enforces 70%.
@@ -156,6 +176,26 @@ If your provider produces a new data type not in this table, you must:
 2. Add import logic in `packages/core/src/parsers/excel-full-import.ts`
 3. Register the sheet in `packages/core/src/excel/generator.ts`
 
+### Sales sheet routing rules
+
+For sales, the `Продажби` sheet must contain enough data to rebuild declaration routing without broker files:
+
+- Always preserve:
+  - symbol
+  - broker
+  - country
+  - exchange
+  - `saleTaxClassification`
+  - buy/sell dates
+  - buy/sell prices
+  - quantity
+  - currency
+  - FX rates
+- `excel-full-import.ts` must read tax treatment by header name, not by fragile column index, so older workbooks remain importable.
+- Any contributor adding or changing sale columns must verify both:
+  - `TaxCalculator.calcCapitalGains()` still skips `eu-regulated-market`
+  - `Declaration.tsx` still derives Appendix 5 vs Appendix 13 from `sales`, not from duplicated state
+
 ## NRA Form Filler
 
 ### Architecture
@@ -251,6 +291,23 @@ for (const d of dividends) {
     d.whtCredit = whtCredit;
 }
 ```
+
+### Step 2b: Handle sales venue and Appendix 13 routing
+
+If your provider parses trades that can become `sales`, you MUST decide whether the sale happened on a regulated EU market whenever the source data allows it.
+
+- Preferred behavior:
+  - set `trade.exchange` from provider data or exchange resolution
+  - set `trade.saleTaxClassification` to `'eu-regulated-market'` when the venue is a regulated EU market
+  - otherwise set `trade.saleTaxClassification` to `'taxable'`
+- Existing patterns in this repo:
+  - Interactive Brokers: derive from `Listing Exch`
+  - Revolut investments: resolve exchange code through OpenFIGI during import
+- If the provider has no reliable venue field:
+  - default to `'taxable'`
+  - preserve any best-effort `exchange`
+  - rely on the editable Sales table for manual correction
+- Do not push this decision into the declaration page. The declaration page only consumes `sales` and splits them by `saleTaxClassification`.
 
 ### Step 3: Register and export
 - Add to `packages/core/src/providers/registry.ts`:
