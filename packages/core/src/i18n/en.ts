@@ -312,6 +312,9 @@ export const en = {
     'spb8.exportBnb': 'Download for BNB (.xls)',
     'spb8.uploadGuide':
         'To submit on the BNB portal: 1) Статистическа отчетност → Опционални входни форми → Подаване на данни чрез файл. Select Format: plain, Content: xls, upload the .xls file and click "Провери". 2) Sign the .xls file with an electronic signature (CAdES, BASELINE_B, DETACHED, SHA256) — you get a .p7s file. 3) Again in Подаване на данни чрез файл — select Type: binary, upload the .p7s signature and click "Подай".',
+    'spb8.filingGuide': 'Filing Guide — Mac + B-Trust КЕП',
+    'spb8.filingGuide.subtitle': 'Step-by-step guide for signing and submitting SPB-8 via the BNB portal using a physical B-Trust token on macOS',
+    'spb8.filingGuide.macNote': 'This guide is specific to macOS with a physical B-Trust КЕП (USB token).',
     'spb8.importPrevious': 'Import from Previous SPB-8',
     'spb8.missingIsin': 'Missing ISIN',
     'spb8.fetchPrices': 'Fetch actual prices ({date})',
