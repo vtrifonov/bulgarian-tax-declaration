@@ -280,7 +280,7 @@ export function YearSetup() {
                             </button>
                             {importOption === 'excel' && (
                                 <a
-                                    href='/holdings-template.csv'
+                                    href={`${import.meta.env.BASE_URL}holdings-template.csv`}
                                     download='holdings-template.csv'
                                     style={{ fontSize: '0.85rem', color: 'var(--accent)' }}
                                 >
